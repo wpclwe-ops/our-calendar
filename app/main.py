@@ -26,7 +26,7 @@ def create_app(config=None,start_worker=True):
         if start_worker:worker.start()
         yield
         worker.stop()
-    app=FastAPI(title='Our Calendar',version='0.2.0',lifespan=lifespan,docs_url=None,redoc_url=None,openapi_url=None)
+    app=FastAPI(title='Our Calendar',version='0.2.1',lifespan=lifespan,docs_url=None,redoc_url=None,openapi_url=None)
     app.state.service=service;app.state.backups=backups;app.state.worker=worker
     buckets=defaultdict(deque)
     @app.exception_handler(Problem)
@@ -79,9 +79,11 @@ def create_app(config=None,start_worker=True):
         with service.db.transaction() as c:
             c.execute('SELECT 1')
             row=c.execute("SELECT value FROM runtime WHERE key='worker_heartbeat'").fetchone()
-        return {'ok':True,'version':'0.2.0','demo':config.demo,'worker_heartbeat':row['value'] if row else None}
+        with service.db.transaction() as c:
+            setup=c.execute("SELECT value FROM runtime WHERE key='bot_setup'").fetchone()
+        return {'ok':True,'ready':True,'version':'0.2.1','demo':config.demo,'worker_heartbeat':row['value'] if row else None,'bot_setup':setup['value'] if setup else 'not_started'}
     @app.get('/api/config')
-    def public_config():return {'demo':config.demo,'bot_username':config.bot_username,'version':'0.2.0',
+    def public_config():return {'demo':config.demo,'bot_username':config.bot_username,'version':'0.2.1',
                               'integrations':{'google':'not_configured','icloud':'pilot_required','translation':'configured' if config.translation_url else 'not_configured'}}
     @app.post('/api/auth')
     async def auth(request:Request):

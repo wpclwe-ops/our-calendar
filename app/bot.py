@@ -62,6 +62,7 @@ class Worker:
         from .translation import Translations
         self.translations=Translations(service)
         self.stop_event=threading.Event(); self.thread=None
+        self.setup_complete=False;self.setup_next=None
     def start(self):
         self.thread=threading.Thread(target=self.run,name='calendar-worker',daemon=True);self.thread.start()
     def stop(self):
@@ -70,12 +71,27 @@ class Worker:
     def run(self):
         while not self.stop_event.is_set():
             try:
-                self.service.maintenance(); self.translations.process(); self.schedule(); self.deliver()
+                self.configure_bot();self.service.maintenance(); self.translations.process(); self.schedule(); self.deliver()
                 with self.service.db.transaction() as c:
                     c.execute('INSERT INTO runtime VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',('worker_heartbeat',stamp()))
             except Exception:
                 log.exception('Worker cycle failed')
             self.stop_event.wait(15)
+
+    def configure_bot(self):
+        if not self.service.config.auto_setup_bot or self.service.config.demo or self.setup_complete:return
+        if self.setup_next and utcnow()<self.setup_next:return
+        status='ready'
+        try:
+            identity=self.telegram.call('getMe',{})
+            if (identity or {}).get('username','').casefold()!=self.service.config.bot_username.casefold():
+                status='username_mismatch'
+            else:
+                self.telegram.setup();self.setup_complete=True
+        except TelegramAPIError as exc:status='telegram_'+str(exc.code)
+        self.setup_next=utcnow()+timedelta(seconds=60)
+        with self.service.db.transaction() as c:
+            c.execute('INSERT INTO runtime VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',('bot_setup',status))
 
     def schedule(self,now=None):
         now=now or utcnow(); horizon=now+timedelta(days=3)
