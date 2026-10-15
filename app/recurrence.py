@@ -1,0 +1,98 @@
+from datetime import datetime, date, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from dateutil.rrule import rrulestr
+from .security import require, Problem
+
+UTC = timezone.utc
+TIME_FIELDS = {'start', 'end', 'all_day', 'timezone', 'rrule'}
+
+def utcnow():
+    return datetime.now(UTC)
+
+def stamp(value=None):
+    return (value or utcnow()).isoformat(timespec='seconds')
+
+def zone(name):
+    try:
+        return ZoneInfo(name)
+    except (ZoneInfoNotFoundError, TypeError):
+        raise Problem(400, 'invalid_timezone')
+
+def local_datetime(value, tz, fold=None):
+    try:
+        dt = datetime.fromisoformat(value)
+        require(dt.tzinfo is None, 'use_local_datetime')
+    except (TypeError, ValueError):
+        raise Problem(400, 'invalid_datetime')
+    a, b = dt.replace(tzinfo=zone(tz), fold=0), dt.replace(tzinfo=zone(tz), fold=1)
+    require(a.astimezone(UTC).astimezone(a.tzinfo).replace(tzinfo=None) == dt, 'nonexistent_local_time')
+    if a.utcoffset() != b.utcoffset():
+        require(fold in (0, 1), 'ambiguous_local_time_choose_fold')
+    return dt.replace(tzinfo=a.tzinfo, fold=fold or 0)
+
+def validate_timing(data):
+    zone(data['timezone'])
+    try:
+        if data['all_day']:
+            start, end = date.fromisoformat(data['start']), date.fromisoformat(data['end'])
+        else:
+            start = local_datetime(data['start'], data['timezone'], data.get('fold'))
+            end = local_datetime(data['end'], data['timezone'], data.get('end_fold'))
+        require((end > start) if data['all_day'] else (end.astimezone(UTC) > start.astimezone(UTC)), 'end_must_follow_start')
+        rule = data.get('rrule', '').upper().strip()
+        require('\n' not in rule and len(rule) < 600, 'invalid_recurrence')
+        if rule:
+            parts = dict(p.split('=', 1) for p in rule.removeprefix('RRULE:').split(';'))
+            require(parts.get('FREQ') in ('DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'), 'invalid_recurrence')
+            require(set(parts) <= {'FREQ','INTERVAL','BYDAY','BYMONTHDAY','BYMONTH','BYSETPOS','COUNT','UNTIL','WKST'}, 'invalid_recurrence')
+            require(not ('COUNT' in parts and 'UNTIL' in parts), 'count_or_until')
+            require(int(parts.get('INTERVAL', '1')) > 0, 'invalid_recurrence')
+            if 'COUNT' in parts:
+                require(1 <= int(parts['COUNT']) <= 10000, 'invalid_recurrence')
+            rrulestr(rule, dtstart=base_datetime(data))
+        data['rrule'] = rule
+    except (ValueError, TypeError, OverflowError):
+        raise Problem(400, 'invalid_timing_or_recurrence')
+
+def base_datetime(data):
+    if data['all_day']:
+        return datetime.combine(date.fromisoformat(data['start']), datetime.min.time(), zone(data['timezone']))
+    return local_datetime(data['start'], data['timezone'], data.get('fold'))
+
+def occurrences(data, start, end, limit=2000):
+    """Expand in event timezone; all-day values remain floating calendar dates."""
+    base = base_datetime(data)
+    if data['all_day']:
+        duration = timedelta(days=(date.fromisoformat(data['end']) - date.fromisoformat(data['start'])).days)
+    else:
+        duration = datetime.fromisoformat(data['end']) - datetime.fromisoformat(data['start'])
+    if data.get('rrule'):
+        rule = rrulestr(data['rrule'], dtstart=base)
+        values = rule.xafter(start.astimezone(base.tzinfo) - duration - timedelta(days=2), count=limit + 1, inc=True)
+    else:
+        values = [base]
+    count = 0
+    for dt in values:
+        if dt > end.astimezone(base.tzinfo) + timedelta(days=2):
+            break
+        # RFC 5545: nonexistent local recurrence instances are ignored.
+        if dt.astimezone(UTC).astimezone(dt.tzinfo).replace(tzinfo=None) != dt.replace(tzinfo=None):
+            continue
+        finish = dt + duration
+        if finish < start - timedelta(days=2):
+            continue
+        count += 1
+        require(count <= limit, 'too_many_occurrences_reduce_range')
+        key = dt.date().isoformat() if data['all_day'] else dt.replace(tzinfo=None).isoformat(timespec='minutes')
+        yield key, dt, finish
+
+def instance(data, key, begin, end, override=None):
+    result = dict(data)
+    result['start'] = begin.date().isoformat() if data['all_day'] else begin.replace(tzinfo=None).isoformat(timespec='minutes')
+    result['end'] = end.date().isoformat() if data['all_day'] else end.replace(tzinfo=None).isoformat(timespec='minutes')
+    result.update(override or {})
+    result['occurrence'] = key
+    if not result['all_day']:
+        result['start_utc'] = local_datetime(result['start'], result['timezone'], result.get('fold', 0)).astimezone(UTC).isoformat()
+        result['end_utc'] = local_datetime(result['end'], result['timezone'], result.get('end_fold', 0)).astimezone(UTC).isoformat()
+    return result
