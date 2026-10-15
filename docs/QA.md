@@ -9,10 +9,12 @@
 - Дополнительно в Chromium выполнены создание категории, создание all-day серии, статус одного экземпляра, его удаление/восстановление, скачивание ZIP, предпросмотр и применение выбранного восстановления. JavaScript exceptions отсутствуют. Telegram SDK в этом локальном тесте подменён пустым скриптом, потому что проверяется frontend в demo-режиме.
 - Найденные при UI-проверке проблемы высоты окна палитры и выбора первого экземпляра новой all-day серии исправлены.
 
-Это **не** проверка настоящего Telegram WebView, доставки Telegram, OAuth Google, iCloud/CalDAV или боевого хостинга. Dockerfile и Railway config подготовлены, но контейнер здесь не собирался и удалённый deploy не выполнялся. Полный объём оставшихся работ: IMPLEMENTATION.md.
+Это **не** проверка настоящего Telegram WebView, доставки Telegram, OAuth Google, iCloud/CalDAV или боевого хостинга. Контейнер 0.2.1 успешно собран и запущен на Railway; production deployment f14189ef-d763-4008-9291-23aae73ded0c завершился SUCCESS. HTTPS /health отвечает 200, ready=false, mode=setup: отсутствуют только BOT_TOKEN и BOT_USERNAME. Полный объём оставшихся работ: IMPLEMENTATION.md.
 
 Дополнительно для 0.2.1 проверяются выбор полей исключений серии, восстановление только своих настроек, обязательный одноразовый предпросмотр, конкурентная правка после сравнения, автоматический перевод с сохранением ручных строк, гонка перевода и редактирования, ошибки сервиса перевода, пауза во время удаления, Google read-only scopes/PKCE/pagination/410, фильтр выбранных ID, шифрование credentials, защита CalDAV от credential redirects и XML entities. Retry Telegram не продлевает исходный срок напоминания.
 
 Bootstrap-коммит `8c4cb06c3b9d65b038ee6f427d3933706ecae87c` прошёл [GitHub Actions](https://github.com/wpclwe-ops/our-calendar/actions/runs/38817635916). Локальный браузерный сценарий создания all-day серии, статуса, корзины, скачивания/предпросмотра/применения ZIP повторно прошёл после изменений 0.2.1 без JavaScript exceptions.
 
 Для 0.2.1 дополнительно проверены отсутствие demo-входа и календарных API в закрытом setup mode, idempotent bot setup, запрет изменения webhook другого бота и отображение ошибки Telegram setup без падения worker.
+
+Production проверен на https://our-calendar-production-ffcb.up.railway.app. Доступен только закрытый экран настройки; публичный demo-вход выключен. Постоянный volume calendar-data смонтирован в /data в europe-west4, работает одна реплика без ошибок. GitHub Actions для исходного production-коммита b898b76c507da7c1c57a051d4d2b72c13cf91a8c завершился успешно. Настоящий Telegram-вход и доставка будут проверяться после настройки BOT_TOKEN/BOT_USERNAME.

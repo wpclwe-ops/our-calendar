@@ -25,6 +25,10 @@
 
 SESSION_SECRET и WEBHOOK_SECRET созданы случайно и хранятся только в переменных Railway. Их значения в репозитории отсутствуют. BOT_TOKEN и BOT_USERNAME пока должен добавить владелец.
 
+## Проверенное состояние
+
+Deployment `f14189ef-d763-4008-9291-23aae73ded0c`, исходный commit `b898b76c507da7c1c57a051d4d2b72c13cf91a8c`: **SUCCESS**. Одна running replica, ошибок нет. HTTPS `/health` возвращает `ok=true`, `ready=false`, `mode=setup`; недостающие переменные — только `BOT_TOKEN` и `BOT_USERNAME`. Это запущенный веб-сервер, но ещё не активированный Telegram-бот.
+
 ## Что нужно владельцу
 
 1. Открыть Dashboard → сервис `our-calendar` → **Variables**.
