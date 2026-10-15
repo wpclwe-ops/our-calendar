@@ -23,20 +23,19 @@
 | Signing private key | `/data/archive-key.pem` |
 | Public key registry | `/data/archive-public-keys.json` |
 
-SESSION_SECRET и WEBHOOK_SECRET созданы случайно и хранятся только в переменных Railway. Их значения в репозитории отсутствуют. BOT_TOKEN и BOT_USERNAME пока должен добавить владелец.
+SESSION_SECRET и WEBHOOK_SECRET созданы случайно и хранятся только в переменных Railway. BOT_TOKEN и BOT_USERNAME добавлены владельцем. Значения секретов в репозитории отсутствуют.
 
 ## Проверенное состояние
 
-Deployment `f14189ef-d763-4008-9291-23aae73ded0c`, исходный commit `b898b76c507da7c1c57a051d4d2b72c13cf91a8c`: **SUCCESS**. Одна running replica, ошибок нет. HTTPS `/health` возвращает `ok=true`, `ready=false`, `mode=setup`; недостающие переменные — только `BOT_TOKEN` и `BOT_USERNAME`. Это запущенный веб-сервер, но ещё не активированный Telegram-бот.
+Deployment `a431c0e4-627f-45b5-b707-570287589e7c`: **SUCCESS**. Одна running replica, ошибок нет. Проверка 2026-10-15 22:59 UTC: HTTPS `/health` возвращает `ok=true`, `ready=true`, `demo=false`, `bot_setup=ready` и свежий `worker_heartbeat`. Имя бота подтверждено через Telegram getMe: [@ourcalendar_bot](https://t.me/ourcalendar_bot). Telegram принял регистрацию webhook, меню и команд.
+
+Открытие Mini App двумя настоящими участниками и доставка напоминаний при закрытом приложении ещё не проверены. Google, iCloud и сервис перевода не подключены; состояние реализации описано в IMPLEMENTATION.md.
 
 ## Что нужно владельцу
 
-1. Открыть Dashboard → сервис `our-calendar` → **Variables**.
-2. Добавить **BOT_TOKEN** — токен нового бота из BotFather.
-3. Добавить **BOT_USERNAME** — его username без `@`.
-4. Применить изменения. Остальные служебные переменные уже настроены.
-5. Дождаться перезапуска. `/health` должен показать `ready=true`, затем `bot_setup=ready` и свежий `worker_heartbeat`.
-6. В BotFather включить основную Mini App и указать публичный адрес сервиса. Каждый участник должен нажать Start в чате с ботом.
+1. В BotFather выбрать `/mybots` → `@ourcalendar_bot` → Bot Settings → Configure Mini App и включить основную Mini App с URL `https://our-calendar-production-ffcb.up.railway.app`.
+2. Открыть https://t.me/ourcalendar_bot, нажать Start, затем кнопку календаря. Каждый участник должен нажать Start в чате с ботом.
+3. Пройти docs/RELEASE_CHECKLIST.md на двух настоящих аккаунтах, включая напоминание при закрытом Mini App.
 
 До заполнения переменных сервер показывает только закрытую страницу настройки. `SETUP_MODE=true` не включает демоданные и не обходит Telegram authentication. После заполнения конфигурации обычное приложение выбирается автоматически. Сервис настраивает webhook/menu после проверки соответствия token и username.
 
