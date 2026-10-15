@@ -1,6 +1,6 @@
 """Versioned, Ed25519-signed archives. No provider credentials are serialized."""
 import base64
-from datetime import datetime
+from datetime import datetime,timedelta
 import hashlib
 from io import BytesIO
 import json
@@ -11,7 +11,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey,
 from cryptography.hazmat.primitives.serialization import Encoding, PrivateFormat, PublicFormat, NoEncryption, load_pem_private_key
 from .security import require, Problem
 from .service import dump, load, uid, EVENT_FIELDS
-from .recurrence import stamp
+from .recurrence import stamp,utcnow
 
 MAX_ARCHIVE = 10 * 1024 * 1024
 MAX_EXPANDED = 40 * 1024 * 1024
@@ -90,54 +90,124 @@ class Backups:
         with self.service.db.transaction() as c:
             cal=self.service.calendar(c,user_id)
             require(archive['calendar']=={'id':cal['id'],'first_id':cal['first_id'],'second_id':cal['second_id']},'archive_wrong_calendar',403)
-            changes=[]; missing=[]
+            changes=[];missing=[];override_changes=[]
             for e in archive['events']:
                 current=c.execute('SELECT * FROM events WHERE id=? AND calendar_id=?',(e['id'],cal['id'])).fetchone()
                 if not current:
-                    missing.append({'id':e['id'],'data':e['data'],'deleted_at':e['deleted_at']}); continue
-                before=load(current['data'])
-                fields={k:{'current':before.get(k),'archive':v} for k,v in e['data'].items() if k in EVENT_FIELDS and before.get(k)!=v}
-                if fields: changes.append({'id':e['id'],'revision':current['revision'],'fields':fields})
-            return {'changes':changes,'missing':missing,'archive_sha256':hashlib.sha256(blob).hexdigest(),
-                    'categories':archive['categories']}
+                    missing.append({'id':e['id'],'data':e['data'],'deleted_at':e['deleted_at']});continue
+                before=load(current['data']);fields={}
+                for k,v in e['data'].items():
+                    if k not in EVENT_FIELDS:continue
+                    left,right=before.get(k),v
+                    if k=='reminders':left,right=before['reminders'].get(user_id,[]),v.get(user_id,[])
+                    if left!=right:fields[k]={'current':left,'archive':right}
+                if fields:changes.append({'id':e['id'],'revision':current['revision'],'fields':fields})
+                actual={r['occurrence']:load(r['data']) for r in c.execute('SELECT * FROM overrides WHERE event_id=?',(e['id'],))}
+                for key in sorted(set(actual)|set(e['overrides'])):
+                    left,right=actual.get(key,{}),e['overrides'].get(key,{})
+                    fields={}
+                    for k in sorted(set(left)|set(right)):
+                        lv,rv=left.get(k),right.get(k)
+                        if k=='reminders':
+                            lv=(lv or {}).get(user_id,before['reminders'].get(user_id,[]))
+                            rv=(rv or {}).get(user_id,e['data']['reminders'].get(user_id,[]))
+                        if lv!=rv:fields[k]={'current':lv,'archive':rv,'archive_present':k in right}
+                    if fields:override_changes.append({'id':e['id'],'occurrence':key,'revision':current['revision'],'fields':fields})
+            own=self.service.user(c,user_id);old=archive['members'][user_id]
+            profile={k:{'current':own.get(k),'archive':old[k]} for k in ('timezone','theme','view','default_reminders','reminders_enabled') if k in old and own.get(k)!=old[k]}
+            categories=[]
+            for category in archive['categories']:
+                current=c.execute('SELECT data FROM categories WHERE id=? AND calendar_id=?',(category['id'],cal['id'])).fetchone()
+                categories.append({**category,'current':load(current['data']) if current else None})
+            result={'changes':changes,'missing':missing,'override_changes':override_changes,'profile':profile,
+                    'archive_sha256':hashlib.sha256(blob).hexdigest(),'categories':categories}
+            preview_id=uid()
+            c.execute('DELETE FROM backup_previews WHERE expires_at<=?',(stamp(),))
+            c.execute('INSERT INTO backup_previews VALUES(?,?,?,?,?,?)',(preview_id,user_id,cal['id'],result['archive_sha256'],dump(result),stamp(utcnow()+timedelta(minutes=15))))
+            return {**result,'preview_id':preview_id}
 
-    def apply(self,user_id,blob,selections,missing_ids,category_ids):
-        archive=self.verify(blob)
-        require(isinstance(selections,list) and isinstance(missing_ids,list) and isinstance(category_ids,list),'invalid_selection')
+    def apply(self,user_id,blob,selections,missing_ids,category_ids,preview_id=None,override_selections=None,profile_fields=None):
+        archive=self.verify(blob);override_selections=override_selections or [];profile_fields=profile_fields or []
+        require(all(isinstance(v,list) for v in (selections,missing_ids,category_ids,override_selections,profile_fields)),'invalid_selection')
         with self.service.db.transaction() as c:
             cal=self.service.calendar(c,user_id)
             require(archive['calendar']=={'id':cal['id'],'first_id':cal['first_id'],'second_id':cal['second_id']},'archive_wrong_calendar',403)
-            archived={e['id']:e for e in archive['events']}
-            cats={e['id']:e for e in archive['categories']}
-            for cid in category_ids:
+            receipt=c.execute('SELECT * FROM backup_previews WHERE id=? AND user_id=? AND calendar_id=? AND expires_at>?',(preview_id,user_id,cal['id'],stamp())).fetchone()
+            require(receipt is not None and receipt['archive_sha']==hashlib.sha256(blob).hexdigest(),'preview_required',409)
+            preview=load(receipt['data']);archived={e['id']:e for e in archive['events']};cats={e['id']:e for e in archive['categories']}
+            expected={e['id']:e for e in preview['changes']}
+            expected_ov={(e['id'],e['occurrence']):e for e in preview['override_changes']}
+            allowed_missing={e['id'] for e in preview['missing']}
+            touched={}
+            # Validate every affected revision BEFORE updating any event. Multiple
+            # field selections for one series share one revision and commit once.
+            for choice in selections+override_selections:
+                event_id=choice['id']
+                allowed=expected_ov.get((event_id,choice.get('occurrence'))) if 'occurrence' in choice else expected.get(event_id)
+                require(allowed is not None and set(choice['fields'])<=set(allowed['fields']),'invalid_selection')
+                row=c.execute('SELECT * FROM events WHERE id=? AND calendar_id=?',(event_id,cal['id'])).fetchone()
+                require(row is not None and row['revision']==choice['revision']==allowed['revision'],'revision_conflict',409)
+                touched[event_id]=dict(row)
+            for cid in set(category_ids):
                 require(cid in cats,'invalid_selection')
-                existing=c.execute('SELECT calendar_id FROM categories WHERE id=?',(cid,)).fetchone()
-                require(not existing or existing['calendar_id']==cal['id'],'invalid_selection')
+                shown=next(v for v in preview['categories'] if v['id']==cid)
+                current=c.execute('SELECT * FROM categories WHERE id=?',(cid,)).fetchone()
+                require(not current or current['calendar_id']==cal['id'],'invalid_selection')
+                require((load(current['data']) if current else None)==shown['current'],'revision_conflict',409)
                 c.execute('INSERT INTO categories VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data',(cid,cal['id'],dump(cats[cid]['data'])))
+            def sanitize_category(data):
+                if data.get('category_id') and not c.execute('SELECT 1 FROM categories WHERE id=? AND calendar_id=?',(data['category_id'],cal['id'])).fetchone():data['category_id']=None
             for choice in selections:
-                require(choice['id'] in archived and set(choice['fields'])<=EVENT_FIELDS,'invalid_selection')
-                current=c.execute('SELECT deleted_at FROM events WHERE id=? AND calendar_id=?',(choice['id'],cal['id'])).fetchone()
-                require(current is not None,'revision_conflict',409)
-                row=self.service.event_row(c,user_id,choice['id'],deleted=bool(current['deleted_at']))
-                require(row['revision']==choice['revision'],'revision_conflict',409)
-                data=load(row['data']); old=archived[choice['id']]['data']
+                row=touched[choice['id']];data=load(row['data']);old=archived[choice['id']]['data']
+                for field in choice['fields']:
+                    if field=='reminders':data['reminders'][user_id]=old['reminders'].get(user_id,[])
+                    else:data[field]=old[field]
+                sanitize_category(data);self.service.validate_event(c,cal,data);row['data']=dump(data)
+            for choice in override_selections:
+                eid,key=choice['id'],choice['occurrence'];row=touched[eid];master=load(row['data'])
+                prior=c.execute('SELECT data FROM overrides WHERE event_id=? AND occurrence=?',(eid,key)).fetchone()
+                patch=load(prior['data']) if prior else {};old=archived[eid]['overrides'].get(key,{})
                 for field in choice['fields']:
                     if field=='reminders':
-                        data['reminders'][user_id]=old['reminders'].get(user_id,[])
-                    else: data[field]=old[field]
-                if data.get('category_id') and not c.execute('SELECT 1 FROM categories WHERE id=? AND calendar_id=?',(data['category_id'],cal['id'])).fetchone(): data['category_id']=None
-                self.service.validate_event(c,cal,data)
-                c.execute('UPDATE events SET data=?,revision=revision+1,schedule_version=schedule_version+1 WHERE id=?',(dump(data),choice['id']))
-                c.execute("UPDATE outbox SET status='cancelled' WHERE event_id=? AND kind='reminder' AND status IN ('pending','sending')",(choice['id'],))
+                        patch['reminders']={**patch.get('reminders',master['reminders']),user_id:old.get('reminders',archived[eid]['data']['reminders']).get(user_id,[])}
+                    elif field in old:patch[field]=old[field]
+                    else:patch.pop(field,None)
+                # Deleted flag, its timestamp and purge marker form one consistent
+                # deletion state. Selecting it is an explicit restoration decision.
+                if set(choice['fields'])&{'deleted','deleted_at','purged'}:
+                    for field in ('deleted','deleted_at','purged'):
+                        if field in old:patch[field]=old[field]
+                        else:patch.pop(field,None)
+                sanitize_category(patch)
+                from .recurrence import zone,instance
+                from datetime import date
+                begin=datetime.fromisoformat(key).replace(tzinfo=zone(master['timezone']))
+                duration=(date.fromisoformat(master['end'])-date.fromisoformat(master['start'])) if master['all_day'] else (datetime.fromisoformat(master['end'])-datetime.fromisoformat(master['start']))
+                candidate=instance(master,key,begin,begin+duration,patch)
+                for field in ('occurrence','start_utc','end_utc','deleted','deleted_at','purged'):candidate.pop(field,None)
+                self.service.validate_event(c,cal,candidate)
+                if patch:c.execute('INSERT INTO overrides VALUES(?,?,?) ON CONFLICT(event_id,occurrence) DO UPDATE SET data=excluded.data',(eid,key,dump(patch)))
+                else:c.execute('DELETE FROM overrides WHERE event_id=? AND occurrence=?',(eid,key))
+            for eid,row in touched.items():
+                c.execute('UPDATE events SET data=?,revision=revision+1,schedule_version=schedule_version+1 WHERE id=?',(row['data'],eid))
+                c.execute("UPDATE outbox SET status='cancelled' WHERE event_id=? AND kind='reminder' AND status IN ('pending','sending')",(eid,))
             for eid in set(missing_ids):
-                require(eid in archived,'invalid_selection')
+                require(eid in archived and eid in allowed_missing,'invalid_selection')
                 require(not c.execute('SELECT 1 FROM events WHERE id=?',(eid,)).fetchone(),'revision_conflict',409)
-                e=archived[eid]; data=e['data']
-                if data.get('category_id') and not c.execute('SELECT 1 FROM categories WHERE id=? AND calendar_id=?',(data['category_id'],cal['id'])).fetchone(): data['category_id']=None
-                self.service.validate_event(c,cal,data)
+                e=archived[eid];data=e['data'];sanitize_category(data);self.service.validate_event(c,cal,data)
                 c.execute('INSERT INTO events(id,calendar_id,data) VALUES(?,?,?)',(eid,cal['id'],dump(data)))
-                for k,v in e['overrides'].items(): c.execute('INSERT INTO overrides VALUES(?,?,?)',(eid,k,dump(v)))
-            self.service.notify(c,cal['id'],user_id,'backup_restored')
+                for k,v in e['overrides'].items():c.execute('INSERT INTO overrides VALUES(?,?,?)',(eid,k,dump(v)))
+            require(set(profile_fields)<=set(preview['profile']),'invalid_selection')
+            prefs=self.service.user(c,user_id)
+            for field in profile_fields:
+                require(prefs.get(field)==preview['profile'][field]['current'],'revision_conflict',409)
+                prefs[field]=archive['members'][user_id][field]
+            if profile_fields:
+                if 'timezone' in profile_fields:prefs['timezone_initialized']=True
+                prefs.pop('id');c.execute('UPDATE users SET data=? WHERE id=?',(dump(prefs),user_id))
+                c.execute("UPDATE outbox SET status='cancelled' WHERE user_id=? AND kind='reminder' AND status IN ('pending','sending')",(user_id,))
+            c.execute('DELETE FROM backup_previews WHERE id=?',(preview_id,))
+            if selections or missing_ids or category_ids or override_selections or profile_fields:self.service.notify(c,cal['id'],user_id,'backup_restored')
         return {'ok':True}
 
     def request_deleted(self,user_id,blob):

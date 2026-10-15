@@ -26,7 +26,7 @@ def create_app(config=None,start_worker=True):
         if start_worker:worker.start()
         yield
         worker.stop()
-    app=FastAPI(title='Our Calendar',version='0.1.0',lifespan=lifespan,docs_url=None,redoc_url=None,openapi_url=None)
+    app=FastAPI(title='Our Calendar',version='0.2.0',lifespan=lifespan,docs_url=None,redoc_url=None,openapi_url=None)
     app.state.service=service;app.state.backups=backups;app.state.worker=worker
     buckets=defaultdict(deque)
     @app.exception_handler(Problem)
@@ -79,15 +79,15 @@ def create_app(config=None,start_worker=True):
         with service.db.transaction() as c:
             c.execute('SELECT 1')
             row=c.execute("SELECT value FROM runtime WHERE key='worker_heartbeat'").fetchone()
-        return {'ok':True,'version':'0.1.0','demo':config.demo,'worker_heartbeat':row['value'] if row else None}
+        return {'ok':True,'version':'0.2.0','demo':config.demo,'worker_heartbeat':row['value'] if row else None}
     @app.get('/api/config')
-    def public_config():return {'demo':config.demo,'bot_username':config.bot_username,'version':'0.1.0',
-                              'integrations':{'google':'not_configured','icloud':'pilot_required','translation':'manual'}}
+    def public_config():return {'demo':config.demo,'bot_username':config.bot_username,'version':'0.2.0',
+                              'integrations':{'google':'not_configured','icloud':'pilot_required','translation':'configured' if config.translation_url else 'not_configured'}}
     @app.post('/api/auth')
     async def auth(request:Request):
         data=await body(request)
         if config.demo and data.get('demo_user') in ('1','2','3'):
-            telegram={'id':int(data['demo_user']),'first_name':{'1':'Рита','2':'Partner','3':'Third user'}[data['demo_user']],'language_code':'ru' if data['demo_user']=='1' else 'en'}
+            telegram={'id':int(data['demo_user']),'first_name':{'1':'Alex','2':'Partner','3':'Third user'}[data['demo_user']],'language_code':'ru' if data['demo_user']=='1' else 'en'}
         else:
             try:telegram=telegram_user(data.get('init_data',''),config.bot_token,config.auth_max_age)
             except (ValueError,TypeError):raise Problem(401,'invalid_init_data')
@@ -119,13 +119,21 @@ def create_app(config=None,start_worker=True):
     def events(request:Request,start:str='',end:str='',q:str='',owner:str='',category:str='',status:str='',trash:bool=False):
         return service.events(actor(request),start,end,q,owner,category,status,trash)
     @app.get('/api/events/{eid}')
-    def event(request:Request,eid:str,trash:bool=False):return service.get_event(actor(request),eid,trash)
+    def event(request:Request,eid:str,trash:bool=False,occurrence:str=''):return service.get_event(actor(request),eid,trash,occurrence or None)
     @app.post('/api/events')
     async def new_event(request:Request):return service.save_event(actor(request),await body(request))
     @app.patch('/api/events/{eid}')
     async def edit_event(request:Request,eid:str):
         data=await body(request);revision=data.pop('revision',None)
         return service.save_event(actor(request),data,eid,revision)
+    @app.post('/api/events/{eid}/translate')
+    async def translate_event(request:Request,eid:str):
+        data=await body(request)
+        return worker.translations.request(actor(request),eid,overwrite_manual=data.get('overwrite_manual') is True)
+    @app.post('/api/categories/{cid}/translate')
+    async def translate_category(request:Request,cid:str):
+        data=await body(request)
+        return worker.translations.request(actor(request),cid,kind='category',overwrite_manual=data.get('overwrite_manual') is True)
     @app.post('/api/events/{eid}/occurrence')
     async def occurrence(request:Request,eid:str):
         data=await body(request)
@@ -150,7 +158,7 @@ def create_app(config=None,start_worker=True):
     @app.post('/api/backup/apply')
     async def apply(request:Request):
         data=await body(request);require(data.get('previewed') is True,'preview_required')
-        return backups.apply(actor(request),archive(data),data.get('selections',[]),data.get('missing_ids',[]),data.get('category_ids',[]))
+        return backups.apply(actor(request),archive(data),data.get('selections',[]),data.get('missing_ids',[]),data.get('category_ids',[]),preview_id=data.get('preview_id'),override_selections=data.get('override_selections',[]),profile_fields=data.get('profile_fields',[]))
     @app.post('/api/backup/restore-deleted')
     async def restore_deleted(request:Request):return backups.request_deleted(actor(request),archive(await body(request)))
     @app.post('/api/backup/restore-deleted/{rid}')

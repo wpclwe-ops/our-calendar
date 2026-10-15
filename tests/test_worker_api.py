@@ -71,3 +71,20 @@ def test_production_never_accepts_demo_identity(service):
     with TestClient(app) as client:
         assert client.post('/api/auth',json={'demo_user':'1'}).status_code==401
         assert client.post('/api/auth',json={'demo_user':'1'},headers={'Origin':'https://evil.example'}).status_code==403
+
+def test_retry_does_not_extend_original_reminder_deadline(service):
+    from app.bot import TelegramAPIError
+    class RateLimited:
+        def send(self,*args):raise TelegramAPIError(429,120)
+    service.save_event('1',{'title':'Soon','start':'2026-10-24T12:00','end':'2026-10-24T13:00','timezone':'Europe/Warsaw'})
+    with service.db.transaction() as c:
+        c.execute("DELETE FROM outbox WHERE kind!='reminder'")
+        for person in ('1','2'):
+            prefs=service.user(c,person);prefs.pop('id');prefs['bot_can_message']=True
+            c.execute('UPDATE users SET data=? WHERE id=?',(dump(prefs),person))
+    worker=Worker(service,RateLimited());due=datetime(2026,10,24,9,0,tzinfo=UTC)
+    worker.schedule(due-timedelta(hours=1));worker.deliver(due)
+    fake=FakeTelegram();worker.telegram=fake;worker.deliver(due+timedelta(seconds=120))
+    assert fake.sent==[]
+    with service.db.transaction() as c:
+        assert c.execute("SELECT COUNT(*) FROM outbox WHERE kind='reminder' AND status='expired'").fetchone()[0]==2

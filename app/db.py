@@ -44,6 +44,15 @@ CREATE TABLE IF NOT EXISTS outbox(
  lease_until TEXT, error TEXT, created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS outbox_due ON outbox(status, due);
+CREATE TABLE IF NOT EXISTS backup_previews(
+ id TEXT PRIMARY KEY, user_id TEXT NOT NULL, calendar_id TEXT NOT NULL REFERENCES calendars(id) ON DELETE CASCADE,
+ archive_sha TEXT NOT NULL, data TEXT NOT NULL, expires_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS translation_jobs(
+ kind TEXT NOT NULL,resource_id TEXT NOT NULL,calendar_id TEXT NOT NULL REFERENCES calendars(id) ON DELETE CASCADE,
+ version TEXT NOT NULL,payload TEXT NOT NULL,state TEXT NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,
+ error TEXT,next_at TEXT NOT NULL,PRIMARY KEY(kind,resource_id)
+);
 CREATE TABLE IF NOT EXISTS bot_updates(id INTEGER PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS runtime(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS restore_requests(

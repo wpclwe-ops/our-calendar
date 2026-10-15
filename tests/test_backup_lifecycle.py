@@ -6,6 +6,10 @@ from app.security import Problem
 from app.recurrence import stamp,utcnow
 from app.service import load
 
+def apply_preview(backup,user_id,blob,selections,missing,categories,**kwargs):
+    p=backup.preview(user_id,blob)
+    return backup.apply(user_id,blob,selections,missing,categories,preview_id=p['preview_id'],**kwargs)
+
 def test_signed_archive_tamper_and_wrong_pair(service,backup,event):
     blob=backup.export('1');assert backup.verify(blob)['events'][0]['id']==event['id']
     buf=BytesIO()
@@ -20,13 +24,13 @@ def test_active_backup_selects_fields_and_missing(service,backup,event):
     blob=backup.export('1')
     service.save_event('1',{'title':'New','location':'Home'},event['id'],1)
     p=backup.preview('2',blob);assert set(p['changes'][0]['fields'])=={'title','location'}
-    backup.apply('2',blob,[{'id':event['id'],'revision':2,'fields':['title']}],[],[])
+    apply_preview(backup,'2',blob,[{'id':event['id'],'revision':2,'fields':['title']}],[],[])
     restored=service.get_event('1',event['id']);assert restored['title']=='Together' and restored['location']=='Home'
     service.delete_event('1',event['id'],3);service.delete_event('1',event['id'],4,permanent=True)
     assert len(backup.preview('2',blob)['missing'])==1
-    backup.apply('2',blob,[],[],[])
+    apply_preview(backup,'2',blob,[],[],[])
     assert service.events('1','2026-10-01','2026-11-01')==[]
-    backup.apply('2',blob,[],[event['id']],[])
+    apply_preview(backup,'2',blob,[],[event['id']],[])
     assert service.get_event('1',event['id'])['title']=='Together'
 
 def test_full_delete_lock_cancel_and_expiration(service,backup,event):
@@ -76,3 +80,55 @@ def test_ics_roundtrip_with_timezone_exceptions_and_utf8(service,backup):
     assert instances[0]['DTSTART'].dt.hour==12
     assert instances[1].get('RECURRENCE-ID')
     assert b'BEGIN:VTIMEZONE' in blob
+
+
+def test_restore_override_fields_and_keep_partner_reminders(service,backup):
+    event=service.save_event('1',{'title':'Series','start':'2026-10-20T12:00','end':'2026-10-20T13:00','timezone':'Europe/Warsaw','rrule':'FREQ=DAILY;COUNT=3'})
+    key='2026-10-21T12:00'
+    service.occurrence_change('1',event['id'],key,{'title':'Old exception','reminders':[30]},1)
+    blob=backup.export('1')
+    service.occurrence_change('2',event['id'],key,{'title':'New exception','location':'Local','reminders':[15]},2)
+    p=backup.preview('1',blob)
+    change=p['override_changes'][0];assert change['fields']['title']['archive']=='Old exception'
+    backup.apply('1',blob,[],[],[],preview_id=p['preview_id'],override_selections=[{'id':event['id'],'occurrence':key,'revision':3,'fields':['title']}])
+    result=service.get_event('1',event['id'])['overrides'][key]
+    assert result['title']=='Old exception' and result['location']=='Local'
+    assert result['reminders']['2']==[15]
+
+
+def test_restore_removes_override_missing_from_archive(service,backup):
+    event=service.save_event('1',{'title':'Series','start':'2026-10-20T12:00','end':'2026-10-20T13:00','rrule':'FREQ=DAILY;COUNT=3'})
+    blob=backup.export('1');key='2026-10-21T12:00'
+    service.occurrence_change('1',event['id'],key,{'title':'Later exception','location':'Keep'},1)
+    p=backup.preview('1',blob)
+    backup.apply('1',blob,[],[],[],preview_id=p['preview_id'],override_selections=[{'id':event['id'],'occurrence':key,'revision':2,'fields':['title']}])
+    assert service.get_event('1',event['id'])['overrides'][key]=={'location':'Keep'}
+
+
+def test_preview_receipt_cannot_be_skipped_reused_or_used_by_partner(service,backup,event):
+    blob=backup.export('1');p=backup.preview('1',blob)
+    with pytest.raises(Problem):backup.apply('1',blob,[],[],[])
+    with pytest.raises(Problem):backup.apply('2',blob,[],[],[],preview_id=p['preview_id'])
+    backup.apply('1',blob,[],[],[],preview_id=p['preview_id'])
+    with pytest.raises(Problem):backup.apply('1',blob,[],[],[],preview_id=p['preview_id'])
+
+
+def test_preview_detects_concurrent_edit(service,backup,event):
+    blob=backup.export('1');service.save_event('1',{'title':'Local'},event['id'],1)
+    p=backup.preview('1',blob);service.save_event('2',{'location':'New'},event['id'],2)
+    with pytest.raises(Problem) as e:
+        backup.apply('1',blob,[{'id':event['id'],'revision':2,'fields':['title']}],[],[],preview_id=p['preview_id'])
+    assert e.value.code=='revision_conflict'
+    assert service.get_event('1',event['id'])['title']=='Local'
+
+
+def test_restore_only_own_selected_profile_settings(service,backup,event):
+    service.settings('1',{'default_reminders':[30],'timezone':'Europe/Warsaw'})
+    blob=backup.export('1')
+    service.settings('1',{'default_reminders':[15],'timezone':'Europe/Amsterdam'})
+    service.settings('2',{'default_reminders':[120]})
+    p=backup.preview('1',blob)
+    backup.apply('1',blob,[],[],[],preview_id=p['preview_id'],profile_fields=['default_reminders'])
+    assert service.state('1')['me']['default_reminders']==[30]
+    assert service.state('1')['me']['timezone']=='Europe/Amsterdam'
+    assert service.state('2')['me']['default_reminders']==[120]

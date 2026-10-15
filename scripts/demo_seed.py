@@ -7,7 +7,7 @@ config=Config.env()
 if not config.demo:raise SystemExit('DEMO_MODE=true required')
 s=Service(Database(config.database),config)
 with s.db.transaction() as c:
-    for i,name in [(1,'Рита'),(2,'Partner')]:s.ensure_user(c,{'id':i,'first_name':name,'language_code':'ru' if i==1 else 'en'})
+    for i,name in [(1,'Alex'),(2,'Partner')]:s.ensure_user(c,{'id':i,'first_name':name,'language_code':'ru' if i==1 else 'en'})
 if not s.state('1')['calendar']:
     s.create_calendar('1');s.join('2',s.invite('1')['token'])
     category=s.save_category('1',{'name':'Наши планы','color':'#9B77D1','translations':{'en':'Our plans'}})

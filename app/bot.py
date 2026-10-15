@@ -59,6 +59,8 @@ class Telegram:
 class Worker:
     def __init__(self,service,telegram=None):
         self.service=service; self.telegram=telegram or Telegram(service.config)
+        from .translation import Translations
+        self.translations=Translations(service)
         self.stop_event=threading.Event(); self.thread=None
     def start(self):
         self.thread=threading.Thread(target=self.run,name='calendar-worker',daemon=True);self.thread.start()
@@ -68,7 +70,7 @@ class Worker:
     def run(self):
         while not self.stop_event.is_set():
             try:
-                self.service.maintenance(); self.schedule(); self.deliver()
+                self.service.maintenance(); self.translations.process(); self.schedule(); self.deliver()
                 with self.service.db.transaction() as c:
                     c.execute('INSERT INTO runtime VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',('worker_heartbeat',stamp()))
             except Exception:
@@ -102,7 +104,7 @@ class Worker:
                             if not (now<due<=horizon):continue
                             unique='reminder:'+':'.join([row['id'],key,str(row['schedule_version']),person['id'],str(minutes),stamp(due)])
                             self.service.enqueue(c,row['calendar_id'],person['id'],'reminder',{'action':'reminder','data':event,
-                                'schedule_version':row['schedule_version'],'minutes':minutes},due=stamp(due),key=unique,event_id=row['id'])
+                                'schedule_version':row['schedule_version'],'minutes':minutes,'scheduled_due':stamp(due)},due=stamp(due),key=unique,event_id=row['id'])
 
     def text(self,job,person):
         p=load(job['payload']); data=p.get('data',{}); lang=person['language']; strings=TEXT[lang]
@@ -140,7 +142,7 @@ class Worker:
                     if not ev or ev['deleted_at'] or ev['schedule_version']!=payload['schedule_version'] or not person['reminders_enabled']:
                         c.execute("UPDATE outbox SET status='cancelled' WHERE id=?",(job['id'],));continue
                     # Do not catch up historical reminders after downtime, pause, or restore.
-                    if (now-datetime.fromisoformat(job['due'])).total_seconds()>90:
+                    if (now-datetime.fromisoformat(payload.get('scheduled_due',job['due']))).total_seconds()>90:
                         c.execute("UPDATE outbox SET status='expired' WHERE id=?",(job['id'],));continue
                 if not person['bot_can_message']:
                     person['delivery_error']='start_bot_required';person.pop('id')

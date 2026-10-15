@@ -166,7 +166,12 @@ class Service:
             translations=data.get('translations',{})
             require(isinstance(translations,dict) and set(translations)<={'ru','en'} and all(isinstance(v,str) and len(v)<=100 for v in translations.values()),'invalid_translation')
             category_id=category_id or uid()
+            previous=c.execute('SELECT data FROM categories WHERE id=?',(category_id,)).fetchone()
+            old=load(previous['data']) if previous else {}
+            data['translation_manual']={k:old.get('translation_manual',{}).get(k,True) if v==old.get('translations',{}).get(k) else True for k,v in translations.items()}
             c.execute('INSERT INTO categories VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data',(category_id,cal['id'],dump(data)))
+            from .translation import enqueue_translation
+            enqueue_translation(c,self.config,'category',category_id,cal['id'],data,digest(dump(data)),force=old.get('name')!=data['name'])
             return {'id':category_id,**data}
 
     def event_row(self,c,user_id,event_id,deleted=False):
@@ -179,12 +184,14 @@ class Service:
         return {'id':row['id'],'revision':row['revision'],'schedule_version':row['schedule_version'],
                 'deleted_at':row['deleted_at'],**load(row['data'])}
 
-    def get_event(self,user_id,event_id,deleted=False):
+    def get_event(self,user_id,event_id,deleted=False,occurrence=None):
         with self.db.transaction() as c:
             r=self.event_row(c,user_id,event_id,deleted)
             result=self.event_data(r)
             ov={v['occurrence']:load(v['data']) for v in c.execute('SELECT * FROM overrides WHERE event_id=?',(event_id,))}
             result['overrides']=ov
+            translation=c.execute("SELECT state,error FROM translation_jobs WHERE kind='event' AND resource_id=?",(event_id,)).fetchone()
+            result['translation_status']=dict(translation) if translation else None
             from .recurrence import base_datetime
             from dateutil.rrule import rrulestr
             base=base_datetime(result)
@@ -195,6 +202,13 @@ class Service:
                 if ov.get(key,{}).get('deleted'):continue
                 result['first_instance']=instance(load(r['data']),key,start,start+duration,ov.get(key))
                 break
+            if occurrence:
+                try:target=datetime.fromisoformat(occurrence).replace(tzinfo=zone(result['timezone']))
+                except (TypeError,ValueError):raise Problem(400,'invalid_occurrence')
+                for key,a,b in occurrences(result,target-timedelta(days=2),target+timedelta(days=2)):
+                    if key==occurrence and not ov.get(key,{}).get('deleted'):
+                        result['selected_instance']=instance(load(r['data']),key,a,b,ov.get(key));break
+                require('selected_instance' in result,'event_not_found',404)
             return result
 
     def validate_event(self,c,cal,data):
@@ -257,6 +271,9 @@ class Service:
                 c.execute('INSERT INTO events(id,calendar_id,data) VALUES(?,?,?)',(event_id,cal['id'],dump(data)))
                 self.notify(c,cal['id'],user_id,'created',data,event_id)
             row=c.execute('SELECT * FROM events WHERE id=?',(event_id,)).fetchone()
+            if not previous or any(data.get(k)!=previous.get(k) for k in ('title','description')):
+                from .translation import enqueue_translation
+                enqueue_translation(c,self.config,'event',event_id,cal['id'],data,row['revision'])
             overlaps=self.overlaps(c,cal['id'],event_id,data)
             return {**self.event_data(row),'overlap_warning':overlaps}
 
@@ -451,11 +468,13 @@ class Service:
     def maintenance(self):
         with self.db.transaction() as c:
             cutoff=stamp(utcnow()-timedelta(days=30))
+            c.execute('DELETE FROM backup_previews WHERE expires_at<=?',(stamp(),))
             c.execute('DELETE FROM events WHERE deleted_at IS NOT NULL AND deleted_at<=?',(cutoff,))
             for ov in c.execute('SELECT * FROM overrides').fetchall():
                 patch=load(ov['data'])
                 if patch.get('deleted_at') and patch['deleted_at']<=cutoff and not patch.get('purged'):
                     c.execute('UPDATE overrides SET data=? WHERE event_id=? AND occurrence=?',(dump({'deleted':True,'purged':True}),ov['event_id'],ov['occurrence']))
             c.execute("DELETE FROM calendars WHERE state='pending_delete' AND delete_at<=?",(stamp(),))
+            c.execute("DELETE FROM translation_jobs WHERE (kind='event' AND NOT EXISTS (SELECT 1 FROM events e WHERE e.id=translation_jobs.resource_id)) OR (kind='category' AND NOT EXISTS (SELECT 1 FROM categories ca WHERE ca.id=translation_jobs.resource_id))")
             c.execute("DELETE FROM outbox WHERE status IN ('sent','cancelled','expired','failed') AND created_at<?",(cutoff,))
             c.execute('DELETE FROM restore_requests WHERE created_at<?',(cutoff,))
