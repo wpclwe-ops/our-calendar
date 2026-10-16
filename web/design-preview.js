@@ -8,13 +8,13 @@
   const frame=document.createElement('iframe');frame.title='Mobile interface preview';
   frame.style.cssText='display:block;width:390px;height:844px;max-width:100%;border:0;margin:24px auto;box-shadow:0 4px 24px #0002;border-radius:20px';
   const query=new URLSearchParams({lang:params.get('lang')||'ru',theme:params.get('theme')||'light'});
-  frame.srcdoc='<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/assets/style.css"><script src="/assets/design-preview.js?'+query.toString().replaceAll('&','&amp;')+'" defer></scr'+'ipt><script src="/assets/app.js" defer></scr'+'ipt></head><body><div id="app"></div><div id="toast" role="status"></div></body></html>';
+  frame.srcdoc='<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/assets/style.css"><script src="/assets/design-preview.js?'+query.toString().replaceAll('&','&amp;')+'" defer></scr'+'ipt><script src="/assets/recurrence.js" defer></scr'+'ipt><script src="/assets/calendar-navigation.js" defer></scr'+'ipt><script src="/assets/calendar-time.js" defer></scr'+'ipt><script src="/assets/calendar-touch.js" defer></scr'+'ipt><script src="/assets/app.js" defer></scr'+'ipt></head><body><div id="app"></div><div id="toast" role="status"></div></body></html>';
   document.body.append(frame);
   window.fetch=async()=>new Response(JSON.stringify({demo:false}),{headers:{'Content-Type':'application/json'}});return;
  }
  const today=new Date().toISOString().slice(0,10),month=today.slice(0,7);
  const members=[{id:'1',name:'Alex',active:true},{id:'2',name:'Partner',active:true}];
- const me={id:'1',name:'Alex',language:params.get('lang')==='en'?'en':'ru',theme:params.get('theme')==='dark'?'dark':'light',timezone:'Europe/Warsaw',timezone_initialized:true,view:'month',notify_at_start:true,default_reminders:[60,15],reminders_enabled:true,bot_can_message:true};
+ const me={id:'1',name:'Alex',language:params.get('lang')==='en'?'en':'ru',theme:params.get('theme')==='dark'?'dark':'light',timezone:'Europe/Warsaw',timezone_initialized:true,view:'day',day_layout:'timeline',month_layout:'paged',default_duration:60,notify_at_start:true,default_reminders:[60,15],reminders_enabled:true,bot_can_message:true};
  const state={me,calendar:{id:'preview',first_id:'1',second_id:'2',state:'active',active:true,votes:[],created_at:month+'-01T12:00:00Z'},members,restores:[]};
  let categories=[{id:'work',name:'Работа и учёба',color:'#7778C9',translations:{en:'Work & study'}},{id:'social',name:'Встречи',color:'#D47AAE',translations:{en:'Social'}},{id:'home',name:'Дом',color:'#55A77B',translations:{en:'Home'}},{id:'sport',name:'Спорт',color:'#4DA5A8',translations:{en:'Sport'}},{id:'travel',name:'Поездки',color:'#598DD4',translations:{en:'Travel'}},{id:'health',name:'Здоровье',color:'#D77777',translations:{en:'Health'}}];
  const events=[];

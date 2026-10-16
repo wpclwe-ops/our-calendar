@@ -47,6 +47,7 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  await swipe(325,60);assert.equal((await info()).view,'day');assert.equal((await info()).selected,'2026-10-16');
  await swipe(250,175);assert.equal((await info()).selected,'2026-10-17');
  await swipe(150,225);assert.equal((await info()).selected,'2026-10-16');
+ await page.locator('.timeline').evaluate(el=>el.scrollTop=400);
  const scrollBefore=await page.locator('.timeline').evaluate(el=>el.scrollTop);
  await swipe(200,205,550,-150);assert.equal((await info()).selected,'2026-10-16');assert.equal((await info()).view,'day');
  assert.ok(await page.locator('.timeline').evaluate(el=>el.scrollTop)>scrollBefore,'native vertical scrolling');
