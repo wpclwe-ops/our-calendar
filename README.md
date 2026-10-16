@@ -2,7 +2,7 @@
 
 Приватный общий календарь для неизменяемой пары Telegram-аккаунтов. Telegram Mini App, бот, сервер и постоянное хранилище находятся в одном проекте.
 
-**Версия 0.2.1 — рабочее ядро, ещё не завершённая реализация всего ТЗ.** Код запускается локально; для реального использования нужно разместить сервер, настроить Telegram-бота и пройти проверку двумя настоящими аккаунтами. Google/iCloud ещё не подключены к пользовательскому интерфейсу. Автоматический перевод RU/EN работает через отдельный приватный сервис LibreTranslate в Railway. Полная таблица готовности: [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md).
+**Версия 0.3.0 — рабочее ядро с удобными повторениями, исправленным поиском, мониторингом и зашифрованными служебными копиями. Полный объём ТЗ ещё не завершён.** Сервис и бот @ourcalendar_bot размещены на Railway. Финальная приёмка на двух настоящих аккаунтах и устройствах остаётся отдельной проверкой. Google/iCloud ещё не подключены к пользовательскому интерфейсу. Автоматический перевод RU/EN работает через отдельный приватный сервис LibreTranslate в Railway. Полная таблица готовности: [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md).
 
 ## Что уже реализовано
 
@@ -47,7 +47,7 @@ python -m app
 
 ## Текущее размещение
 
-Сервис подготовлен на [Railway](https://railway.com/project/a1ef8c5a-c529-40f6-88b1-50d4ebbaa1d6/service/8c7c1a2c-8a80-4c1d-8911-641a43bdea81?environmentId=a628191b-a89a-41b4-aad0-ec48b97383ff). Публичный адрес: https://our-calendar-production-ffcb.up.railway.app. До добавления Telegram-токена и имени бота сервис работает в закрытом режиме настройки, без календарных API и без demo-входа. Подробности: [docs/RAILWAY_DEPLOYMENT.md](docs/RAILWAY_DEPLOYMENT.md).
+Сервис подготовлен на [Railway](https://railway.com/project/a1ef8c5a-c529-40f6-88b1-50d4ebbaa1d6/service/8c7c1a2c-8a80-4c1d-8911-641a43bdea81?environmentId=a628191b-a89a-41b4-aad0-ec48b97383ff). Публичный адрес: https://our-calendar-production-ffcb.up.railway.app. Telegram-бот и приватный перевод подключены. Production demo-вход выключен. Состояние фоновых служб проверяется через `/health`. Подробности: [docs/RAILWAY_DEPLOYMENT.md](docs/RAILWAY_DEPLOYMENT.md).
 
 ## Размещение на Railway
 
@@ -83,6 +83,8 @@ pip install -r requirements-dev.txt
 python -m pytest -q
 python -m compileall -q app scripts
 node --check web/app.js
+node --check web/recurrence.js
+node --test tests/recurrence.test.cjs
 ```
 
 CI повторяет эти проверки. Тесты не используют настоящие Telegram-сообщения, внешние календари и реальные пользовательские данные.
@@ -94,7 +96,7 @@ CI повторяет эти проверки. Тесты не использу�
 | `app/main.py` | HTTP API, авторизация, защита запросов, раздача Mini App |
 | `app/service.py` | Права участников, календарь, события, корзина и жизненный цикл |
 | `app/recurrence.py` | IANA timezone, DST, RRULE и развёртка экземпляров |
-| `app/bot.py` | Telegram Bot API, webhook и постоянная очередь напоминаний |
+| `app/bot.py` | Telegram Bot API, webhook и независимые циклы напоминаний/перевода/копий |
 | `app/backup.py` | Ed25519 ZIP, выборочное/полное восстановление, ICS |
 | `app/translation.py` | Очередь LibreTranslate, защита ручного текста и проверка версий |
 | `app/providers/` | Пилотные read-only адаптеры Google/iCloud, HTTPS transport и credential vault |
@@ -107,3 +109,11 @@ CI повторяет эти проверки. Тесты не использу�
 Официальные источники, сверенные при разработке: [Telegram Mini Apps](https://core.telegram.org/bots/webapps), [Bot API](https://core.telegram.org/bots/api), [Google incremental sync](https://developers.google.com/workspace/calendar/api/guides/sync), [Apple third-party access](https://support.apple.com/en-us/121539), [Railway Dockerfiles](https://docs.railway.com/builds/dockerfiles), [Railway Volumes](https://docs.railway.com/volumes).
 
 Развёрнутый движок: отдельный `calendar-translate`, образ `libretranslate/libretranslate:v1.9.5`, только `en,ru`, одна реплика в EU, лимит 1 GB RAM / 1 CPU. Публичного домена нет; приложение обращается к `http://calendar-translate.railway.internal:5000`. Этот сервис расходует оплачиваемые ресурсы Railway. Модели загружаются при первом старте контейнера; база календаря и ключи остаются на прежнем диске приложения.
+
+## Изменения 0.3.0
+
+Поиск учитывает изменённые экземпляры и их эффективные статусы, категории и принадлежность. В карточке серии можно выбрать другой месяц/экземпляр. Повторения настраиваются обычными полями без ручного RRULE; особые существующие правила сохраняются без потерь. Исправлены сохранение напоминаний партнёра, переход после разделения серии, перевод исключений, пустые переводы категорий и восстановление состояния корзины из ZIP.
+
+Служебные копии ежедневно шифруются до отправки в отдельный приватный bucket Railway ams и проходят пробное offline-восстановление. Хранение — 7 дней. Ключ расшифровки находится вне рабочего volume. Отдельный зашифрованный журнал удалений обязателен при аварийном восстановлении: старая копия не возвращает окончательно удалённый календарь. Настройки показывают последнее состояние. Внешний monitor GitHub Actions проверяет работоспособность каждые 15 минут; расписание может задерживаться.
+
+Подробности: [эксплуатация и аварийное восстановление](docs/OPERATIONS.md), [приёмка](docs/RELEASE_CHECKLIST.md), [хранение данных](docs/PRIVACY.md), [результаты проверки](docs/QA.md). Секреты и реальные данные не коммитятся.

@@ -1,0 +1,9 @@
+const test=require('node:test');const assert=require('node:assert/strict');const R=require('../web/recurrence.js');
+test('weekly selections and interval survive roundtrip',()=>{const c=R.parse('FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE,FR;COUNT=12','2026-10-19T12:00');assert.equal(R.build(c),'FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE,FR;COUNT=12')});
+test('second Tuesday and last weekday are editable',()=>{for(const r of ['FREQ=MONTHLY;BYDAY=2TU','FREQ=MONTHLY;BYDAY=-1FR'])assert.equal(R.build(R.parse(r,'2026-10-13')),r)});
+test('monthly date 31 remains explicit',()=>assert.equal(R.build(R.parse('FREQ=MONTHLY;BYMONTHDAY=31','2026-10-31')),'FREQ=MONTHLY;BYMONTHDAY=31'));
+test('until is inclusive through the DST transition in the event zone',()=>{const c={...R.defaults('2026-10-20'),freq:'DAILY',endMode:'date',until:'2026-10-25'};assert.equal(R.build(c,'Europe/Warsaw'),'FREQ=DAILY;UNTIL=20261025T225959Z');assert.equal(R.parse(R.build(c,'Europe/Warsaw'),'2026-10-20','Europe/Warsaw').until,'2026-10-25')});
+test('until works in Melbourne without shifting the requested date',()=>{const c={...R.defaults('2026-10-20'),freq:'YEARLY',endMode:'date',until:'2027-10-25'};assert.equal(R.parse(R.build(c,'Australia/Melbourne'),'2026-10-20','Australia/Melbourne').until,'2027-10-25')});
+test('special rule is preserved exactly',()=>{const r='FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1';const c=R.parse(r,'2026-10-20');assert.equal(c.freq,'preserve');assert.equal(R.build(c),r)});
+test('invalid interval, count and empty weekdays are rejected',()=>{for(const c of [{freq:'DAILY',interval:0},{freq:'DAILY',interval:1,endMode:'count',count:0},{freq:'WEEKLY',interval:1,days:[]}])assert.throws(()=>R.build(c))});
+test('weekly default uses the event date',()=>assert.deepEqual(R.defaults('2026-10-20T12:00').days,['TU']));

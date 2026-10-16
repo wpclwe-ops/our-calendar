@@ -26,7 +26,7 @@ def create_app(config=None,start_worker=True):
         if start_worker:worker.start()
         yield
         worker.stop()
-    app=FastAPI(title='Our Calendar',version='0.2.1',lifespan=lifespan,docs_url=None,redoc_url=None,openapi_url=None)
+    app=FastAPI(title='Our Calendar',version='0.3.0',lifespan=lifespan,docs_url=None,redoc_url=None,openapi_url=None)
     app.state.service=service;app.state.backups=backups;app.state.worker=worker
     buckets=defaultdict(deque)
     @app.exception_handler(Problem)
@@ -66,7 +66,10 @@ def create_app(config=None,start_worker=True):
         require(header.startswith('Bearer '),'unauthorized',401)
         return session_user(header[7:],config.session_secret or 'local-demo-secret')
     async def body(request):
-        data=await request.body();require(len(data)<=MAX_ARCHIVE*2,'request_too_large',413)
+        chunks=[];size=0
+        async for chunk in request.stream():
+            size+=len(chunk);require(size<=MAX_ARCHIVE*2,'request_too_large',413);chunks.append(chunk)
+        data=b''.join(chunks)
         import json
         result=json.loads(data);require(isinstance(result,dict),'invalid_request')
         return result
@@ -76,16 +79,17 @@ def create_app(config=None,start_worker=True):
 
     @app.get('/health')
     def health():
-        with service.db.transaction() as c:
-            c.execute('SELECT 1')
-            row=c.execute("SELECT value FROM runtime WHERE key='worker_heartbeat'").fetchone()
-        with service.db.transaction() as c:
-            setup=c.execute("SELECT value FROM runtime WHERE key='bot_setup'").fetchone()
-            translation=c.execute("SELECT value FROM runtime WHERE key='translation_probe'").fetchone()
-        return {'ok':True,'ready':True,'version':'0.2.1','demo':config.demo,'worker_heartbeat':row['value'] if row else None,'bot_setup':setup['value'] if setup else 'not_started',
-                'translation':load(translation['value']) if config.translation_url and translation else {'state':'starting' if config.translation_url else 'not_configured'}}
+        from .health import health_status
+        result=health_status(service)
+        return JSONResponse(result,status_code=200 if result['ready'] else 503)
+    @app.get('/api/system-status')
+    def system_status(request:Request):
+        from .health import health_status
+        with service.db.transaction() as c:service.calendar(c,actor(request))
+        result=health_status(service)
+        return {k:result[k] for k in ('ready','degraded','translation','backup')}
     @app.get('/api/config')
-    def public_config():return {'demo':config.demo,'bot_username':config.bot_username,'version':'0.2.1',
+    def public_config():return {'demo':config.demo,'bot_username':config.bot_username,'version':'0.3.0',
                               'integrations':{'google':'not_configured','icloud':'pilot_required','translation':'configured' if config.translation_url else 'not_configured'}}
     @app.post('/api/auth')
     async def auth(request:Request):
@@ -122,6 +126,9 @@ def create_app(config=None,start_worker=True):
     @app.get('/api/events')
     def events(request:Request,start:str='',end:str='',q:str='',owner:str='',category:str='',status:str='',trash:bool=False):
         return service.events(actor(request),start,end,q,owner,category,status,trash)
+    @app.get('/api/events/{eid}/instances')
+    def event_instances(request:Request,eid:str,start:str,end:str):
+        return service.events(actor(request),start,end,event_id=eid)
     @app.get('/api/events/{eid}')
     def event(request:Request,eid:str,trash:bool=False,occurrence:str=''):return service.get_event(actor(request),eid,trash,occurrence or None)
     @app.post('/api/events')

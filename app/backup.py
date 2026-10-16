@@ -101,6 +101,7 @@ class Backups:
                     left,right=before.get(k),v
                     if k=='reminders':left,right=before['reminders'].get(user_id,[]),v.get(user_id,[])
                     if left!=right:fields[k]={'current':left,'archive':right}
+                if current['deleted_at']!=e['deleted_at']:fields['deleted_at']={'current':current['deleted_at'],'archive':e['deleted_at']}
                 if fields:changes.append({'id':e['id'],'revision':current['revision'],'fields':fields})
                 actual={r['occurrence']:load(r['data']) for r in c.execute('SELECT * FROM overrides WHERE event_id=?',(e['id'],))}
                 for key in sorted(set(actual)|set(e['overrides'])):
@@ -114,7 +115,7 @@ class Backups:
                         if lv!=rv:fields[k]={'current':lv,'archive':rv,'archive_present':k in right}
                     if fields:override_changes.append({'id':e['id'],'occurrence':key,'revision':current['revision'],'fields':fields})
             own=self.service.user(c,user_id);old=archive['members'][user_id]
-            profile={k:{'current':own.get(k),'archive':old[k]} for k in ('timezone','theme','view','day_layout','default_reminders','reminders_enabled','notify_at_start') if k in old and own.get(k)!=old[k]}
+            profile={k:{'current':own.get(k),'archive':old[k]} for k in ('language','timezone','theme','view','day_layout','default_reminders','reminders_enabled','notify_at_start') if k in old and own.get(k)!=old[k]}
             categories=[]
             for category in archive['categories']:
                 current=c.execute('SELECT data FROM categories WHERE id=? AND calendar_id=?',(category['id'],cal['id'])).fetchone()
@@ -160,7 +161,8 @@ class Backups:
             for choice in selections:
                 row=touched[choice['id']];data=load(row['data']);old=archived[choice['id']]['data']
                 for field in choice['fields']:
-                    if field=='reminders':data['reminders'][user_id]=old['reminders'].get(user_id,[])
+                    if field=='deleted_at':row['deleted_at']=archived[choice['id']]['deleted_at']
+                    elif field=='reminders':data['reminders'][user_id]=old['reminders'].get(user_id,[])
                     else:data[field]=old[field]
                 sanitize_category(data);self.service.validate_event(c,cal,data);row['data']=dump(data)
             for choice in override_selections:
@@ -189,7 +191,7 @@ class Backups:
                 if patch:c.execute('INSERT INTO overrides VALUES(?,?,?) ON CONFLICT(event_id,occurrence) DO UPDATE SET data=excluded.data',(eid,key,dump(patch)))
                 else:c.execute('DELETE FROM overrides WHERE event_id=? AND occurrence=?',(eid,key))
             for eid,row in touched.items():
-                c.execute('UPDATE events SET data=?,revision=revision+1,schedule_version=schedule_version+1 WHERE id=?',(row['data'],eid))
+                c.execute('UPDATE events SET data=?,deleted_at=?,revision=revision+1,schedule_version=schedule_version+1 WHERE id=?',(row['data'],row['deleted_at'],eid))
                 c.execute("UPDATE outbox SET status='cancelled' WHERE event_id=? AND kind='reminder' AND status IN ('pending','sending')",(eid,))
             for eid in set(missing_ids):
                 require(eid in archived and eid in allowed_missing,'invalid_selection')

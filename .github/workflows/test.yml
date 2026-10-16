@@ -20,3 +20,5 @@ jobs:
       - run: python -m pytest -q
       - run: python -m compileall -q app scripts
       - run: node --check web/app.js
+      - run: node --check web/recurrence.js
+      - run: node --test tests/recurrence.test.cjs

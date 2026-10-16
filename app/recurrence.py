@@ -59,6 +59,24 @@ def base_datetime(data):
         return datetime.combine(date.fromisoformat(data['start']), datetime.min.time(), zone(data['timezone']))
     return local_datetime(data['start'], data['timezone'], data.get('fold'))
 
+def recurrence_starts(data,after=None,limit=None):
+    """RRULE COUNT counts valid instances; nonexistent DST times do not count."""
+    base=base_datetime(data);rule=data.get('rrule','').removeprefix('RRULE:')
+    parts=dict(p.split('=',1) for p in rule.split(';')) if rule else {}
+    total=int(parts.pop('COUNT')) if 'COUNT' in parts else None
+    if rule:
+        parsed=rrulestr(';'.join(k+'='+v for k,v in parts.items()),dtstart=base)
+        values=iter(parsed) if total else parsed.xafter(after or base,inc=True)
+    else:values=[base]
+    valid=yielded=0
+    for dt in values:
+        if dt.astimezone(UTC).astimezone(dt.tzinfo).replace(tzinfo=None)!=dt.replace(tzinfo=None):continue
+        valid+=1
+        if total is not None and valid>total:break
+        if after is not None and dt<after:continue
+        yield dt;yielded+=1
+        if limit is not None and yielded>=limit:break
+
 def occurrences(data, start, end, limit=2000):
     """Expand in event timezone; all-day values remain floating calendar dates."""
     base = base_datetime(data)
@@ -66,11 +84,7 @@ def occurrences(data, start, end, limit=2000):
         duration = timedelta(days=(date.fromisoformat(data['end']) - date.fromisoformat(data['start'])).days)
     else:
         duration = datetime.fromisoformat(data['end']) - datetime.fromisoformat(data['start'])
-    if data.get('rrule'):
-        rule = rrulestr(data['rrule'], dtstart=base)
-        values = rule.xafter(start.astimezone(base.tzinfo) - duration - timedelta(days=2), count=limit + 1, inc=True)
-    else:
-        values = [base]
+    values=recurrence_starts(data,start.astimezone(base.tzinfo)-duration-timedelta(days=2),limit+1)
     count = 0
     for dt in values:
         if dt > end.astimezone(base.tzinfo) + timedelta(days=2):
@@ -90,7 +104,10 @@ def instance(data, key, begin, end, override=None):
     result = dict(data)
     result['start'] = begin.date().isoformat() if data['all_day'] else begin.replace(tzinfo=None).isoformat(timespec='minutes')
     result['end'] = end.date().isoformat() if data['all_day'] else end.replace(tzinfo=None).isoformat(timespec='minutes')
-    result.update(override or {})
+    override=override or {}
+    if any(k in override and override[k]!=data.get(k) for k in ('title','description')):
+        result['translations']={}
+    result.update(override)
     result['occurrence'] = key
     if not result['all_day']:
         result['start_utc'] = local_datetime(result['start'], result['timezone'], result.get('fold', 0)).astimezone(UTC).isoformat()

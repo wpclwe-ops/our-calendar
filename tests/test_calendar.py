@@ -114,3 +114,10 @@ def test_day_layout_archived_and_restored_for_only_own_profile(service,backup):
     backup.apply('1',blob,[],[],[],preview_id=preview['preview_id'],profile_fields=['day_layout'])
     assert service.state('1')['me']['day_layout']=='list'
     assert service.state('2')['me']['day_layout']=='list'
+
+
+def test_count_skips_nonexistent_dst_hour_without_losing_occurrence(service):
+    service.save_event('1',{'title':'DST count','start':'2027-03-27T02:30','end':'2027-03-27T03:30',
+        'timezone':'Europe/Warsaw','rrule':'FREQ=DAILY;COUNT=3'})
+    rows=service.events('1','2027-03-26','2027-04-01')
+    assert [r['start'][:10] for r in rows]==['2027-03-27','2027-03-29','2027-03-30']

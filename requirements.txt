@@ -4,3 +4,4 @@ python-dateutil==2.9.0.post0
 cryptography==50.0.2
 icalendar==7.3.0
 tzdata==2026.5
+boto3==1.43.114
