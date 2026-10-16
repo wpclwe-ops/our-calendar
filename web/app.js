@@ -2,6 +2,9 @@
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const tg=window.Telegram?.WebApp;
+// Touch/click focus stays quiet; keyboard navigation keeps a visible theme-coloured ring.
+document.addEventListener('keydown',e=>{if(e.key==='Tab'||e.key.startsWith('Arrow'))document.documentElement.classList.add('keyboard-navigation')},true);
+document.addEventListener('pointerdown',()=>document.documentElement.classList.remove('keyboard-navigation'),true);
 const words={
 ru:{translateAgain:'Перевести заново',replaceManual:'Заменить ручные переводы',replaceManualHelp:'Ручные версии RU/EN будут заменены автоматическим переводом исходного текста.',translationQueued:'Перевод поставлен в очередь',translationFailed:'Перевод не выполнен. Попробуйте заново.',translation_not_configured:'Сервис перевода ещё не настроен.',mySettings:'Мои настройки из архива',recurrenceExceptions:'Исключения повторяющихся событий',preview_required:'Сравните архив с календарём заново: предпросмотр устарел или уже применён.',calendar:'Календарь',categories:'Категории',settings:'Настройки',month:'Месяц',week:'Неделя',day:'День',today:'Сегодня',
 subtitle:'Время для вас двоих',search:'Поиск событий',filters:'Фильтры',all:'Все',mine:'Мне',partner:'Партнёру',both:'Обоим',
@@ -150,7 +153,9 @@ function calendarPage(){
  let html='';
  if(showSearch){
   html=`<section class="search-page"><div class="search-box">${icon('search')}<input id="search" type="search" value="${esc(query)}" placeholder="${t('search')}" aria-label="${t('search')}">${button(query?'clear-search':'search',icon('close'),'icon',`aria-label="${t(query?'clearSearch':'close')}"`)}</div>${filterControls()}<div class="search-summary"><span>${events.length} ${t('results')}</span>${button('reset-filters',t('resetFilters'),'text-button')}</div>`;
-  let previous='';for(const e of events){const m=eventDay(e).slice(0,7);if(m!==previous){html+=`<h3 class="section-label">${esc(dateLabel(m+'-01',{month:'long',year:'numeric'}))}</h3>`;previous=m}html+=eventList([e])}
+  const groups=new Map();
+  for(const e of events){const month=eventDay(e).slice(0,7);if(!groups.has(month))groups.set(month,[]);groups.get(month).push(e)}
+  for(const [month,entries] of groups)html+=`<h3 class="section-label">${esc(dateLabel(month+'-01',{month:'long',year:'numeric'}))}</h3><div class="search-event-group">${eventList(entries)}</div>`;
   return html+(events.length?'':empty())+'</section>';
  }
  html=`<section class="calendar-controls"><div class="calendar-heading">${button('prev',icon('prev'),'icon',`aria-label="${t('back')}"`)}<div class="grow"><h1 class="month-title">${esc(heading)}</h1>${view==='day'?`<small>${esc(dateLabel(selected,{day:'numeric',month:'long'}))} · ${esc(tz())}</small>`:''}</div>${button('next',icon('next'),'icon',`aria-label="${t('next')}"`)}${button('search',icon('search'),'icon',`aria-label="${t('search')}"`)}${button('filters',icon('filters'),`icon ${showFilters?'selected':''}`,`aria-label="${t('filters')}" aria-expanded="${showFilters}"`)}</div><div class="calendar-view-row"><div class="segment" role="group" aria-label="${t('calendar')}">${['month','week','day'].map(v=>button('view',t(v),v===view?'active':'',`data-view="${v}" aria-pressed="${v===view}"`)).join('')}</div>${button('today',t('today'),'today-btn')}</div>${showFilters?filterControls():''}</section>`;
