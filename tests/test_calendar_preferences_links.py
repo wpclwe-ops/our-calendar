@@ -59,3 +59,31 @@ def test_telegram_button_label_and_url(service):
     button = bot.send('1', 'Notice', 'ru', 'https://calendar.example/?event=example')['reply_markup']['inline_keyboard'][0][0]
     assert button == {'text': 'Открыть событие', 'web_app': {'url': 'https://calendar.example/?event=example'}}
     assert bot.send('1', 'Welcome', 'en')['reply_markup']['inline_keyboard'][0][0]['text'] == 'Open calendar'
+
+
+def test_touchbar_personal_defaults_order_and_restore(service, backup):
+    default = ['day', 'month', 'settings']
+    assert service.state('1')['me']['touch_bar'] == default
+    custom = ['categories', 'week', 'day', 'month', 'settings']
+    service.settings('1', {'touch_bar': custom})
+    assert service.state('1')['me']['touch_bar'] == custom
+    assert service.state('2')['me']['touch_bar'] == default
+    archive = backup.export('1')
+    service.settings('1', {'touch_bar': ['settings']})
+    preview = backup.preview('1', archive)
+    assert 'touch_bar' in preview['profile']
+    backup.apply('1', archive, [], [], [], preview_id=preview['preview_id'], profile_fields=['touch_bar'])
+    assert service.state('1')['me']['touch_bar'] == custom
+    assert service.state('2')['me']['touch_bar'] == default
+    with service.db.transaction() as c:
+        prefs = service.user(c, '2'); prefs.pop('id'); prefs.pop('touch_bar')
+        c.execute('UPDATE users SET data=? WHERE id=?', (dump(prefs), '2'))
+    assert service.state('2')['me']['touch_bar'] == default
+
+
+@pytest.mark.parametrize('items', [None, '', {}, [], ['day'], ['settings', 'day'], ['day', 'day', 'settings'], ['unknown', 'settings'], [True, 'settings'], [['day'], 'settings']])
+def test_invalid_touchbar_cannot_hide_settings(service, items):
+    before = service.state('1')['me']['touch_bar']
+    with pytest.raises(Problem):
+        service.settings('1', {'touch_bar': items})
+    assert service.state('1')['me']['touch_bar'] == before

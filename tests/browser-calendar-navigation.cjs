@@ -13,7 +13,7 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  await new Promise((resolve,reject)=>{server.stderr.on('data',d=>{if(String(d).includes('Uvicorn running'))resolve()});server.on('exit',c=>reject(new Error('server exit '+c)))});
  browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH}:{})});
  const context=await browser.newContext({viewport:{width:375,height:812},isMobile:true,hasTouch:true});const page=await context.newPage();await page.route('https://telegram.org/**',r=>r.abort());
- const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('http://127.0.0.1:8000');await page.waitForSelector('.calendar-view-row');
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('http://127.0.0.1:8000');await page.waitForSelector('.calendar-controls');
  const cdp=await context.newCDPSession(page);
  const wait=()=>page.waitForFunction(()=>!busy&&!calendarSwipe.active());
  const info=()=>page.evaluate(()=>({selected,view,page,query}));
@@ -60,8 +60,8 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  await page.waitForTimeout(510);await page.locator('[data-action="date"][data-date="2026-10-16"] .day-number').tap();await wait();assert.equal((await info()).view,'day');
  // Search and other tabs do not respond to gestures.
  await page.locator('[data-action="search"]').tap();await wait();await page.locator('#search').blur();await swipe(325,60);assert.equal((await info()).view,'day');assert.equal((await info()).selected,'2026-10-16');
- await page.locator('[data-action="search"]').tap();await wait();await page.locator('[data-action="tab"][data-tab="categories"]').tap();await wait();await swipe(325,60);assert.equal((await info()).view,'day');
- await page.locator('[data-action="tab"][data-tab="calendar"]').tap();await wait();await set('2027-01-01','week');assert.match(await page.locator('.week-range').textContent(),/2026.*2027/);
+ await page.locator('[data-action="search"]').tap();await wait();await page.locator('.bottom-nav [data-tab="settings"]').tap();await wait();await page.locator('[data-tab="categories"]').tap();await wait();await swipe(325,60);assert.equal((await info()).view,'day');
+ await page.locator('.bottom-nav [data-view="day"]').tap();await wait();await set('2027-01-01','week');assert.match(await page.locator('.week-range').textContent(),/2026.*2027/);
  for(const width of [320,375,430]){await page.setViewportSize({width,height:812});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);}
  // Checklist uses its own scroll container, and event taps still open details.
  await page.setViewportSize({width:375,height:812});await set('2026-10-16','day');await page.evaluate(()=>{state.me.day_layout='list';render()});await swipe(250,175);assert.equal((await info()).selected,'2026-10-17');await swipe(150,225);assert.equal((await info()).selected,'2026-10-16');
