@@ -53,11 +53,20 @@
 
 /* Personal bottom navigation and calendar actions. */
 .bottom-nav{grid-template-columns:repeat(auto-fit,minmax(0,1fr))}
-.calendar-shell .calendar-motion-viewport{margin-bottom:84px}
-.calendar-actions{position:fixed;z-index:21;right:max(16px,calc((100vw - 928px)/2));bottom:calc(var(--nav-height) + 14px);height:56px;display:flex;align-items:center;gap:10px}
-.calendar-actions .fab{position:static;flex:none}
-.calendar-actions .today-btn{border:1px solid var(--line);border-radius:24px;background:var(--card);padding:10px 18px;box-shadow:var(--shadow)}
+.calendar-shell .calendar-motion-viewport{margin-bottom:0}
+.calendar-actions{pointer-events:none;background:transparent;position:fixed;z-index:21;right:max(16px,calc((100vw - 928px)/2));bottom:calc(var(--nav-height) + 14px);height:56px;display:flex;align-items:center;gap:10px}
+.calendar-actions .fab{position:static;flex:none;pointer-events:auto}
+.calendar-actions .today-btn{pointer-events:auto;border:1px solid var(--line);border-radius:24px;background:var(--card);padding:10px 18px;box-shadow:var(--shadow)}
 .month .day{border-right:0;background:var(--bg)}
 .touchbar-row{display:flex;align-items:center;min-height:60px;padding:8px 12px;gap:4px;border-bottom:1px solid var(--line)}
 .touchbar-row:last-child{border:0}.touchbar-row label{display:flex;flex:1;align-items:center;gap:10px;margin:0;color:var(--ink);font-size:14px;flex-wrap:wrap}.touchbar-row label small{flex-basis:100%;padding-left:30px;font-size:10px;color:var(--muted)}
 .touchbar-row .icon{padding:8px;width:36px;min-width:36px;background:none}.touchbar-row [data-direction] svg{rotate:90deg}.touchbar-handle{touch-action:none;cursor:grab}.touchbar-row.reordering{background:var(--soft);box-shadow:var(--shadow)}
+
+/* Main tabs share the same swipe surface; only calendar buttons float over content. */
+.navigation-shell{height:calc(100dvh - var(--nav-height));display:flex;flex-direction:column;padding:0!important;max-width:960px!important}
+.navigation-shell .header{margin:0;flex:none}.demo+.navigation-shell{height:calc(100dvh - var(--nav-height) - 34px)}
+.navigation-content{flex:1;min-height:0;overflow-y:auto;overscroll-behavior-y:contain;touch-action:pan-y pinch-zoom;padding:20px 16px}
+.calendar-actions .fab,.calendar-actions .today-btn{border:1px solid var(--accent);background:var(--card);color:var(--accent)}
+.timeline,.agenda,.month-scroll{padding-bottom:86px;scroll-padding-bottom:86px}
+.month-scroll{--week-height:260px}.month-scroll .scroll-week:last-child{margin-bottom:0}
+.calendar-swipe-hint[data-mode=tab]{color:var(--accent);border-color:var(--accent)}

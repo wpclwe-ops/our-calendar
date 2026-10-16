@@ -49,3 +49,23 @@ test('long swipe remains reachable on small phones and large screens',()=>{
  assert.deepEqual(N.gesture(-180,0,320,'month'),{type:'view',view:'week'});
  assert.deepEqual(N.gesture(-270,0,1200,'month'),{type:'view',view:'week'});
 });
+
+test('long swipes follow personal Touch Bar order and skip hidden views',()=>{
+ const items=['month','day','settings'];
+ assert.deepEqual(N.gesture(-240,0,375,'month',items),{type:'view',view:'day'});
+ assert.deepEqual(N.gesture(240,0,375,'day',items),{type:'view',view:'month'});
+ assert.deepEqual(N.gesture(-240,0,375,'day',items),{type:'tab',tab:'settings'});
+ assert.deepEqual(N.gesture(240,0,375,'settings',items),{type:'view',view:'day'});
+ assert.deepEqual(N.gesture(-240,0,375,'settings',items),{type:'limit'});
+ assert.deepEqual(N.gesture(240,0,375,'month',items),{type:'limit'});
+ assert.deepEqual(N.gesture(-240,0,375,'week',items),{type:'limit'});
+});
+test('reordered categories and calendar tabs work in both directions',()=>{
+ const items=['categories','week','month','day','settings'];
+ assert.deepEqual(N.gesture(-240,0,375,'categories',items),{type:'view',view:'week'});
+ assert.deepEqual(N.gesture(240,0,375,'week',items),{type:'tab',tab:'categories'});
+ assert.deepEqual(N.gesture(-240,0,375,'week',items),{type:'view',view:'month'});
+ assert.deepEqual(N.gesture(70,0,375,'settings',items),null);
+ assert.deepEqual(N.gesture(-70,0,375,'categories',items),null);
+ assert.deepEqual(N.gesture(-70,0,375,'day',items),{type:'move',direction:1});
+});
