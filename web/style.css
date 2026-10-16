@@ -26,3 +26,28 @@
 .calendar-motion-page .month,.calendar-motion-page .week-strip,.calendar-motion-page .timeline,.calendar-motion-page .day-checklist{transform-origin:top center}
 .calendar-preview-loading{position:absolute;bottom:20px;align-self:center;color:var(--muted);font-size:13px;padding:8px 14px;border-radius:16px;background:var(--card)}
 @media(prefers-reduced-motion:reduce){.motion-active>.calendar-motion-page{will-change:auto}}
+
+/* Personal layouts, current time, and direct manipulation. */
+[hidden]{display:none!important}
+.week-marker-slot{height:9px;display:flex;justify-content:center;align-items:end;margin-top:3px}
+.week-marker{display:block;width:13px;height:4px;border-radius:4px;box-shadow:0 0 0 1px var(--card)}
+.now-line{position:absolute;left:54px;right:0;height:2px;background:var(--accent);z-index:5;pointer-events:none}
+.now-line:before{content:attr(data-time);position:absolute;right:100%;top:-8px;padding-right:6px;font-size:11px;font-weight:700;color:var(--accent);background:var(--card)}
+.now-line:after{content:'';position:absolute;left:-4px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.time-event{touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.time-owner{font-weight:600;opacity:.85}
+.time-event.event-dragging{z-index:10;box-shadow:0 8px 26px #0004;opacity:.92;scale:1.025;cursor:grabbing;will-change:top}
+.calendar-holding{user-select:none;-webkit-user-select:none}
+.drag-time-badge{position:fixed;z-index:90;left:50%;transform:translateX(-50%);border-radius:12px;padding:7px 15px;background:var(--accent-fill);color:var(--on-accent);font-size:14px;font-weight:700;pointer-events:none;box-shadow:var(--shadow)}
+.month-scroll{position:relative;flex:1;min-height:0;overflow-y:auto;overflow-anchor:none;overscroll-behavior-y:contain;touch-action:pan-y pinch-zoom;padding-bottom:70px}
+.scroll-month-weekdays{flex:none;background:var(--card);border-bottom:1px solid var(--line)}
+.scroll-month h2{margin:0;padding:18px 14px 12px;color:var(--accent);font-size:22px;text-transform:capitalize}
+.scroll-month .month{display:block;overflow:visible;flex:none;padding:0}
+.scroll-month .days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));grid-auto-rows:100px;grid-template-rows:none!important}
+.scroll-month .day,.month-spacer{min-height:100px;overflow:hidden}
+.scroll-month .chosen-date:not(.today) .day-number{box-shadow:inset 0 0 0 1px var(--accent);border-radius:50%;color:var(--accent)}
+.setting-row:has(#duration-preset) label,.setting-row:has(#setting-day_layout) label{flex:1;max-width:65%}
+@media(max-width:360px){.scroll-month .days{grid-auto-rows:86px}.scroll-month .day,.month-spacer{min-height:86px}.scroll-month h2{font-size:20px}}
+@media(prefers-reduced-motion:no-preference){.event-dragging{transition:scale .2s,box-shadow .2s}.segment button{transition:background .24s,color .24s,box-shadow .24s}.modal{animation-duration:.28s;animation-timing-function:cubic-bezier(.16,1,.3,1)}}
+
+.time-event-heading{display:flex;align-items:baseline;justify-content:space-between;gap:4px;min-width:0}.time-event-heading>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.time-event-heading .time-owner{flex:none;white-space:nowrap;margin:0;font-size:9px;line-height:12px}
