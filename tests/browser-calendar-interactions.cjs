@@ -23,7 +23,8 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  }
  const back=async()=>{await page.locator('[data-action="back"]').first().click();await wait()};
  assert.equal(await page.evaluate(()=>view),'day');
- assert.deepEqual(await page.locator('.calendar-view-row [data-action="view"]').allTextContents(),['День','Неделя','Месяц']);
+ assert.deepEqual(await page.locator('.bottom-nav button').allTextContents(),['День','Месяц','Настройки']);
+ assert.equal(await page.locator('.calendar-view-row').count(),0);
  assert.equal(await page.locator('.now-line').getAttribute('data-time'),'22:30');
  const line=await page.locator('.now-line').boundingBox(),viewport=await page.locator('.timeline').boundingBox();assert.ok(line.y>=viewport.y&&line.y<=viewport.y+viewport.height);
  await page.locator('.timeline').evaluate(el=>el.scrollTop=300);await page.evaluate(()=>render());assert.equal(await page.locator('.timeline').evaluate(el=>el.scrollTop),300);
@@ -33,20 +34,24 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  await page.locator('[name="start"]').fill('2026-10-16T23:30');await page.locator('[name="start"]').dispatchEvent('change');assert.equal(await page.inputValue('[name="end"]'),'2026-10-17T00:30');
  await page.locator('[name="end"]').fill('2026-10-17T02:00');await page.locator('[name="end"]').dispatchEvent('change');
  await page.locator('[name="start"]').fill('2026-10-17T00:00');await page.locator('[name="start"]').dispatchEvent('change');assert.equal(await page.inputValue('[name="end"]'),'2026-10-17T02:00');await back();
- // Personal settings, Today always opens day, and settings survive a fresh login.
+ // Personal settings, Today preserves the current view, and settings survive a fresh login.
  await page.locator('[data-tab="settings"]').last().click();await wait();
  await page.selectOption('[name="setting-day_layout"]','list');await wait();await page.selectOption('[name="setting-month_layout"]','scroll');await wait();
  await page.selectOption('[name="duration-preset"]','custom');await page.locator('[name="setting-default_duration"]').fill('95');await page.locator('[name="setting-default_duration"]').dispatchEvent('change');await wait();
- await page.locator('[data-tab="calendar"]').last().click();await wait();await set('2026-11-10','week');await page.locator('[data-action="today"]').click();await wait();
- assert.equal(await page.evaluate(()=>selected),'2026-10-16');assert.equal(await page.evaluate(()=>view),'day');assert.equal(await page.locator('.day-checklist').count(),1);
+ await page.locator('.bottom-nav [data-view="day"]').click();await wait();await set('2026-11-10','week');await page.locator('[data-action="today"]').click();await wait();
+ assert.equal(await page.evaluate(()=>selected),'2026-10-16');assert.equal(await page.evaluate(()=>view),'week');
+ await page.locator('.bottom-nav [data-view="day"]').click();await wait();assert.equal(await page.locator('.day-checklist').count(),1);
  await page.locator('[data-action="new"]').click();await wait();assert.equal(await page.inputValue('[name="end"]'),'2026-10-17T00:05');await back();
  await page.reload();await page.waitForSelector('.day-checklist');assert.equal(await page.evaluate(()=>state.me.default_duration),95);
  // Continuous months load both ways and remain bounded without resetting the scroll anchor.
- await set('2026-10-16','month');assert.equal(await page.locator('.scroll-month').count(),3);
+ await set('2026-10-16','month');assert.equal(await page.evaluate(()=>monthWindow.length),3);
+ assert.ok(await page.locator('.month-scroll').evaluate(el=>Math.abs(el.clientHeight/2-el.querySelector('.scroll-week').offsetHeight)<2));
+ const dates=await page.locator('.month-scroll .day').evaluateAll(els=>els.map(el=>el.dataset.date));assert.equal(new Set(dates).size,dates.length);
+ for(let i=1;i<dates.length;i++)assert.equal(Date.parse(dates[i])-Date.parse(dates[i-1]),86400000);
  assert.ok(await page.locator('.month-scroll').evaluate(el=>el.scrollTop)>100);
- await page.locator('.month-scroll').evaluate(el=>el.scrollTop=el.scrollHeight);await page.waitForTimeout(400);await wait();assert.ok(await page.locator('.scroll-month').count()>=4);
+ await page.locator('.month-scroll').evaluate(el=>el.scrollTop=el.scrollHeight);await page.waitForTimeout(400);await wait();assert.ok(await page.evaluate(()=>monthWindow.length)>=4);
  for(let i=0;i<7;i++){await page.locator('.month-scroll').evaluate(el=>el.scrollTop=el.scrollHeight);await page.waitForTimeout(240);await wait()}
- assert.ok(await page.locator('.scroll-month').count()<=7);
+ assert.ok(await page.evaluate(()=>monthWindow.length)<=7);
  const before=await page.evaluate(()=>monthWindow[0]);await page.locator('.month-scroll').evaluate(el=>el.scrollTop=0);await page.waitForTimeout(400);await wait();assert.ok(await page.evaluate(()=>monthWindow[0])<before);
  if(process.env.CALENDAR_SCREENSHOT_DIR)await page.screenshot({path:join(process.env.CALENDAR_SCREENSHOT_DIR,'scroll-month.png')});
  // Long press empty month and week dates creates an event for that date.
@@ -82,7 +87,7 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  await page.locator('.timeline').evaluate(el=>el.scrollTop=14*70);box=await page.locator(`.time-event[data-id="${series.id}"]`).boundingBox();await hold(box.x+box.width/2,box.y+12,box.y+82);
  await page.locator('[data-choice="one"]').click();await wait();const changed=await page.evaluate(id=>api('events/'+id+'?occurrence=2026-10-18T15%3A00'),series.id);
  assert.equal(changed.start,'2026-10-16T15:00');assert.equal(changed.selected_instance.start,'2026-10-18T16:00');
- await page.goto('http://127.0.0.1:8001/?event=missing');await page.waitForSelector('.calendar-view-row');await page.waitForTimeout(200);assert.match(await page.locator('#toast').textContent(),/удалено|недоступно/);
+ await page.goto('http://127.0.0.1:8001/?event=missing');await page.waitForSelector('.calendar-controls');await page.waitForTimeout(200);assert.match(await page.locator('#toast').textContent(),/удалено|недоступно/);
  for(const width of [320,390,430]){await page.setViewportSize({width,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth))}
  await page.evaluate(()=>{state.me.theme='dark';render()});if(process.env.CALENDAR_SCREENSHOT_DIR)await page.screenshot({path:join(process.env.CALENDAR_SCREENSHOT_DIR,'timeline-dark.png')});
  assert.deepEqual(errors,[]);console.log('PASS: defaults, end tracking, midnight, personal settings, Today, current-time positioning, scrolling months, long press in all views, real touch event drag, ownership/category markers, exact-event and occurrence links, responsive layout');
