@@ -128,3 +128,34 @@ def test_translation_probe_uses_synthetic_data_and_is_cached(service):
     assert fake.calls==[(['Купить молоко'],'en'),(['Buy milk'],'ru')]
     with service.db.transaction() as c:
         assert load(c.execute("SELECT value FROM runtime WHERE key='translation_probe'").fetchone()['value'])['state']=='ready'
+
+
+def test_changed_occurrence_gets_its_own_translation_without_reusing_master(service):
+    translator,fake=configured(service)
+    event=service.save_event('1',{'title':'Original','start':'2026-10-20T12:00','end':'2026-10-20T13:00','rrule':'FREQ=DAILY;COUNT=3'})
+    translator.process();e=service.get_event('1',event['id']);key='2026-10-21T12:00'
+    service.occurrence_change('1',event['id'],key,{'title':'Особая встреча'},e['revision'])
+    pending=service.get_event('2',event['id'],occurrence=key)
+    assert pending['selected_instance']['translations']=={}
+    translator.process()
+    result=service.get_event('2',event['id'],occurrence=key)
+    assert result['selected_instance']['translations']['en']['title']=='en: Особая встреча'
+    assert result['translations']['en']['title']=='en: Original'
+
+
+def test_empty_category_translation_fields_do_not_block_auto_translation(service):
+    translator,fake=configured(service)
+    service.save_category('1',{'name':'Дом','color':'#9B77D1','translations':{'ru':'','en':''}})
+    translator.process()
+    assert service.categories('2')[0]['translations']['en']=='en: Дом'
+
+
+def test_manual_exception_translation_is_preserved_and_marked_stale(service):
+    translator,fake=configured(service)
+    event=service.save_event('1',{'title':'Original','description':'Description','start':'2026-10-20T12:00','end':'2026-10-20T13:00','rrule':'FREQ=DAILY;COUNT=3'})
+    key='2026-10-21T12:00'
+    service.occurrence_change('1',event['id'],key,{'description':'Other','translations':{'en':{'title':'Handmade','manual':True}}},1)
+    translator.process();e=service.get_event('1',event['id'])
+    service.save_event('1',{'title':'New original'},event['id'],e['revision'])
+    translator.process();selected=service.get_event('2',event['id'],occurrence=key)['selected_instance']
+    assert selected['translations']['en']['title']=='Handmade' and selected['translations']['en']['stale']

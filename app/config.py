@@ -24,6 +24,12 @@ class Config:
     demo: bool = False
     translation_url: str = ''
     translation_api_key: str = ''
+    backup_endpoint: str = ''
+    backup_bucket: str = ''
+    backup_region: str = 'auto'
+    backup_access_key: str = ''
+    backup_secret_key: str = ''
+    backup_encryption_key: str = ''
     auto_setup_bot: bool = False
     auth_max_age: int = 3600
     session_ttl: int = 3600
@@ -38,9 +44,20 @@ class Config:
                 archive_public_keys=os.getenv('ARCHIVE_PUBLIC_KEYS', 'data/archive-public-keys.json'),
                 auto_setup_bot=os.getenv('AUTO_SETUP_BOT','true').lower()=='true',
                 translation_url=os.getenv('TRANSLATION_URL','').rstrip('/'),translation_api_key=os.getenv('TRANSLATION_API_KEY',''),
-                demo=os.getenv('DEMO_MODE', 'false').lower() == 'true')
+                demo=os.getenv('DEMO_MODE', 'false').lower() == 'true',
+                backup_endpoint=os.getenv('OPERATOR_BACKUP_ENDPOINT',''),backup_bucket=os.getenv('OPERATOR_BACKUP_BUCKET',''),
+                backup_region=os.getenv('OPERATOR_BACKUP_REGION','auto'),backup_access_key=os.getenv('OPERATOR_BACKUP_ACCESS_KEY',''),
+                backup_secret_key=os.getenv('OPERATOR_BACKUP_SECRET_KEY',''),backup_encryption_key=os.getenv('OPERATOR_BACKUP_KEY',''))
         if not valid_translation_url(c.translation_url):
             raise ValueError('TRANSLATION_URL must use HTTPS or Railway private networking')
+        if any((c.backup_endpoint,c.backup_bucket,c.backup_access_key,c.backup_secret_key,c.backup_encryption_key)):
+            if not all((c.backup_endpoint,c.backup_bucket,c.backup_access_key,c.backup_secret_key,c.backup_encryption_key)):
+                raise ValueError('Complete all OPERATOR_BACKUP variables')
+            target=urlsplit(c.backup_endpoint)
+            if target.scheme!='https' or not target.hostname or target.username or target.password or target.query or target.fragment:
+                raise ValueError('OPERATOR_BACKUP_ENDPOINT must be an HTTPS endpoint')
+            from cryptography.fernet import Fernet
+            Fernet(c.backup_encryption_key.encode())
         if not c.demo:
             if not c.bot_token or len(c.session_secret) < 32 or len(c.webhook_secret) < 32:
                 raise ValueError('Set BOT_TOKEN, SESSION_SECRET and WEBHOOK_SECRET (secrets: at least 32 characters)')
