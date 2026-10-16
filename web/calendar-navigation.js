@@ -26,12 +26,12 @@
   const range=sameMonth?`${start.getUTCDate()}–${format(end,{day:'numeric',month:'long',year:'numeric'})}`:`${format(start,{day:'numeric',month:'long',...(!sameYear?{year:'numeric'}:{})})} – ${format(end,{day:'numeric',month:'long',year:'numeric'})}`;
   return {title:language==='en'?`Week ${number} of ${month}`:`${number}-я неделя ${month}`,range};
  }
- function gesture(dx,dy,width,view){
+ function gesture(dx,dy,width,view,items=VIEWS){
   if(Math.abs(dx)<44||Math.abs(dx)<Math.abs(dy)*1.5)return null;
   const direction=dx<0?1:-1;
-  if(Math.abs(dx)<Math.max(140,Math.min(260,width*.55)))return {type:'move',direction};
-  const target=VIEWS[VIEWS.indexOf(view)+direction];
-  return target?{type:'view',view:target}:{type:'limit'};
+  if(Math.abs(dx)<Math.max(140,Math.min(260,width*.55)))return VIEWS.includes(view)?{type:'move',direction}:null;
+  const index=items.indexOf(view),target=index<0?null:items[index+direction];
+  return target?(VIEWS.includes(target)?{type:'view',view:target}:{type:'tab',tab:target}):{type:'limit'};
  }
  function motion({preview,haptic=()=>{}}){
   const viewport=document.querySelector('.calendar-motion-viewport'),current=viewport?.querySelector('.calendar-motion-page');
@@ -49,7 +49,7 @@
    viewport.classList.remove('motion-active');viewport.removeAttribute('aria-busy');
   }
   function ensure(action,node){
-   const nextKey=action.type==='move'?'move'+action.direction:action.type+action.view;
+   const nextKey=action.type==='move'?'move'+action.direction:action.type+(action.view||action.tab);
    if(node||nextKey!==key){const previous=incoming;incoming=null;key=nextKey;
     if(action.type!=='limit'){
      incoming=node||preview(action);incoming.classList.add('motion-preview');incoming.inert=true;incoming.setAttribute('aria-hidden','true');viewport.append(incoming);
@@ -74,7 +74,7 @@
   return {
    update(value,action){
     dx=value;
-    if(action.type==='view'&&lastType!=='view'&&!reduced)haptic();lastType=action.type;
+    if(['view','tab'].includes(action.type)&&action.type!==lastType&&!reduced)haptic();lastType=action.type;
     cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>paint(action));
    },
    async cancel(){
@@ -83,7 +83,7 @@
    },
    async finish(action,node,commit,ready=Promise.resolve()){
     if(ended)return;ended=true;cancelAnimationFrame(frame);ensure(action,node);current.inert=true;viewport.classList.add('motion-active');viewport.setAttribute('aria-busy','true');
-    const direction=action.type==='move'?action.direction:VIEWS.indexOf(action.view)>VIEWS.indexOf(current.dataset.view)?1:-1;
+    const direction=action.direction||(action.type==='move'?action.direction:VIEWS.indexOf(action.view)>VIEWS.indexOf(current.dataset.view)?1:-1);
     const start=current.style.transform||'translate3d(0,0,0)';
     incoming.style.transform=`translate3d(${dx+(direction*width)}px,0,0)`;
     try{
@@ -106,16 +106,16 @@
    }
   };
  }
- function mount({enabled,getView,label,run,onError,startMotion=()=>null}){
+ function mount({enabled,getView,getItems=()=>VIEWS,label,run,onError,startMotion=()=>null}){
   let drag=null,hint=null,suppressUntil=0,settling=false;
   const clear=()=>{hint?.remove();hint=null;drag=null};
   const rollback=session=>{if(!session)return;settling=true;Promise.resolve(session.cancel()).catch(onError).finally(()=>settling=false)};
   const cancel=()=>{const session=drag?.motion;clear();rollback(session)};
   document.addEventListener('pointerdown',e=>{
    if(drag){cancel();return}if(settling)return;
-   const surface=e.target.closest?.('.calendar-shell');
+   const surface=e.target.closest?.('.calendar-shell,.navigation-shell');
    if(!e.isPrimary||e.pointerType==='mouse'||!surface||!enabled()||e.target.closest('header,.calendar-controls,.day-layout-row,.time-event,input,select,textarea'))return;
-   drag={id:e.pointerId,x:e.clientX,y:e.clientY,surface,width:surface.clientWidth,view:getView(),axis:null};
+   drag={id:e.pointerId,x:e.clientX,y:e.clientY,surface,width:surface.clientWidth,view:getView(),items:[...getItems()],axis:null};
   });
   document.addEventListener('pointermove',e=>{
    if(!drag||e.pointerId!==drag.id)return;
@@ -126,20 +126,20 @@
     drag.axis='x';drag.motion=startMotion();drag.surface.setPointerCapture(e.pointerId);
    }
    e.preventDefault();
-   const action=gesture(dx,dy,drag.width,drag.view);
-   drag.motion?.update(dx,action||{type:'move',direction:dx<0?1:-1});
+   const action=gesture(dx,dy,drag.width,drag.view,drag.items);
+   drag.motion?.update(dx,action||(VIEWS.includes(drag.view)?{type:'move',direction:dx<0?1:-1}:{type:'limit'}));
    if(!action){hint?.remove();hint=null;return}
    if(!hint){hint=document.createElement('div');hint.className='calendar-swipe-hint';hint.setAttribute('role','status');document.body.append(hint)}
    hint.textContent=label(action);hint.dataset.mode=action.type;
   },{passive:false});
   document.addEventListener('pointerup',e=>{
    if(!drag||e.pointerId!==drag.id)return;
-   const action=drag.axis==='x'?gesture(e.clientX-drag.x,e.clientY-drag.y,drag.width,drag.view):null;
-   const session=drag.motion;
+   const action=drag.axis==='x'?gesture(e.clientX-drag.x,e.clientY-drag.y,drag.width,drag.view,drag.items):null;
+   const session=drag.motion,dragStartX=drag.x;
    if(drag.axis==='x')suppressUntil=Date.now()+500;
    clear();
    if(action&&action.type!=='limit'&&enabled()){
-    settling=true;Promise.resolve().then(()=>run(action,session)).catch(async error=>{await session?.cancel();onError(error)}).finally(()=>settling=false);
+    settling=true;Promise.resolve().then(()=>run({...action,direction:e.clientX<dragStartX?1:-1},session)).catch(async error=>{await session?.cancel();onError(error)}).finally(()=>settling=false);
    }else rollback(session);
   });
   document.addEventListener('pointercancel',cancel);

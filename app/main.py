@@ -26,7 +26,7 @@ def create_app(config=None,start_worker=True):
         if start_worker:worker.start()
         yield
         worker.stop()
-    app=FastAPI(title='Our Calendar',version='0.5.0',lifespan=lifespan,docs_url=None,redoc_url=None,openapi_url=None)
+    app=FastAPI(title='Our Calendar',version='0.5.1',lifespan=lifespan,docs_url=None,redoc_url=None,openapi_url=None)
     app.state.service=service;app.state.backups=backups;app.state.worker=worker
     buckets=defaultdict(deque)
     @app.exception_handler(Problem)
@@ -89,7 +89,7 @@ def create_app(config=None,start_worker=True):
         result=health_status(service)
         return {k:result[k] for k in ('ready','degraded','translation','backup')}
     @app.get('/api/config')
-    def public_config():return {'demo':config.demo,'bot_username':config.bot_username,'version':'0.5.0',
+    def public_config():return {'demo':config.demo,'bot_username':config.bot_username,'version':'0.5.1',
                               'integrations':{'google':'not_configured','icloud':'pilot_required','translation':'configured' if config.translation_url else 'not_configured'}}
     @app.post('/api/auth')
     async def auth(request:Request):
