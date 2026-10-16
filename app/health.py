@@ -5,7 +5,7 @@ from .service import load
 
 def health_status(service):
     with service.db.transaction() as c:
-        values={r['key']:r['value'] for r in c.execute("SELECT * FROM runtime WHERE key IN ('worker_heartbeat','translation_heartbeat','bot_setup','translation_probe','operator_backup')")}
+        values={r['key']:r['value'] for r in c.execute("SELECT * FROM runtime WHERE key IN ('worker_heartbeat','translation_heartbeat','bot_setup','translation_probe','operator_backup','release_checkpoint')")}
     now=utcnow()
     def age(value):
         try:return max(0,int((now-datetime.fromisoformat(value)).total_seconds()))
@@ -21,4 +21,4 @@ def health_status(service):
     degraded=not ready or (bool(service.config.translation_url) and translation['state']!='ready') or (bool(service.config.backup_bucket) and backup['state']!='ready')
     return {'ok':True,'ready':ready,'degraded':degraded,'version':'0.3.0','demo':service.config.demo,
             'worker_heartbeat':heartbeat,'heartbeat_age_seconds':seconds,'bot_setup':values.get('bot_setup','not_started'),
-            'translation':translation,'backup':backup}
+            'translation':translation,'backup':backup,'release_checkpoint':load(values['release_checkpoint']) if values.get('release_checkpoint') else {'state':'not_requested'}}
