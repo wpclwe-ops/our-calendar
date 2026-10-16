@@ -24,6 +24,7 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
   await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await wait();await page.waitForTimeout(50);await wait();return hint;
  }
  async function set(date,mode){await page.evaluate(async({date,mode})=>{selected=date;await changeView(mode)},{date,mode});await wait()}
+ await page.evaluate(async()=>{state=await api('settings','PATCH',{touch_bar:['month','week','day','settings']})});
  await set('2026-10-16','month');
  // The page follows the finger before release; cancelling returns it without navigation.
  const startBounds=await page.locator('.bottom-nav').boundingBox();
@@ -51,20 +52,22 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  const scrollBefore=await page.locator('.timeline').evaluate(el=>el.scrollTop);
  await swipe(200,205,550,-150);assert.equal((await info()).selected,'2026-10-16');assert.equal((await info()).view,'day');
  assert.ok(await page.locator('.timeline').evaluate(el=>el.scrollTop)>scrollBefore,'native vertical scrolling');
- await swipe(325,60);assert.equal((await info()).view,'day');assert.equal((await info()).selected,'2026-10-16');
+ await swipe(325,60);assert.equal(await page.evaluate(()=>tab),'settings');assert.equal((await info()).selected,'2026-10-16');
+ await swipe(60,325);assert.equal(await page.evaluate(()=>tab),'calendar');assert.equal((await info()).view,'day');
  await swipe(60,325);assert.equal((await info()).view,'week');
  await swipe(60,325);assert.equal((await info()).view,'month');
  await swipe(60,325);assert.equal((await info()).view,'month');assert.equal((await info()).selected,'2026-10-16');
  // A cancelled gesture must not move, and its hint must disappear.
  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:320,y:430}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:80,y:430}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]});await wait();assert.equal((await info()).view,'month');assert.equal(await page.locator('.calendar-swipe-hint').count(),0);
  await page.waitForTimeout(510);await page.locator('[data-action="date"][data-date="2026-10-16"] .day-number').tap();await wait();assert.equal((await info()).view,'day');
- // Search and other tabs do not respond to gestures.
+ // Search stays isolated; a tab absent from Touch Bar has no long-swipe neighbour.
  await page.locator('[data-action="search"]').tap();await wait();await page.locator('#search').blur();await swipe(325,60);assert.equal((await info()).view,'day');assert.equal((await info()).selected,'2026-10-16');
  await page.locator('[data-action="search"]').tap();await wait();await page.locator('.bottom-nav [data-tab="settings"]').tap();await wait();await page.locator('[data-tab="categories"]').tap();await wait();await swipe(325,60);assert.equal((await info()).view,'day');
- await page.locator('.bottom-nav [data-view="day"]').tap();await wait();await set('2027-01-01','week');assert.match(await page.locator('.week-range').textContent(),/2026.*2027/);
+ await page.waitForTimeout(510);await page.locator('.bottom-nav [data-view="day"]').tap();await wait();await set('2027-01-01','week');assert.match(await page.locator('.week-range').textContent(),/2026.*2027/);
  for(const width of [320,375,430]){await page.setViewportSize({width,height:812});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);}
  // Checklist uses its own scroll container, and event taps still open details.
- await page.setViewportSize({width:375,height:812});await set('2026-10-16','day');await page.evaluate(()=>{state.me.day_layout='list';render()});await swipe(250,175);assert.equal((await info()).selected,'2026-10-17');await swipe(150,225);assert.equal((await info()).selected,'2026-10-16');
+ await page.evaluate(()=>api('events','POST',{title:'Navigation specimen',start:'2026-10-16T12:00',end:'2026-10-16T13:00',timezone:'UTC'}));
+ await page.setViewportSize({width:375,height:812});await set('2026-10-16','day');await page.evaluate(async()=>{state=await api('settings','PATCH',{day_layout:'list'});render()});await swipe(250,175);assert.equal((await info()).selected,'2026-10-17');await swipe(150,225);assert.equal((await info()).selected,'2026-10-16');
  // Pinch/multitouch cancels navigation.
  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:300,y:500,id:1}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:300,y:500,id:1},{x:200,y:500,id:2}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});assert.equal((await info()).selected,'2026-10-16');
  await page.waitForTimeout(510);await page.locator('.day-task-card').first().tap();await wait();assert.equal((await info()).page,'detail');await page.locator('[data-action="back"]').first().tap();await wait();await set('2026-10-16','week');

@@ -146,6 +146,7 @@ function mountTouchBar(){
 }
 function demo(){return cfg.demo?`<div class="demo">${t('demo')}<select id="demo-user" aria-label="Demo account">${['1','2','3'].map(x=>opt(x,'User '+x,state?.me.id)).join('')}</select></div>`:''}
 function render(){
+ const oldNavigation=$('.calendar-motion-page:not(.motion-preview) .navigation-content'),navigationPosition=oldNavigation?{tab:document.body.dataset.tab,top:oldNavigation.scrollTop}:null;
  monthResize?.disconnect();monthResize=null;
  const oldTimeline=$('.timeline'),timelinePosition=oldTimeline?{day:oldTimeline.dataset.date,top:oldTimeline.scrollTop}:null;
  const oldMonths=$('.month-scroll'),monthPosition=oldMonths&&oldMonths.dataset.focus===selected?monthAnchor(oldMonths):null;
@@ -172,9 +173,11 @@ function render(){
  else html=settingsPage();
  const active=state.calendar?.active;
  document.body.dataset.page=page;document.body.dataset.tab=tab;document.body.classList.toggle('calendar-screen',Boolean(active&&tab==='calendar'&&page==='main'&&!showSearch));
- const content=active&&tab==='calendar'&&page==='main'&&!showSearch?`<div class="calendar-motion-viewport"><div class="calendar-motion-page" data-view="${view}">${html}</div></div>`:html;
- $('#app').innerHTML=demo()+`<main class="shell ${page==='main'?'main-screen':'sub-screen'} ${tab==='calendar'&&page==='main'&&!showSearch?'calendar-shell':''}">${header()}${content}</main>`+(active&&page==='main'?navigation():'')+(active&&tab==='calendar'&&page==='main'&&!showSearch?`<div class="calendar-actions">${button('today',t('today'),'today-btn')}${button('new',icon('plus'),'fab','aria-label="'+t('newEvent')+'"')}</div>`:'');
+ const mainNavigation=active&&page==='main'&&!showSearch;
+ const content=mainNavigation?`<div class="calendar-motion-viewport"><div class="calendar-motion-page" data-view="${activeNavigation()}">${tab==='calendar'?html:`<div class="navigation-content">${html}</div>`}</div></div>`:html;
+ $('#app').innerHTML=demo()+`<main class="shell ${page==='main'?'main-screen':'sub-screen'} ${mainNavigation?(tab==='calendar'?'calendar-shell':'navigation-shell'):''}">${header()}${content}</main>`+(active&&page==='main'?navigation():'')+(active&&tab==='calendar'&&page==='main'&&!showSearch?`<div class="calendar-actions">${button('today',t('today'),'today-btn')}${button('new',icon('plus'),'fab','aria-label="'+t('newEvent')+'"')}</div>`:'');
  paint();
+ if(page==='main'&&navigationPosition?.tab===tab){const content=$('.navigation-content');if(content)content.scrollTop=navigationPosition.top}
  if(page==='touchbar')mountTouchBar();
  if(page==='main'&&tab==='calendar'&&!query){positionTimeline(document,timelinePosition);mountMonthScroll(monthPosition)}
 }
@@ -395,13 +398,18 @@ function backupPage(){
  return html;
 }
 async function refresh(){state=await api('state');await loadData();render()}
-function navigationTarget(action){return {date:action.type==='move'?CalendarNavigation.shift(selected,view,action.direction):selected,mode:action.type==='view'?action.view:view}}
+function activeNavigation(){return tab==='calendar'?view:tab}
+function navigationTarget(action){return {date:action.type==='move'?CalendarNavigation.shift(selected,view,action.direction):selected,mode:action.type==='view'?action.view:view,tab:action.type==='tab'?action.tab:'calendar'}}
 function atCalendarTarget(target,rows,fn){
- const old={selected,view,events,monthWindow};monthWindow=[...monthWindow];
- try{selected=target.date;view=target.mode;if(rows)events=rows;return fn()}
- finally{selected=old.selected;view=old.view;events=old.events;monthWindow=old.monthWindow}
+ const old={selected,view,events,monthWindow,tab,categories,systemStatus};monthWindow=[...monthWindow];
+ try{selected=target.date;view=target.mode;tab=target.tab||'calendar';if(rows){if(tab==='calendar')events=rows;else if(tab==='categories')categories=rows;else systemStatus=rows}return fn()}
+ finally{selected=old.selected;view=old.view;events=old.events;monthWindow=old.monthWindow;tab=old.tab;categories=old.categories;systemStatus=old.systemStatus}
 }
 function navigationEntry(target){
+ if(target.tab&&target.tab!=='calendar'){
+  const key='tab:'+target.tab;if(navigationCache.has(key))return navigationCache.get(key);
+  const entry={rows:null,promise:null};entry.promise=api(target.tab==='categories'?'categories':'system-status').then(rows=>{entry.rows=rows;return rows}).catch(error=>{navigationCache.delete(key);throw error});entry.promise.catch(()=>{});navigationCache.set(key,entry);while(navigationCache.size>12)navigationCache.delete(navigationCache.keys().next().value);return entry;
+ }
  const params=atCalendarTarget(target,null,()=>{
   const days=calendarRange();
   return new URLSearchParams({start:addDays(days[0],-1),end:addDays(days.at(-1),2),q:'',...filter});
@@ -417,13 +425,13 @@ function navigationEntry(target){
 }
 function warmNavigation(){
  if(tab!=='calendar'||page!=='main'||showSearch||!state.calendar?.active)return;
- const modes=['month','week','day'],i=modes.indexOf(view);
+ const modes=touchBarItems(),i=modes.indexOf(view);
  for(const direction of [-1,1])navigationEntry(navigationTarget({type:'move',direction}));
- for(const mode of [modes[i-1],modes[i+1]].filter(Boolean))navigationEntry({date:selected,mode});
+ for(const mode of (i<0?[]:[modes[i-1],modes[i+1]]).filter(mode=>['day','week','month'].includes(mode)))navigationEntry({date:selected,mode});
 }
 function navigationPage(target,rows){
- const node=document.createElement('div');node.className='calendar-motion-page';node.dataset.view=target.mode;
- node.innerHTML=atCalendarTarget(target,rows||[],calendarPage);paint(node);positionTimeline(node);requestAnimationFrame(()=>{positionTimeline(node);node.dataset.timelineScroll=$('.timeline',node)?.scrollTop||0;const el=$('.month-scroll',node);if(el)positionMonths(el)});
+ const node=document.createElement('div');node.className='calendar-motion-page';node.dataset.view=target.tab==='calendar'?target.mode:target.tab;
+ node.innerHTML=atCalendarTarget(target,rows||(target.tab==='calendar'?[]:null),()=>tab==='calendar'?calendarPage():`<div class="navigation-content">${tab==='categories'?categoriesPage():settingsPage()}</div>`);paint(node);positionTimeline(node);requestAnimationFrame(()=>{positionTimeline(node);node.dataset.timelineScroll=$('.timeline',node)?.scrollTop||0;const el=$('.month-scroll',node);if(el)positionMonths(el)});
  if(!rows){const loading=document.createElement('span');loading.className='calendar-preview-loading';loading.textContent=t('loading');node.append(loading)}
  return node;
 }
@@ -432,14 +440,15 @@ function navigationPreview(action){
  if(!entry.rows)entry.promise.then(rows=>{
   if(!node.isConnected)return;
   node.replaceChildren(...navigationPage(target,rows).childNodes);
-  positionTimeline(node);
+  positionTimeline(node);const months=$('.month-scroll',node);if(months)positionMonths(months);
  }).catch(()=>{});
  return node;
 }
 async function navigateSmoothly(action,motion){
+ if(!action.direction&&['view','tab'].includes(action.type)){const items=touchBarItems();action={...action,direction:items.indexOf(action.view||action.tab)>items.indexOf(activeNavigation())?1:-1}}
  const target=navigationTarget(action),rows=await navigationEntry(target).promise;
  const ready=action.type==='view'?api('settings','PATCH',{view:target.mode}):Promise.resolve();
- const commit=()=>{selected=target.date;view=target.mode;state.me.view=view;events=rows;render();warmNavigation()};
+ const commit=()=>{selected=target.date;view=target.mode;tab=target.tab;state.me.view=view;if(tab==='calendar')events=rows;else if(tab==='categories')categories=rows;else systemStatus=rows;render();warmNavigation()};
  if(motion)await motion.finish(action,navigationPage(target,rows),commit,ready);else{await ready;commit()}
 }
 async function loadData(){
@@ -491,7 +500,7 @@ const actions={
  'touchbar':()=>{page='touchbar';render()},
  'touchbar-move':el=>{const items=[...touchBarItems()],i=items.indexOf(el.dataset.item),j=i+Number(el.dataset.direction);if(i<0||j<0||j>=items.length-1)return;[items[i],items[j]]=[items[j],items[i]];return saveTouchBar(items)},
  'nav-view':async el=>{if(tab==='calendar'&&page==='main'&&!showSearch){if(view!==el.dataset.view)await navigateSmoothly({type:'view',view:el.dataset.view},CalendarNavigation.motion({preview:navigationPreview}));return}tab='calendar';page='main';showSearch=false;query='';await changeView(el.dataset.view)},
- 'tab':async el=>{tab=el.dataset.tab;page='main';await loadData();render()},
+ 'tab':async el=>{tab=el.dataset.tab;page='main';showSearch=false;query='';await loadData();render()},
  'view':el=>el.dataset.view===view?undefined:navigateSmoothly({type:'view',view:el.dataset.view},CalendarNavigation.motion({preview:navigationPreview})),
  'day-layout':async el=>{state=await api('settings','PATCH',{day_layout:el.dataset.layout});render()},
  'toggle-day-done':async el=>{const e=listedEvent(el);await changeEventStatus(e,e.status==='done'?'planned':'done');await loadData();render()},
@@ -549,9 +558,9 @@ function categoryDialog(category){
  if(category)$('#remove-category',el).onclick=async()=>{if(await confirmDialog(t('categoryDelete'))){await api('categories/'+category.id,'DELETE');el.remove();await loadData();render()}};
 }
 const calendarSwipe=CalendarNavigation.mount({
- enabled:()=>Boolean(state?.calendar?.active&&state.calendar.state==='active'&&tab==='calendar'&&page==='main'&&!showSearch&&!busy&&!document.querySelector('.modal-backdrop')),
- getView:()=>view,
- label:action=>action.type==='view'?`${['month','week','day'].indexOf(action.view)>['month','week','day'].indexOf(view)?'←':'→'} ${t(action.view)}`:action.type==='limit'?t(view):`${action.direction>0?'←':'→'} ${t(action.direction>0?'next':'back')} · ${t(view)}`,
+ enabled:()=>Boolean(state?.calendar?.active&&state.calendar.state==='active'&&page==='main'&&!showSearch&&!busy&&!monthLoading&&!document.querySelector('.modal-backdrop')),
+ getView:activeNavigation,getItems:touchBarItems,
+ label:action=>['view','tab'].includes(action.type)?t(action.view||action.tab):action.type==='limit'?t(activeNavigation()):`${action.direction>0?'←':'→'} ${t(action.direction>0?'next':'back')} · ${t(view)}`,
  startMotion:()=>CalendarNavigation.motion({preview:navigationPreview,haptic:()=>{try{tg?.HapticFeedback?.selectionChanged()}catch{}}}),
  run:async(action,motion)=>{busy=true;try{await navigateSmoothly(action,motion)}finally{busy=false}},
  onError:error=>toast(error.message)
