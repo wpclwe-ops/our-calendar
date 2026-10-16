@@ -5,6 +5,7 @@ import pytest
 from app.bot import Worker,TelegramAPIError
 from app.main import create_app
 from app.service import load,dump
+from app.security import Problem
 from app.recurrence import UTC,stamp
 
 class FakeTelegram:
@@ -16,12 +17,12 @@ def test_reminders_dedupe_reschedule_and_no_past(service):
     worker=Worker(service,FakeTelegram());now=datetime(2026,10,24,8,0,tzinfo=UTC)
     worker.schedule(now);worker.schedule(now)
     with service.db.transaction() as c:
-        assert c.execute("SELECT COUNT(*) FROM outbox WHERE kind='reminder' AND status='pending'").fetchone()[0]==2
+        assert c.execute("SELECT COUNT(*) FROM outbox WHERE kind='reminder' AND status='pending'").fetchone()[0]==4
     service.save_event('1',{'start':'2026-10-24T14:00','end':'2026-10-24T15:00'},ev['id'],1)
     worker.schedule(now)
     with service.db.transaction() as c:
-        assert c.execute("SELECT COUNT(*) FROM outbox WHERE kind='reminder' AND status='pending'").fetchone()[0]==2
-        assert c.execute("SELECT COUNT(*) FROM outbox WHERE kind='reminder' AND status='cancelled'").fetchone()[0]==2
+        assert c.execute("SELECT COUNT(*) FROM outbox WHERE kind='reminder' AND status='pending'").fetchone()[0]==4
+        assert c.execute("SELECT COUNT(*) FROM outbox WHERE kind='reminder' AND status='cancelled'").fetchone()[0]==4
     worker.schedule(now+timedelta(days=1))
     # Expired jobs are not delivered late.
     worker.deliver(now+timedelta(days=1))
@@ -31,7 +32,7 @@ def test_all_day_reminder_midnight_each_recipient(service):
     service.settings('1',{'timezone':'Europe/Warsaw'});service.settings('2',{'timezone':'Australia/Melbourne'})
     service.save_event('1',{'title':'Day','start':'2026-10-25','end':'2026-10-26','all_day':True})
     worker=Worker(service,FakeTelegram());worker.schedule(datetime(2026,10,23,0,0,tzinfo=UTC))
-    with service.db.transaction() as c:jobs=c.execute("SELECT * FROM outbox WHERE kind='reminder' ORDER BY user_id").fetchall()
+    with service.db.transaction() as c:jobs=c.execute("SELECT * FROM outbox WHERE kind='reminder' AND json_extract(payload,'$.minutes')=60 ORDER BY user_id").fetchall()
     assert jobs[0]['due']=='2026-10-24T21:00:00+00:00'
     assert jobs[1]['due']=='2026-10-24T12:00:00+00:00'
 
@@ -88,3 +89,79 @@ def test_retry_does_not_extend_original_reminder_deadline(service):
     assert fake.sent==[]
     with service.db.transaction() as c:
         assert c.execute("SELECT COUNT(*) FROM outbox WHERE kind='reminder' AND status='expired'").fetchone()[0]==2
+
+
+def allow_messages(service):
+    with service.db.transaction() as c:
+        c.execute('DELETE FROM outbox')
+        for user_id in ('1','2'):
+            prefs=service.user(c,user_id);prefs.pop('id');prefs['bot_can_message']=True
+            c.execute('UPDATE users SET data=? WHERE id=?',(dump(prefs),user_id))
+
+
+def test_existing_event_start_delivery_both_languages_and_deduplication(service,event):
+    # Legacy accounts have no new preference stored; existing events must work.
+    allow_messages(service)
+    with service.db.transaction() as c:
+        for user_id in ('1','2'):
+            prefs=load(c.execute('SELECT data FROM users WHERE id=?',(user_id,)).fetchone()['data'])
+            prefs.pop('notify_at_start',None)
+            c.execute('UPDATE users SET data=? WHERE id=?',(dump(prefs),user_id))
+    fake=FakeTelegram();worker=Worker(service,fake)
+    begin=datetime(2026,10,24,10,0,tzinfo=UTC)
+    worker.schedule(begin-timedelta(minutes=2));worker.schedule(begin-timedelta(seconds=20))
+    worker.deliver(begin-timedelta(seconds=1));assert not fake.sent
+    worker.deliver(begin+timedelta(seconds=14));worker.deliver(begin+timedelta(seconds=30))
+    assert len(fake.sent)==2
+    assert fake.sent[0][1].startswith('Событие начинается: Together')
+    assert fake.sent[1][1].startswith('Event starting now: Together')
+
+
+def test_start_preference_is_personal_and_master_switch_still_applies(service,event):
+    allow_messages(service)
+    service.settings('1',{'notify_at_start':False})
+    fake=FakeTelegram();worker=Worker(service,fake)
+    begin=datetime(2026,10,24,10,0,tzinfo=UTC)
+    worker.schedule(begin-timedelta(minutes=2))
+    service.settings('2',{'reminders_enabled':False})
+    worker.deliver(begin);assert not fake.sent
+    service.settings('2',{'reminders_enabled':True})
+    worker.schedule(begin-timedelta(seconds=30));worker.deliver(begin)
+    assert len(fake.sent)==1 and fake.sent[0][0]=='2'
+    with pytest.raises(Problem) as exc:
+        service.settings('1',{'notify_at_start':'false'})
+    assert exc.value.code=='invalid_settings'
+
+
+def test_start_notifications_skip_past_and_expire_after_downtime(service,event):
+    allow_messages(service)
+    fake=FakeTelegram();worker=Worker(service,fake)
+    begin=datetime(2026,10,24,10,0,tzinfo=UTC)
+    worker.schedule(begin+timedelta(seconds=1));worker.deliver(begin+timedelta(seconds=1))
+    assert not fake.sent
+    worker.schedule(begin-timedelta(minutes=2))
+    worker.deliver(begin+timedelta(seconds=91));assert not fake.sent
+
+
+def test_start_notification_all_day_uses_each_recipient_midnight(service):
+    service.settings('1',{'timezone':'Europe/Warsaw'})
+    service.settings('2',{'timezone':'Australia/Melbourne'})
+    service.save_event('1',{'title':'Day','start':'2026-10-25','end':'2026-10-26','all_day':True})
+    worker=Worker(service,FakeTelegram());worker.schedule(datetime(2026,10,23,tzinfo=UTC))
+    with service.db.transaction() as c:
+        jobs=c.execute("SELECT user_id,due FROM outbox WHERE json_extract(payload,'$.minutes')=0 ORDER BY user_id").fetchall()
+    assert [(j['user_id'],j['due']) for j in jobs]==[
+        ('1','2026-10-24T22:00:00+00:00'),('2','2026-10-24T13:00:00+00:00')]
+
+
+@pytest.mark.parametrize('change',['delete','done','move'])
+def test_start_queue_invalidated_when_event_changes(service,event,change):
+    allow_messages(service)
+    fake=FakeTelegram();worker=Worker(service,fake)
+    begin=datetime(2026,10,24,10,0,tzinfo=UTC)
+    worker.schedule(begin-timedelta(minutes=2))
+    if change=='delete':service.delete_event('1',event['id'],1)
+    elif change=='done':service.save_event('1',{'status':'done'},event['id'],1)
+    else:service.save_event('1',{'start':'2026-10-24T14:00','end':'2026-10-24T15:00'},event['id'],1)
+    worker.schedule(begin-timedelta(seconds=30));worker.deliver(begin)
+    assert not any('Событие начинается:' in m[1] or 'Event starting now:' in m[1] for m in fake.sent)

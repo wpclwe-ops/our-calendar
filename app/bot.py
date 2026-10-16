@@ -15,7 +15,7 @@ TEXT={
        'deletion_started':'Календарь будет удалён через 30 дней. Любой из вас может отменить удаление.',
        'deletion_cancelled':'Удаление календаря отменено', 'restore_requested':'Запрошено восстановление Our Calendar из ZIP. Откройте приложение для подтверждения.',
        'calendar_restored':'Календарь восстановлен. Включите свои напоминания в настройках, когда будете готовы.',
-       'reminder':'Напоминание','open':'Открыть календарь','welcome':'Our Calendar — ваш общий календарь для двоих. Откройте приложение, чтобы начать.',
+       'event_started':'Событие начинается','reminder':'Напоминание','open':'Открыть календарь','welcome':'Our Calendar — ваш общий календарь для двоих. Откройте приложение, чтобы начать.',
        'all_day':'Весь день','both':'Обоим'},
  'en':{'created':'New event','updated':'Event updated','deleted':'Event deleted','restored':'Event restored',
        'joined':'Your partner joined Our Calendar','backup_restored':'Calendar restored from backup',
@@ -23,7 +23,7 @@ TEXT={
        'deletion_started':'Your calendar will be deleted in 30 days. Either participant can cancel.',
        'deletion_cancelled':'Calendar deletion cancelled','restore_requested':'Our Calendar ZIP restoration requested. Open the app to approve.',
        'calendar_restored':'Calendar restored. Enable your own reminders in settings when ready.',
-       'reminder':'Reminder','open':'Open calendar','welcome':'Our Calendar — a shared calendar for two. Open the app to get started.',
+       'event_started':'Event starting now','reminder':'Reminder','open':'Open calendar','welcome':'Our Calendar — a shared calendar for two. Open the app to get started.',
        'all_day':'All day','both':'Both'}
 }
 
@@ -115,11 +115,13 @@ class Worker:
                         if event['all_day']:
                             begin=datetime.fromisoformat(event['start']).replace(tzinfo=zone(person['timezone']))
                         else:begin=datetime.fromisoformat(event['start_utc'])
-                        for minutes in event['reminders'].get(person['id'],[]):
+                        intervals=list(event['reminders'].get(person['id'],[]))
+                        if person['notify_at_start']:intervals.append(0)
+                        for minutes in intervals:
                             due=begin.astimezone(UTC)-timedelta(minutes=minutes)
                             if not (now<due<=horizon):continue
                             unique='reminder:'+':'.join([row['id'],key,str(row['schedule_version']),person['id'],str(minutes),stamp(due)])
-                            self.service.enqueue(c,row['calendar_id'],person['id'],'reminder',{'action':'reminder','data':event,
+                            self.service.enqueue(c,row['calendar_id'],person['id'],'reminder',{'action':'event_started' if minutes==0 else 'reminder','data':event,
                                 'schedule_version':row['schedule_version'],'minutes':minutes,'scheduled_due':stamp(due)},due=stamp(due),key=unique,event_id=row['id'])
 
     def text(self,job,person):
@@ -155,7 +157,7 @@ class Worker:
                 if job['kind']=='reminder':
                     ev=c.execute('SELECT * FROM events WHERE id=?',(job['event_id'],)).fetchone()
                     payload=load(job['payload'])
-                    if not ev or ev['deleted_at'] or ev['schedule_version']!=payload['schedule_version'] or not person['reminders_enabled']:
+                    if not ev or ev['deleted_at'] or ev['schedule_version']!=payload['schedule_version'] or not person['reminders_enabled'] or (payload.get('minutes')==0 and not person.get('notify_at_start',True)):
                         c.execute("UPDATE outbox SET status='cancelled' WHERE id=?",(job['id'],));continue
                     # Do not catch up historical reminders after downtime, pause, or restore.
                     if (now-datetime.fromisoformat(payload.get('scheduled_due',job['due']))).total_seconds()>90:
