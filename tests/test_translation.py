@@ -3,6 +3,7 @@ import pytest
 from app.translation import Translations
 from app.security import Problem
 from app.service import load
+from app.config import valid_translation_url
 
 class FakeTranslator:
     def __init__(self):self.calls=[];self.during=None
@@ -85,3 +86,45 @@ def test_provider_failure_keeps_original_and_records_retry(service):
     result=service.get_event('1',event['id'])
     assert result['title']=='Keep me' and result['translations']=={}
     assert result['translation_status']=={'state':'pending','error':'translation_unavailable'}
+
+def test_existing_events_and_categories_are_backfilled_when_enabled(service):
+    event=service.save_event('1',{'title':'Старое событие','start':'2026-10-24T12:00','end':'2026-10-24T13:00',
+        'translations':{'ru':{'title':'Ручное название','manual':True}}})
+    category=service.save_category('1',{'name':'Дом','color':'#9B77D1'})
+    translator,fake=configured(service)
+    translator.process(limit=5)
+    result=service.get_event('2',event['id'])
+    assert result['translations']['en']['title']=='en: Старое событие'
+    assert result['translations']['ru']['title']=='Ручное название'
+    assert service.categories('2')[0]['translations']['en']=='en: Дом'
+    calls=len(fake.calls);translator.process(limit=5)
+    assert len(fake.calls)==calls
+
+def test_provider_recovers_after_four_failures_without_manual_retry(service):
+    translator,fake=configured(service)
+    event=service.save_event('1',{'title':'Recover','start':'2026-10-24T12:00','end':'2026-10-24T13:00'})
+    translate=fake.translate
+    def fail(*args):raise Problem(502,'translation_unavailable')
+    fake.translate=fail
+    for _ in range(4):
+        with service.db.transaction() as c:c.execute("UPDATE translation_jobs SET next_at='2000-01-01T00:00:00Z'")
+        translator.process()
+    assert service.get_event('2',event['id'])['translation_status']['state']=='failed'
+    fake.translate=translate
+    with service.db.transaction() as c:c.execute("UPDATE translation_jobs SET next_at='2000-01-01T00:00:00Z'")
+    translator.process()
+    assert service.get_event('2',event['id'])['translations']['en']['title']=='en: Recover'
+
+@pytest.mark.parametrize('url,valid',[
+    ('https://translator.example',True),('http://calendar-translate.railway.internal:5000',True),
+    ('http://public.example',False),('http://railway.internal.evil.example',False),
+    ('https://user:secret@example.com',False),('http://localhost',False)])
+def test_translation_network_config(url,valid):
+    assert valid_translation_url(url) is valid
+
+def test_translation_probe_uses_synthetic_data_and_is_cached(service):
+    translator,fake=configured(service)
+    translator.probe();translator.probe()
+    assert fake.calls==[(['Купить молоко'],'en'),(['Buy milk'],'ru')]
+    with service.db.transaction() as c:
+        assert load(c.execute("SELECT value FROM runtime WHERE key='translation_probe'").fetchone()['value'])['state']=='ready'

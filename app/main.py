@@ -81,7 +81,9 @@ def create_app(config=None,start_worker=True):
             row=c.execute("SELECT value FROM runtime WHERE key='worker_heartbeat'").fetchone()
         with service.db.transaction() as c:
             setup=c.execute("SELECT value FROM runtime WHERE key='bot_setup'").fetchone()
-        return {'ok':True,'ready':True,'version':'0.2.1','demo':config.demo,'worker_heartbeat':row['value'] if row else None,'bot_setup':setup['value'] if setup else 'not_started'}
+            translation=c.execute("SELECT value FROM runtime WHERE key='translation_probe'").fetchone()
+        return {'ok':True,'ready':True,'version':'0.2.1','demo':config.demo,'worker_heartbeat':row['value'] if row else None,'bot_setup':setup['value'] if setup else 'not_started',
+                'translation':load(translation['value']) if config.translation_url and translation else {'state':'starting' if config.translation_url else 'not_configured'}}
     @app.get('/api/config')
     def public_config():return {'demo':config.demo,'bot_username':config.bot_username,'version':'0.2.1',
                               'integrations':{'google':'not_configured','icloud':'pilot_required','translation':'configured' if config.translation_url else 'not_configured'}}

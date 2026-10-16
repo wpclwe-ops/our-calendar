@@ -37,6 +37,37 @@ class LibreTranslate:
 class Translations:
     def __init__(self,service,transport=None):
         self.service=service;self.config=service.config;self.transport=transport or LibreTranslate(self.config)
+        self.verified=False
+
+    def probe(self):
+        """Verify both language directions with synthetic text, never calendar data."""
+        if not self.config.translation_url or self.verified:return
+        state='ready'
+        try:
+            for text,target in (('Купить молоко','en'),('Buy milk','ru')):
+                values=self.transport.translate([text],target)
+                require(bool(values[0].strip()) and values[0]!=text,'translation_invalid_response',502)
+            self.verified=True
+        except Problem as exc:state=exc.code
+        with self.service.db.transaction() as c:
+            c.execute('INSERT INTO runtime VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',('translation_probe',dump({'state':state,'checked_at':stamp()})))
+
+    def backfill(self):
+        """Queue pre-configuration records once per endpoint, without manual changes."""
+        if not self.config.translation_url:return
+        marker='translation_backfill:'+digest(self.config.translation_url)
+        with self.service.db.transaction() as c:
+            if c.execute('SELECT 1 FROM runtime WHERE key=?',(marker,)).fetchone():return
+            for kind,table in (('event','events'),('category','categories')):
+                rows=c.execute('SELECT r.* FROM '+table+" r JOIN calendars ca ON ca.id=r.calendar_id WHERE ca.state='active'"+(' AND r.deleted_at IS NULL' if kind=='event' else '')).fetchall()
+                for row in rows:
+                    data=load(row['data']);translations=data.get('translations',{})
+                    missing=any(not translations.get(lang) or (isinstance(translations.get(lang),dict) and translations[lang].get('stale') and not translations[lang].get('manual')) for lang in ('ru','en'))
+                    if not missing:continue
+                    job=c.execute('SELECT state FROM translation_jobs WHERE kind=? AND resource_id=?',(kind,row['id'])).fetchone()
+                    if job and job['state']=='pending':continue
+                    enqueue_translation(c,self.config,kind,row['id'],row['calendar_id'],data,resource_version(kind,row))
+            c.execute('INSERT INTO runtime VALUES(?,?)',(marker,stamp()))
     def request(self,user_id,resource_id,kind='event',overwrite_manual=False):
         require(bool(self.config.translation_url),'translation_not_configured',503)
         require(kind in ('event','category'),'invalid_resource')
@@ -50,9 +81,10 @@ class Translations:
 
     def process(self,limit=1):
         if not self.config.translation_url:return
+        self.backfill()
         for _ in range(limit):
             with self.service.db.transaction() as c:
-                job=c.execute("SELECT j.* FROM translation_jobs j JOIN calendars ca ON ca.id=j.calendar_id WHERE ca.state='active' AND j.state='pending' AND j.next_at<=? ORDER BY j.next_at LIMIT 1",(stamp(),)).fetchone()
+                job=c.execute("SELECT j.* FROM translation_jobs j JOIN calendars ca ON ca.id=j.calendar_id WHERE ca.state='active' AND j.state IN ('pending','failed') AND j.next_at<=? ORDER BY j.next_at LIMIT 1",(stamp(),)).fetchone()
                 if not job:return
                 job=dict(job);source=load(job['payload'])['source'];settings=load(job['payload'])
             try:
@@ -100,4 +132,4 @@ class Translations:
                 with self.service.db.transaction() as c:
                     attempts=job['attempts']+1
                     c.execute('UPDATE translation_jobs SET state=?,attempts=?,error=?,next_at=? WHERE kind=? AND resource_id=? AND version=?',
-                              ('failed' if attempts>=4 else 'pending',attempts,exc.code,stamp(utcnow()+timedelta(seconds=30*2**attempts)),job['kind'],job['resource_id'],job['version']))
+                              ('failed' if attempts>=4 else 'pending',attempts,exc.code,stamp(utcnow()+timedelta(seconds=30*2**min(attempts,7))),job['kind'],job['resource_id'],job['version']))

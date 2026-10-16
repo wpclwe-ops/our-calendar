@@ -1,6 +1,15 @@
 from dataclasses import dataclass
 from pathlib import Path
 import os
+from urllib.parse import urlsplit
+
+def valid_translation_url(value):
+    if not value:return True
+    url=urlsplit(value)
+    if url.username or url.password or url.query or url.fragment:return False
+    # Railway's private service mesh is encrypted; HTTP never leaves the project.
+    return bool(url.hostname) and (url.scheme=='https' or (
+        url.scheme=='http' and url.hostname.endswith('.railway.internal')))
 
 @dataclass(frozen=True)
 class Config:
@@ -30,8 +39,8 @@ class Config:
                 auto_setup_bot=os.getenv('AUTO_SETUP_BOT','true').lower()=='true',
                 translation_url=os.getenv('TRANSLATION_URL','').rstrip('/'),translation_api_key=os.getenv('TRANSLATION_API_KEY',''),
                 demo=os.getenv('DEMO_MODE', 'false').lower() == 'true')
-        if c.translation_url and not c.translation_url.startswith('https://'):
-            raise ValueError('TRANSLATION_URL must use HTTPS')
+        if not valid_translation_url(c.translation_url):
+            raise ValueError('TRANSLATION_URL must use HTTPS or Railway private networking')
         if not c.demo:
             if not c.bot_token or len(c.session_secret) < 32 or len(c.webhook_secret) < 32:
                 raise ValueError('Set BOT_TOKEN, SESSION_SECRET and WEBHOOK_SECRET (secrets: at least 32 characters)')

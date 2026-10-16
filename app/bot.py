@@ -72,6 +72,7 @@ class Worker:
         while not self.stop_event.is_set():
             try:
                 self.configure_bot();self.service.maintenance(); self.translations.process(); self.schedule(); self.deliver()
+                self.translations.probe()
                 with self.service.db.transaction() as c:
                     c.execute('INSERT INTO runtime VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',('worker_heartbeat',stamp()))
             except Exception:
