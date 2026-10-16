@@ -15,7 +15,7 @@ from .recurrence import stamp,utcnow
 
 MAX_ARCHIVE = 10 * 1024 * 1024
 MAX_EXPANDED = 40 * 1024 * 1024
-PROFILE_FIELDS = {'language','timezone','theme','view','default_reminders','reminders_enabled','notify_at_start','name'}
+PROFILE_FIELDS = {'language','timezone','theme','view','day_layout','default_reminders','reminders_enabled','notify_at_start','name'}
 
 class Backups:
     def __init__(self, service):
@@ -114,7 +114,7 @@ class Backups:
                         if lv!=rv:fields[k]={'current':lv,'archive':rv,'archive_present':k in right}
                     if fields:override_changes.append({'id':e['id'],'occurrence':key,'revision':current['revision'],'fields':fields})
             own=self.service.user(c,user_id);old=archive['members'][user_id]
-            profile={k:{'current':own.get(k),'archive':old[k]} for k in ('timezone','theme','view','default_reminders','reminders_enabled','notify_at_start') if k in old and own.get(k)!=old[k]}
+            profile={k:{'current':own.get(k),'archive':old[k]} for k in ('timezone','theme','view','day_layout','default_reminders','reminders_enabled','notify_at_start') if k in old and own.get(k)!=old[k]}
             categories=[]
             for category in archive['categories']:
                 current=c.execute('SELECT data FROM categories WHERE id=? AND calendar_id=?',(category['id'],cal['id'])).fetchone()

@@ -91,3 +91,26 @@ def test_manual_translation_not_overwritten(service,event):
     e=service.save_event('1',{'translations':{'en':{'title':'Manual','manual':True}}},event['id'],1)
     e=service.save_event('2',{'title':'Новый оригинал'},event['id'],e['revision'])
     assert e['translations']['en']=={'title':'Manual','manual':True,'stale':True}
+
+
+def test_day_layout_is_personal_persistent_and_validated(service):
+    assert service.state('1')['me']['day_layout']=='timeline'
+    service.settings('1',{'day_layout':'list'})
+    assert service.state('1')['me']['day_layout']=='list'
+    assert service.state('1')['me']['view']=='month'
+    assert service.state('2')['me']['day_layout']=='timeline'
+    for invalid in ('agenda','',None,True,[],{}):
+        with pytest.raises(Problem):service.settings('1',{'day_layout':invalid})
+    assert service.state('1')['me']['day_layout']=='list'
+
+
+def test_day_layout_archived_and_restored_for_only_own_profile(service,backup):
+    service.settings('1',{'day_layout':'list'})
+    blob=backup.export('1')
+    service.settings('1',{'day_layout':'timeline'})
+    service.settings('2',{'day_layout':'list'})
+    preview=backup.preview('1',blob)
+    assert preview['profile']['day_layout']=={'current':'timeline','archive':'list'}
+    backup.apply('1',blob,[],[],[],preview_id=preview['preview_id'],profile_fields=['day_layout'])
+    assert service.state('1')['me']['day_layout']=='list'
+    assert service.state('2')['me']['day_layout']=='list'
