@@ -165,3 +165,24 @@ def test_start_queue_invalidated_when_event_changes(service,event,change):
     else:service.save_event('1',{'start':'2026-10-24T14:00','end':'2026-10-24T15:00'},event['id'],1)
     worker.schedule(begin-timedelta(seconds=30));worker.deliver(begin)
     assert not any('Событие начинается:' in m[1] or 'Event starting now:' in m[1] for m in fake.sent)
+
+
+def test_changed_instance_stops_only_its_own_reminders(service):
+    event=service.save_event('1',{'title':'Series','start':'2026-10-24T12:00','end':'2026-10-24T13:00',
+        'timezone':'Europe/Warsaw','rrule':'FREQ=DAILY;COUNT=3'})
+    allow_messages(service);worker=Worker(service,FakeTelegram());now=datetime(2026,10,24,8,tzinfo=UTC)
+    worker.schedule(now);service.occurrence_change('1',event['id'],'2026-10-25T12:00',{'status':'done'},1)
+    worker.schedule(now)
+    with service.db.transaction() as c:
+        rows=c.execute("SELECT payload FROM outbox WHERE kind='reminder' AND status='pending'").fetchall()
+    assert len(rows)==8
+    assert all(load(r['payload'])['data']['occurrence']!='2026-10-25T12:00' for r in rows)
+
+
+def test_language_and_timezone_are_selected_at_actual_delivery(service,event):
+    allow_messages(service);worker=Worker(service,FakeTelegram());begin=datetime(2026,10,24,10,tzinfo=UTC)
+    worker.schedule(begin-timedelta(minutes=2))
+    service.settings('2',{'language':'ru','timezone':'Australia/Melbourne'})
+    worker.schedule(begin-timedelta(minutes=1));worker.deliver(begin)
+    message=next(m[1] for m in worker.telegram.sent if m[0]=='2')
+    assert message.startswith('Событие начинается:') and '21:00' in message and 'Australia/Melbourne' in message

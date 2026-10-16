@@ -15,7 +15,7 @@ def enqueue_translation(c,config,kind,resource_id,calendar_id,row_data,version,f
     c.execute('''INSERT INTO translation_jobs(kind,resource_id,calendar_id,version,payload,state,next_at)
       VALUES(?,?,?,?,?,'pending',?) ON CONFLICT(kind,resource_id) DO UPDATE SET
       version=excluded.version,payload=excluded.payload,state='pending',attempts=0,error=NULL,next_at=excluded.next_at''',
-      (kind,resource_id,calendar_id,str(version),dump({'source':row_data,'force':force,'overwrite_manual':overwrite_manual}),stamp()))
+      (kind,resource_id,calendar_id,str(version),dump({'source':row_data,'force':force,'overwrite_manual':overwrite_manual,'overrides':{r['occurrence']:load(r['data']) for r in c.execute('SELECT * FROM overrides WHERE event_id=?',(resource_id,))} if kind=='event' else {}}),stamp()))
     return True
 
 class LibreTranslate:
@@ -37,11 +37,13 @@ class LibreTranslate:
 class Translations:
     def __init__(self,service,transport=None):
         self.service=service;self.config=service.config;self.transport=transport or LibreTranslate(self.config)
-        self.verified=False
+        self.verified=False;self.probe_after=0
 
     def probe(self):
         """Verify both language directions with synthetic text, never calendar data."""
-        if not self.config.translation_url or self.verified:return
+        import time
+        if not self.config.translation_url or time.monotonic()<self.probe_after:return
+        self.probe_after=time.monotonic()+300
         state='ready'
         try:
             for text,target in (('Купить молоко','en'),('Buy milk','ru')):
@@ -55,14 +57,16 @@ class Translations:
     def backfill(self):
         """Queue pre-configuration records once per endpoint, without manual changes."""
         if not self.config.translation_url:return
-        marker='translation_backfill:'+digest(self.config.translation_url)
+        marker='translation_backfill_v2:'+digest(self.config.translation_url)
         with self.service.db.transaction() as c:
             if c.execute('SELECT 1 FROM runtime WHERE key=?',(marker,)).fetchone():return
             for kind,table in (('event','events'),('category','categories')):
                 rows=c.execute('SELECT r.* FROM '+table+" r JOIN calendars ca ON ca.id=r.calendar_id WHERE ca.state='active'"+(' AND r.deleted_at IS NULL' if kind=='event' else '')).fetchall()
                 for row in rows:
                     data=load(row['data']);translations=data.get('translations',{})
-                    missing=any(not translations.get(lang) or (isinstance(translations.get(lang),dict) and translations[lang].get('stale') and not translations[lang].get('manual')) for lang in ('ru','en'))
+                    overrides=[load(r['data']) for r in c.execute('SELECT data FROM overrides WHERE event_id=?',(row['id'],))] if kind=='event' else []
+                    missing_override=any(not ov.get('deleted') and any(k in ov for k in ('title','description')) and any(not ov.get('translations',{}).get(lang) for lang in ('ru','en')) for ov in overrides)
+                    missing=missing_override or any(not translations.get(lang) or (isinstance(translations.get(lang),dict) and translations[lang].get('stale') and not translations[lang].get('manual')) for lang in ('ru','en'))
                     if not missing:continue
                     job=c.execute('SELECT state FROM translation_jobs WHERE kind=? AND resource_id=?',(kind,row['id'])).fetchone()
                     if job and job['state']=='pending':continue
@@ -79,6 +83,21 @@ class Translations:
             enqueue_translation(c,self.config,kind,resource_id,cal['id'],load(row['data']),resource_version(kind,row),force=True,overwrite_manual=overwrite_manual)
         return {'queued':True}
 
+    def translate_fields(self,kind,source,settings):
+        translations=dict(source.get('translations',{}))
+        for lang in ('ru','en'):
+            existing=translations.get(lang)
+            manual=existing.get('manual',False) if isinstance(existing,dict) else source.get('translation_manual',{}).get(lang,bool(existing))
+            if manual and not settings['overwrite_manual']:continue
+            if existing and not settings['force'] and not (isinstance(existing,dict) and existing.get('stale')):continue
+            fields=['name'] if kind=='category' else ['title','description']
+            nonempty=[k for k in fields if source.get(k)]
+            values=self.transport.translate([source[k] for k in nonempty],lang) if nonempty else []
+            translated=dict(zip(nonempty,values))
+            if kind=='category':translations[lang]=translated.get('name','')
+            else:translations[lang]={'title':translated.get('title',''),'description':translated.get('description',''),'manual':False,'stale':False}
+        return translations
+
     def process(self,limit=1):
         if not self.config.translation_url:return
         self.backfill()
@@ -88,18 +107,12 @@ class Translations:
                 if not job:return
                 job=dict(job);source=load(job['payload'])['source'];settings=load(job['payload'])
             try:
-                translations=dict(source.get('translations',{}))
-                for lang in ('ru','en'):
-                    existing=translations.get(lang)
-                    manual=existing.get('manual',False) if isinstance(existing,dict) else source.get('translation_manual',{}).get(lang,bool(existing))
-                    if manual and not settings['overwrite_manual']:continue
-                    if existing and not settings['force'] and not (isinstance(existing,dict) and existing.get('stale')):continue
-                    fields=['name'] if job['kind']=='category' else ['title','description']
-                    nonempty=[k for k in fields if source.get(k)]
-                    values=self.transport.translate([source[k] for k in nonempty],lang) if nonempty else []
-                    translated=dict(zip(nonempty,values))
-                    if job['kind']=='category':translations[lang]=translated.get('name','')
-                    else:translations[lang]={'title':translated.get('title',''),'description':translated.get('description',''),'manual':False,'stale':False}
+                translations=self.translate_fields(job['kind'],source,settings)
+                translated_overrides={}
+                for key,patch in settings.get('overrides',{}).items():
+                    if patch.get('deleted') or not any(k in patch for k in ('title','description')):continue
+                    effective={**source,**patch,'translations':patch.get('translations',{})}
+                    translated_overrides[key]=self.translate_fields('event',effective,settings)
                 with self.service.db.transaction() as c:
                     table='events' if job['kind']=='event' else 'categories'
                     fresh=c.execute('SELECT * FROM '+table+' WHERE id=? AND calendar_id=?',(job['resource_id'],job['calendar_id'])).fetchone()
@@ -117,8 +130,11 @@ class Translations:
                         self.service.validate_event(c,dict(c.execute('SELECT * FROM calendars WHERE id=?',(job['calendar_id'],)).fetchone()),data)
                         c.execute('UPDATE events SET data=?,revision=revision+1 WHERE id=?',(dump(data),job['resource_id']))
                         for notice in c.execute("SELECT * FROM outbox WHERE event_id=? AND status='pending'",(job['resource_id'],)).fetchall():
-                            payload=load(notice['payload']);payload.setdefault('data',{})['translations']=translations
+                            payload=load(notice['payload']);payload.setdefault('data',{})['translations']=translated_overrides.get(payload.get('data',{}).get('occurrence'),translations)
                             c.execute('UPDATE outbox SET payload=? WHERE id=?',(dump(payload),notice['id']))
+                        for key,tr in translated_overrides.items():
+                            patch=settings['overrides'][key];patch['translations']=tr
+                            c.execute('UPDATE overrides SET data=? WHERE event_id=? AND occurrence=?',(dump(patch),job['resource_id'],key))
                     else:
                         # Automatic category translations are distinguished from
                         # user-authored strings by server-owned metadata.

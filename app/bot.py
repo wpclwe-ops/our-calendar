@@ -64,20 +64,39 @@ class Worker:
         self.stop_event=threading.Event(); self.thread=None
         self.setup_complete=False;self.setup_next=None
     def start(self):
-        self.thread=threading.Thread(target=self.run,name='calendar-worker',daemon=True);self.thread.start()
+        from .operator_backup import OperatorBackups
+        self.backups=OperatorBackups(self.service)
+        self.stop_event.clear()
+        self.threads=[threading.Thread(target=target,name=name,daemon=True) for target,name in
+                      ((self.run,'calendar-worker'),(self.run_translations,'calendar-translations'),(self.run_backups,'calendar-backups'))]
+        self.thread=self.threads[0]
+        for thread in self.threads:thread.start()
     def stop(self):
         self.stop_event.set()
-        if self.thread:self.thread.join(timeout=25)
+        for thread in getattr(self,'threads',[]):thread.join(timeout=2)
+    def heartbeat(self,key):
+        with self.service.db.transaction() as c:
+            c.execute('INSERT INTO runtime VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',(key,stamp()))
     def run(self):
+        # Translation and backup network requests never block reminder delivery.
         while not self.stop_event.is_set():
             try:
-                self.configure_bot();self.service.maintenance(); self.translations.process(); self.schedule(); self.deliver()
-                self.translations.probe()
-                with self.service.db.transaction() as c:
-                    c.execute('INSERT INTO runtime VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',('worker_heartbeat',stamp()))
+                self.configure_bot();self.service.maintenance();self.schedule();self.deliver()
+                self.heartbeat('worker_heartbeat')
             except Exception:
-                log.exception('Worker cycle failed')
+                log.error('Calendar worker cycle failed')
             self.stop_event.wait(15)
+    def run_translations(self):
+        while not self.stop_event.is_set():
+            try:
+                self.translations.process();self.translations.probe();self.heartbeat('translation_heartbeat')
+            except Exception:log.error('Translation worker cycle failed')
+            self.stop_event.wait(5)
+    def run_backups(self):
+        while not self.stop_event.is_set():
+            try:self.backups.run_due()
+            except Exception:log.error('Operator backup cycle failed')
+            self.stop_event.wait(60)
 
     def configure_bot(self):
         if not self.service.config.auto_setup_bot or self.service.config.demo or self.setup_complete:return
@@ -169,6 +188,11 @@ class Worker:
                     c.execute("UPDATE outbox SET status='failed',error='start_bot_required' WHERE id=?",(job['id'],));continue
                 c.execute("UPDATE outbox SET status='sending',lease_until=?,attempts=attempts+1 WHERE id=?",(stamp(now+timedelta(seconds=60)),job['id']))
             try:
+                if job['kind']=='reminder':
+                    payload=load(job['payload']);occ=payload.get('data',{}).get('occurrence')
+                    latest=self.service.get_event(job['user_id'],job['event_id'],occurrence=occ)
+                    payload['data']=latest.get('selected_instance',latest)
+                    job={**job,'payload':dump(payload)}
                 self.telegram.send(job['user_id'],self.text(job,person),person['language'])
             except TelegramAPIError as exc:
                 with self.service.db.transaction() as c:

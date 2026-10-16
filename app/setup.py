@@ -30,7 +30,7 @@ def create_setup_app():
     @app.get('/health')
     def health():return {'ok':True,'ready':False,'mode':'setup','missing':missing_configuration()}
     @app.get('/api/config')
-    def config():return {'demo':False,'setup_required':True,'version':'0.2.1'}
+    def config():return {'demo':False,'setup_required':True,'version':'0.3.0'}
     @app.post('/api/auth')
     @app.post('/api/telegram/webhook')
     def closed():return JSONResponse({'error':'telegram_not_configured'},status_code=503)

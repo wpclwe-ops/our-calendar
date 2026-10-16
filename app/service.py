@@ -6,7 +6,7 @@ import secrets
 import uuid
 from .security import require, Problem, digest
 from .recurrence import (UTC, utcnow, stamp, zone, validate_timing, occurrences, instance,
-                         TIME_FIELDS, local_datetime)
+                         TIME_FIELDS, local_datetime, recurrence_starts)
 
 PALETTE = ['#9B77D1','#D47AAE','#D77777','#E0A34B','#D0BD55','#55A77B','#4DA5A8','#598DD4','#7778C9','#888888','#333333','#F3B6D4']
 REMINDERS = {1440,720,120,60,30,15}
@@ -167,6 +167,8 @@ class Service:
             require(re.fullmatch('#[0-9a-fA-F]{6}',data.get('color','')) is not None,'invalid_color')
             translations=data.get('translations',{})
             require(isinstance(translations,dict) and set(translations)<={'ru','en'} and all(isinstance(v,str) and len(v)<=100 for v in translations.values()),'invalid_translation')
+            translations={k:v for k,v in translations.items() if v.strip()}
+            data['translations']=translations
             category_id=category_id or uid()
             previous=c.execute('SELECT data FROM categories WHERE id=?',(category_id,)).fetchone()
             old=load(previous['data']) if previous else {}
@@ -198,7 +200,7 @@ class Service:
             from dateutil.rrule import rrulestr
             base=base_datetime(result)
             duration=(date.fromisoformat(result['end'])-date.fromisoformat(result['start'])) if result['all_day'] else (datetime.fromisoformat(result['end'])-datetime.fromisoformat(result['start']))
-            values=rrulestr(result['rrule'],dtstart=base).xafter(base,count=len(ov)+2,inc=True) if result['rrule'] else [base]
+            values=recurrence_starts(result,base,len(ov)+2)
             for start in values:
                 key=start.date().isoformat() if result['all_day'] else start.replace(tzinfo=None).isoformat(timespec='minutes')
                 if ov.get(key,{}).get('deleted'):continue
@@ -274,6 +276,13 @@ class Service:
                 self.notify(c,cal['id'],user_id,'created',data,event_id)
             row=c.execute('SELECT * FROM events WHERE id=?',(event_id,)).fetchone()
             if not previous or any(data.get(k)!=previous.get(k) for k in ('title','description')):
+                if previous:
+                    changed={k for k in ('title','description') if data.get(k)!=previous.get(k)}
+                    for ov in c.execute('SELECT * FROM overrides WHERE event_id=?',(event_id,)).fetchall():
+                        patch=load(ov['data'])
+                        if changed-set(patch) and patch.get('translations'):
+                            patch['translations']={k:{**v,'stale':True} for k,v in patch['translations'].items()}
+                            c.execute('UPDATE overrides SET data=? WHERE event_id=? AND occurrence=?',(dump(patch),event_id,ov['occurrence']))
                 from .translation import enqueue_translation
                 enqueue_translation(c,self.config,'event',event_id,cal['id'],data,row['revision'])
             overlaps=self.overlaps(c,cal['id'],event_id,data)
@@ -295,59 +304,91 @@ class Service:
                     found.append({'id':row['id'],'title':it['title']}); break
         return found
 
-    def events(self,user_id,start=None,end=None,query='',owner='',category='',status='',trash=False):
+    @staticmethod
+    def expanded(data, overrides, start_dt, end_dt):
+        """Include moved exceptions even outside their original recurrence window."""
+        expanded={k:instance(data,k,a,b,overrides.get(k)) for k,a,b in occurrences(data,start_dt,end_dt)}
+        duration=(date.fromisoformat(data['end'])-date.fromisoformat(data['start'])) if data['all_day'] else (datetime.fromisoformat(data['end'])-datetime.fromisoformat(data['start']))
+        for key,ov in overrides.items():
+            if key not in expanded and 'start' in ov:
+                begin=datetime.fromisoformat(key).replace(tzinfo=zone(data['timezone']))
+                expanded[key]=instance(data,key,begin,begin+duration,ov)
+        return expanded.values()
+
+    @staticmethod
+    def matches(data, categories, query='', owner='', category='', status=''):
+        if owner and data['owner']!=owner:return False
+        if category and (data['category_id'] or 'none')!=category:return False
+        if status and data['status']!=status:return False
+        cat=categories.get(data['category_id'],{})
+        texts=[data['title'],data['description'],data['location'],cat.get('name','')]
+        texts.extend(cat.get('translations',{}).values())
+        for tr in data.get('translations',{}).values():texts.extend([tr.get('title',''),tr.get('description','')])
+        return not query or query.casefold() in ' '.join(texts).casefold()
+
+    def search_series(self,data,overrides,categories,query,owner,category,status):
+        from .recurrence import base_datetime
+        from dateutil.rrule import rrulestr
+        base=base_datetime(data)
+        duration=(date.fromisoformat(data['end'])-date.fromisoformat(data['start'])) if data['all_day'] else (datetime.fromisoformat(data['end'])-datetime.fromisoformat(data['start']))
+        candidates=[]
+        # A series is one search result. Find its first matching unmodified
+        # instance, then compare every exception against its effective fields.
+        values=recurrence_starts(data,base,len(overrides)+3)
+        if self.matches(data,categories,query,owner,category,status):
+            for begin in values:
+                key=begin.date().isoformat() if data['all_day'] else begin.replace(tzinfo=None).isoformat(timespec='minutes')
+                if key in overrides:continue
+                if begin.astimezone(UTC).astimezone(begin.tzinfo).replace(tzinfo=None)!=begin.replace(tzinfo=None):continue
+                candidates.append(instance(data,key,begin,begin+duration));break
+        for key,patch in overrides.items():
+            if patch.get('deleted'):continue
+            begin=datetime.fromisoformat(key).replace(tzinfo=zone(data['timezone']))
+            effective=instance(data,key,begin,begin+duration,patch)
+            if self.matches(effective,categories,query,owner,category,status):candidates.append(effective)
+        return min(candidates,key=lambda it:it.get('start_utc',it['start'])) if candidates else None
+
+    def events(self,user_id,start=None,end=None,query='',owner='',category='',status='',trash=False,event_id=''):
         with self.db.transaction() as c:
             cal=self.calendar(c,user_id)
+            if event_id:self.event_row(c,user_id,event_id)
             categories={v['id']:load(v['data']) for v in c.execute('SELECT * FROM categories WHERE calendar_id=?',(cal['id'],))}
             rows=c.execute('SELECT * FROM events WHERE calendar_id=? AND '+('deleted_at IS NOT NULL' if trash else 'deleted_at IS NULL'),(cal['id'],)).fetchall()
             result=[]
             if trash:
-                for ov in c.execute('SELECT o.*,e.data AS master,e.revision FROM overrides o JOIN events e ON e.id=o.event_id WHERE e.calendar_id=? AND e.deleted_at IS NULL',(cal['id'],)):
+                for ov in c.execute('SELECT o.*,e.data AS master,e.revision,e.schedule_version FROM overrides o JOIN events e ON e.id=o.event_id WHERE e.calendar_id=? AND e.deleted_at IS NULL',(cal['id'],)):
                     patch=load(ov['data'])
                     if not patch.get('deleted_at') or patch.get('purged'):continue
                     master=load(ov['master']);key=ov['occurrence']
                     original=datetime.fromisoformat(key).replace(tzinfo=zone(master['timezone']))
                     duration=(date.fromisoformat(master['end'])-date.fromisoformat(master['start'])) if master['all_day'] else (datetime.fromisoformat(master['end'])-datetime.fromisoformat(master['start']))
-                    result.append({'id':ov['event_id'],'revision':ov['revision'],**instance(master,key,original,original+duration,patch)})
+                    result.append({'id':ov['event_id'],'revision':ov['revision'],'schedule_version':ov['schedule_version'],**instance(master,key,original,original+duration,patch)})
             if not query and not trash:
                 require(start and end,'range_required')
                 try:
                     start_dt=datetime.fromisoformat(start).replace(tzinfo=UTC)
                     end_dt=datetime.fromisoformat(end).replace(tzinfo=UTC)
-                except (ValueError,TypeError): raise Problem(400,'invalid_range')
+                except (ValueError,TypeError):raise Problem(400,'invalid_range')
                 require(0<(end_dt-start_dt).total_seconds()<=370*86400,'invalid_range')
             for row in rows:
+                if event_id and row['id']!=event_id:continue
                 data=self.event_data(row)
-                if owner and data['owner']!=owner: continue
-                if category and (data['category_id'] or 'none')!=category: continue
-                cat=categories.get(data['category_id'],{})
-                haystack=dump([data['title'],data['description'],data['translations'],data['location'],cat])
-                if query and query.casefold() not in haystack.casefold(): continue
-                if trash or query:
-                    if status and data['status']!=status: continue
-                    if not data['all_day']:
-                        data['start_utc']=local_datetime(data['start'],data['timezone'],data.get('fold',0)).astimezone(UTC).isoformat()
-                        data['end_utc']=local_datetime(data['end'],data['timezone'],data.get('end_fold',0)).astimezone(UTC).isoformat()
-                    result.append(data); continue
                 overrides={v['occurrence']:load(v['data']) for v in c.execute('SELECT * FROM overrides WHERE event_id=?',(row['id'],))}
-                # Include moved exceptions even if their original occurrence is outside this range.
-                expanded={}
-                for key,a,b in occurrences(data,start_dt,end_dt):
-                    expanded[key]=instance(data,key,a,b,overrides.get(key))
-                for key,ov in overrides.items():
-                    if key not in expanded and 'start' in ov:
-                        original=date.fromisoformat(key) if data['all_day'] else datetime.fromisoformat(key)
-                        a=datetime.combine(original,datetime.min.time(),zone(data['timezone'])) if data['all_day'] else original.replace(tzinfo=zone(data['timezone']))
-                        duration=(date.fromisoformat(data['end'])-date.fromisoformat(data['start'])) if data['all_day'] else (datetime.fromisoformat(data['end'])-datetime.fromisoformat(data['start']))
-                        expanded[key]=instance(data,key,a,a+duration,ov)
-                for it in expanded.values():
-                    if it.get('deleted') or (status and it['status']!=status): continue
-                    if it['all_day']:
-                        show=it['start'] < end[:10] and it['end'] > start[:10]
-                    else:
-                        show=datetime.fromisoformat(it['start_utc'])<end_dt and datetime.fromisoformat(it['end_utc'])>start_dt
-                    if show: result.append(it)
-            return sorted(result,key=lambda x:x['start'])
+                if trash:
+                    result.append(data);continue
+                if query:
+                    match=self.search_series(data,overrides,categories,query,owner,category,status)
+                    if match:result.append(match)
+                    continue
+                for it in self.expanded(data,overrides,start_dt,end_dt):
+                    if it.get('deleted') or not self.matches(it,categories,owner=owner,category=category,status=status):continue
+                    if it['all_day']:show=it['start']<end[:10] and it['end']>start[:10]
+                    else:show=datetime.fromisoformat(it['start_utc'])<end_dt and datetime.fromisoformat(it['end_utc'])>start_dt
+                    if show:result.append(it)
+            viewer=zone(self.user(c,user_id)['timezone'])
+            def order(it):
+                return datetime.fromisoformat(it['start_utc']).astimezone(viewer).isoformat()[:19] if it.get('start_utc') else it['start']
+            return sorted(result,key=order)
 
     def occurrence_change(self,user_id,event_id,key,changes,revision,scope='one',delete=False):
         with self.db.transaction() as c:
@@ -363,11 +404,13 @@ class Service:
             require(bool(found),'invalid_occurrence')
             k,a,b=found[0]
             require(set(changes)<=EVENT_FIELDS,'invalid_occurrence_fields')
-            if 'reminders' in changes:
-                require(isinstance(changes['reminders'],list),'own_reminders_only')
-                changes={**changes,'reminders':{**data['reminders'],user_id:offsets(changes['reminders'])}}
             prior=c.execute('SELECT data FROM overrides WHERE event_id=? AND occurrence=?',(event_id,key)).fetchone()
             prior=load(prior['data']) if prior else {}
+            if 'reminders' in changes:
+                require(isinstance(changes['reminders'],list),'own_reminders_only')
+                changes={**changes,'reminders':{**prior.get('reminders',data['reminders']),user_id:offsets(changes['reminders'])}}
+            if any(k in changes and changes[k]!=prior.get(k,data.get(k)) for k in ('title','description')) and changes.get('translations',prior.get('translations',{})):
+                changes={**changes,'translations':{k:{**v,'stale':True} for k,v in changes.get('translations',prior.get('translations',{})).items()}}
             single=instance(data,key,a,b,prior)
             for remove in ('occurrence','start_utc','end_utc'): single.pop(remove,None)
             single.update(changes)
@@ -385,18 +428,22 @@ class Service:
             else:
                 # Split with UNTIL in UTC; never silently duplicate the remaining COUNT.
                 require(a>local_datetime(data['start']+'T00:00' if data['all_day'] else data['start'],data['timezone'],data.get('fold')),'use_all_for_first_occurrence')
-                parts=dict(p.split('=',1) for p in data['rrule'].removeprefix('RRULE:').split(';'))
+                row_data_rule=data['rrule']
+                parts=dict(p.split('=',1) for p in row_data_rule.removeprefix('RRULE:').split(';'))
                 original_parts=dict(parts)
                 if 'COUNT' in parts:
                     from dateutil.rrule import rrulestr
                     from .recurrence import base_datetime
-                    elapsed=sum(1 for _ in rrulestr(data['rrule'],dtstart=base_datetime(data)).between(base_datetime(data),a-timedelta(seconds=1),inc=True))
+                    elapsed=0
+                    for begin in recurrence_starts(data):
+                        if begin>=a:break
+                        elapsed+=1
                     original_parts['COUNT']=str(int(parts['COUNT'])-elapsed)
                 parts.pop('COUNT',None)
                 parts['UNTIL']=(a.astimezone(UTC)-timedelta(seconds=1)).strftime('%Y%m%dT%H%M%SZ')
                 data['rrule']=';'.join(f'{p}={v}' for p,v in parts.items())
                 c.execute('UPDATE events SET data=? WHERE id=?',(dump(data),event_id))
-                single['rrule']=changes.get('rrule',';'.join(f'{p}={v}' for p,v in original_parts.items()))
+                single['rrule']=changes['rrule'] if 'rrule' in changes and changes['rrule']!=row_data_rule else ';'.join(f'{p}={v}' for p,v in original_parts.items())
                 new_id=uid()
                 c.execute('INSERT INTO events(id,calendar_id,data,deleted_at) VALUES(?,?,?,?)',(new_id,cal['id'],dump(single),stamp() if delete else None))
                 for ov in c.execute('SELECT * FROM overrides WHERE event_id=? AND occurrence>=?',(event_id,key)).fetchall():
@@ -404,8 +451,14 @@ class Service:
                 c.execute('DELETE FROM overrides WHERE event_id=? AND occurrence>=?',(event_id,key))
             c.execute('UPDATE events SET revision=revision+1,schedule_version=schedule_version+1 WHERE id=?',(event_id,))
             c.execute("UPDATE outbox SET status='cancelled' WHERE event_id=? AND kind='reminder' AND status IN ('pending','sending')",(event_id,))
-            self.notify(c,cal['id'],user_id,'deleted' if delete else 'updated',single,event_id)
-            return {'ok':True}
+            if delete or any(k in changes and changes[k]!=prior.get(k,data.get(k)) for k in IMPORTANT):
+                self.notify(c,cal['id'],user_id,'deleted' if delete else 'updated',{**single,'occurrence':key if scope=='one' else single['start']},new_id if scope=='following' else event_id)
+            from .translation import enqueue_translation
+            for eid in ({event_id,new_id} if scope=='following' else {event_id}):
+                fresh=c.execute('SELECT * FROM events WHERE id=?',(eid,)).fetchone()
+                if not fresh['deleted_at']:
+                    enqueue_translation(c,self.config,'event',eid,cal['id'],load(fresh['data']),fresh['revision'])
+            return {'ok':True,'id':new_id if scope=='following' else event_id,'occurrence':key if scope=='one' else None}
 
     def delete_event(self,user_id,event_id,revision,permanent=False,restore=False):
         with self.db.transaction() as c:
@@ -443,6 +496,7 @@ class Service:
             require(cal['second_id'] is not None,'pair_required')
             votes=set(load(cal['votes']))
             if action in ('cancel','reject'):
+                require(cal['state']!='pending_delete' or cal['delete_at']>stamp(),'calendar_deletion_expired',410)
                 c.execute("UPDATE calendars SET state='active',votes='[]',delete_at=NULL WHERE id=?",(cal['id'],))
                 self.notify(c,cal['id'],user_id,'deletion_cancelled',admin=True)
             elif action=='approve':
@@ -476,7 +530,20 @@ class Service:
                 patch=load(ov['data'])
                 if patch.get('deleted_at') and patch['deleted_at']<=cutoff and not patch.get('purged'):
                     c.execute('UPDATE overrides SET data=? WHERE event_id=? AND occurrence=?',(dump({'deleted':True,'purged':True}),ov['event_id'],ov['occurrence']))
-            c.execute("DELETE FROM calendars WHERE state='pending_delete' AND delete_at<=?",(stamp(),))
+            expired=c.execute("SELECT id,delete_at FROM calendars WHERE state='pending_delete' AND delete_at<=?",(stamp(),)).fetchall()
+            if expired:
+                row=c.execute("SELECT value FROM runtime WHERE key='deletion_tombstones'").fetchone()
+                tombstones=load(row['value']) if row else {}
+                row=c.execute("SELECT value FROM runtime WHERE key='deletion_tombstones_synced'").fetchone()
+                synced=load(row['value']) if row else {}
+                for expired_cal in expired:
+                    cid=expired_cal['id']
+                    if tombstones.get(cid,'')<expired_cal['delete_at']:tombstones[cid]=stamp()
+                    # With operator backups, persist the deletion outside the DB
+                    # before purging it. A stale snapshot cannot revive it later.
+                    if not self.config.backup_bucket or synced.get(cid)==tombstones[cid]:
+                        c.execute('DELETE FROM calendars WHERE id=?',(cid,))
+                c.execute('INSERT INTO runtime VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',('deletion_tombstones',dump(tombstones)))
             c.execute("DELETE FROM translation_jobs WHERE (kind='event' AND NOT EXISTS (SELECT 1 FROM events e WHERE e.id=translation_jobs.resource_id)) OR (kind='category' AND NOT EXISTS (SELECT 1 FROM categories ca WHERE ca.id=translation_jobs.resource_id))")
             c.execute("DELETE FROM outbox WHERE status IN ('sent','cancelled','expired','failed') AND created_at<?",(cutoff,))
             c.execute('DELETE FROM restore_requests WHERE created_at<?',(cutoff,))
