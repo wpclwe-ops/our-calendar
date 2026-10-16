@@ -39,8 +39,8 @@
  const reply=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json'}});
  const normalize=e=>{if(!e.all_day){e.start_utc=e.start+':00+02:00';e.end_utc=e.end+':00+02:00'}e.occurrence=e.start;return e};
  window.fetch=async(input,options={})=>{
-  const url=new URL(typeof input==='string'?input:input.url,location.origin),path=url.pathname,method=options.method||'GET',body=options.body?JSON.parse(options.body):{};
-  if(url.origin!==location.origin||!path.startsWith('/api/'))return reply({error:'preview_only'},400);
+  const url=new URL(typeof input==='string'?input:input.url,document.baseURI),path=url.pathname,method=options.method||'GET',body=options.body?JSON.parse(options.body):{};
+  if(url.origin!==new URL(document.baseURI).origin||!path.startsWith('/api/'))return reply({error:'preview_only'},400);
   if(path==='/api/config')return reply({demo:true,bot_username:'',integrations:{translation:'not_configured'}});
   if(path==='/api/auth')return reply({token:'preview-only-no-session',state});
   if(path==='/api/state')return reply(state);
