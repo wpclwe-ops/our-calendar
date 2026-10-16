@@ -68,13 +68,17 @@ Object.assign(words.ru,{day_layout:'Вид дня',dayList:'Список',dayTim
 Object.assign(words.en,{day_layout:'Day layout',dayList:'List',dayTimeline:'Timeline',completeEvent:'Mark done',undoComplete:'Mark planned',completedCount:'completed',next:'Next',close:'Close',resetFilters:'Reset filters',results:'results',more:'more',yourTime:'Your time',noAllDay:'No all-day events',justYou:'Just for you',sharedData:'Shared data',leaveOrDelete:'Leave or delete',pairTitle:'You & your partner',seats:'seats',sharedCategories:'Shared by both of you',notConnected:'Not connected',notAvailable:'Not available yet',markDone:'Mark done',cancelEvent:'Cancel event',resumeEvent:'Mark planned',personalReminders:'Your settings only',partnerReminders:'Your partner has their own reminders',backupExport:'Backup & export',defaultIntervals:'In advance',repeatedHour:'When the clocks go back',showTranslations:'Edit translations',clearSearch:'Clear search',connectedCalendars:'Your connected calendars'});
 Object.assign(words.ru,{calendar_deletion_expired:'30-дневный срок истёк. Календарь окончательно удаляется.',deleted_at:'Состояние в корзине',title_required:'Введите название.',count_or_until:'Выберите один способ окончания повторений.',repeatEvery:'Повторять каждые',repeatUnitDays:'дн.',repeatUnitWeeks:'нед.',repeatUnitMonths:'мес.',repeatUnitYears:'г.',weekdays:'Дни недели',monthPattern:'В месяце',byDate:'По числу',byWeekday:'По дню недели',monthDay:'Число месяца',ordinal:'Какой по счёту',firstOrdinal:'Первый',secondOrdinal:'Второй',thirdOrdinal:'Третий',fourthOrdinal:'Четвёртый',fifthOrdinal:'Пятый',lastOrdinal:'Последний',weekday:'День недели',repeatEnd:'Завершение',neverEnd:'Без окончания',onDate:'По дату включительно',afterCount:'После повторений',repeatCount:'Количество повторений',repeatUntil:'Последняя дата',preserveRule:'Сохранить существующее повторение',preserveRuleHelp:'У этой серии особый шаблон. Он сохранится. Чтобы заменить его, выберите другой вариант повторения.',shortMonthHelp:'В месяцах без выбранного числа или дня повторение пропускается.',choose_weekdays:'Выберите хотя бы один день недели.',invalid_recurrence:'Проверьте настройки повторения.',otherOccurrences:'Другие даты серии',occurrencesMonth:'Месяц',noOccurrences:'В этом месяце нет экземпляров серии.',retranslateCategory:'Перевести название заново',systemStatus:'Состояние сервиса',serviceReady:'Работает',serviceDelayed:'Требует внимания',backupReady:'Резервная копия сохранена',backupPending:'Ожидаем первую резервную копию',backupUnavailable:'Резервное копирование требует настройки',lastBackup:'Последняя копия',automaticBackups:'Автоматические резервные копии',refreshStatus:'Обновить состояние'});
 Object.assign(words.en,{calendar_deletion_expired:'The 30-day period has ended. The calendar is being permanently deleted.',deleted_at:'Trash state',count_or_until:'Choose one recurrence end condition.',repeatEvery:'Repeat every',repeatUnitDays:'days',repeatUnitWeeks:'weeks',repeatUnitMonths:'months',repeatUnitYears:'years',weekdays:'Weekdays',monthPattern:'Monthly pattern',byDate:'By date',byWeekday:'By weekday',monthDay:'Day of month',ordinal:'Which occurrence',firstOrdinal:'First',secondOrdinal:'Second',thirdOrdinal:'Third',fourthOrdinal:'Fourth',fifthOrdinal:'Fifth',lastOrdinal:'Last',weekday:'Weekday',repeatEnd:'Ends',neverEnd:'Never',onDate:'On date (inclusive)',afterCount:'After occurrences',repeatCount:'Number of occurrences',repeatUntil:'Last date',preserveRule:'Keep existing recurrence',preserveRuleHelp:'This series has a special pattern. It will be kept. Select another recurrence to replace it.',shortMonthHelp:'Months without this date or weekday are skipped.',choose_weekdays:'Select at least one weekday.',invalid_recurrence:'Check the recurrence settings.',otherOccurrences:'Other dates in this series',occurrencesMonth:'Month',noOccurrences:'No occurrences this month.',retranslateCategory:'Translate name again',systemStatus:'Service status',serviceReady:'Working',serviceDelayed:'Needs attention',backupReady:'Backup saved',backupPending:'Waiting for first backup',backupUnavailable:'Backups need configuration',lastBackup:'Last backup',automaticBackups:'Automatic backups',refreshStatus:'Refresh status'});
+Object.assign(words.ru,{defaultDayLayout:'Вид дня по умолчанию',month_layout:'Вид месяца',monthPaged:'Постраничный',monthScroll:'Прокручиваемый',default_duration:'Длительность события',duration30:'30 минут',duration60:'1 час',duration120:'2 часа',durationOther:'Другая',durationMinutes:'Длительность в минутах',now:'Сейчас',eventUnavailable:'Событие удалено или недоступно.',dragHint:'Удерживайте и перетащите, чтобы изменить время',invalid_settings:'Проверьте значение настройки.'});
+Object.assign(words.en,{defaultDayLayout:'Default day view',month_layout:'Month view',monthPaged:'Paged',monthScroll:'Scrolling',default_duration:'Default event duration',duration30:'30 minutes',duration60:'1 hour',duration120:'2 hours',durationOther:'Custom',durationMinutes:'Duration in minutes',now:'Now',eventUnavailable:'This event was deleted or is unavailable.',dragHint:'Hold and drag to change the time',invalid_settings:'Check this setting.'});
 const icons={calendar:'<rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/>',categories:'<path d="M3.5 12.2V4.5a1 1 0 0 1 1-1h7.7l8.3 8.3a1.4 1.4 0 0 1 0 2l-6.2 6.2a1.4 1.4 0 0 1-2 0z"/><circle cx="8" cy="8" r="1.4"/>',settings:'<circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/>',search:'<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>',filters:'<path d="M4 6h16M7 12h10M10 18h4"/>',prev:'<path d="M15 5l-7 7 7 7"/>',next:'<path d="M9 5l7 7-7 7"/>',plus:'<path d="M12 5v14M5 12h14"/>',repeat:'<path d="M4 8h15l-3-3M20 16H5l3 3M20 8v3M4 16v-3"/>',check:'<path d="M5 12l4 4L19 6"/>',clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',pin:'<path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0z"/><circle cx="12" cy="10" r="2"/>',trash:'<path d="M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7"/>',archive:'<rect x="3" y="3" width="18" height="5" rx="1"/><path d="M5 8v13h14V8M10 12h4"/>',close:'<path d="M6 6l12 12M6 18L18 6"/>'};
 const icon=name=>`<svg class="svg-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name]||icons.calendar}</svg>`;
 const radioSegment=(name,items,value)=>`<div class="segment radio-segment" role="group" aria-label="${esc(t(({category_id:'category','filter-category':'category','filter-owner':'owner','filter-status':'status','event-status':'status'}[name]||name)))}">${items.map(([v,l])=>`<label><input type="radio" name="${name}" value="${esc(v)}" ${v===value?'checked':''}><span>${esc(l)}</span></label>`).join('')}</div>`;
-let state=null,cfg={},events=[],categories=[],tab='calendar',page='main',selected='',view='month',query='',showSearch=false,showFilters=false;
+let state=null,cfg={},events=[],categories=[],tab='calendar',page='main',selected='',view='day',query='',showSearch=false,showFilters=false;
 let filter={owner:'',category:'',status:''},currentEvent=null,formEvent=null,formScope='all',archiveData=null,previewData=null,inviteUrl='';
 let token='',busy=false,fetchVersion=0,detailLanguage='',systemStatus=null;
 const navigationCache=new Map();
+let monthWindow=[],monthLoading=false,endManuallySet=false;
+
 const t=k=>(words[state?.me?.language||'ru'][k]||words.en[k]||k);
 const locale=()=>state?.me?.language==='en'?'en-GB':'ru-RU';
 const tz=()=>state?.me?.timezone||Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -82,7 +86,7 @@ const zoned=(value,options={})=>new Intl.DateTimeFormat(locale(),{timeZone:tz(),
 const isoDay=(value=new Date())=>new Intl.DateTimeFormat('en-CA',{timeZone:tz(),year:'numeric',month:'2-digit',day:'2-digit'}).format(value);
 const addDays=(s,n)=>{const d=new Date(s+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)};
 const dateLabel=(s,options={})=>new Intl.DateTimeFormat(locale(),{timeZone:'UTC',...options}).format(new Date(s+'T12:00:00Z'));
-const monthDays=()=>{const d=new Date(selected.slice(0,7)+'-01T12:00:00Z');const offset=(d.getUTCDay()+6)%7;const count=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,0)).getUTCDate();const start=addDays(d.toISOString().slice(0,10),-offset);return Array.from({length:Math.ceil((offset+count)/7)*7},(_,i)=>addDays(start,i))};
+const monthDays=(day=selected)=>{const d=new Date(day.slice(0,7)+'-01T12:00:00Z');const offset=(d.getUTCDay()+6)%7;const count=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,0)).getUTCDate();const start=addDays(d.toISOString().slice(0,10),-offset);return Array.from({length:Math.ceil((offset+count)/7)*7},(_,i)=>addDays(start,i))};
 const weekDays=()=>{const dow=(new Date(selected+'T12:00:00Z').getUTCDay()+6)%7;const first=addDays(selected,-dow);return Array.from({length:7},(_,i)=>addDays(first,i))};
 const cat=id=>categories.find(c=>c.id===id)||{name:t('noCategory'),color:'#888888'};
 const catName=id=>{const c=cat(id);return c.translations?.[state.me.language]||c.name};
@@ -113,7 +117,7 @@ function paint(root=document){
  const dark=document.body.classList.contains('dark');
  $$('[data-bg]',root).forEach(el=>{el.style.backgroundColor=el.dataset.bg;if(el.classList.contains('event-bar')||el.classList.contains('time-event')||el.classList.contains('category-chip')||el.classList.contains('day-task-card')){el.style.backgroundColor=`color-mix(in srgb, ${el.dataset.bg} ${dark?'28':'22'}%, var(--card))`;el.style.color=`color-mix(in srgb, ${el.dataset.bg} ${dark?'45':'65'}%, ${dark?'white':'black'})`}});
  $$('[data-top]',root).forEach(el=>{el.style.top=el.dataset.top+'px';el.style.height=el.dataset.height+'px';el.style.left=`calc(54px + (100% - 54px) * ${el.dataset.lane} / ${el.dataset.lanes})`;el.style.width=`calc((100% - 54px) / ${el.dataset.lanes})`});$$('.hour',root).forEach(el=>el.style.top=el.dataset.hour*70+'px');
- const days=$('.days',root);if(days)days.style.gridTemplateRows=`repeat(${days.children.length/7},minmax(0,1fr))`;
+ $$('.days',root).forEach(days=>days.style.gridTemplateRows=`repeat(${days.children.length/7},minmax(0,1fr))`);
 }
 function header(){
  const sub=page!=='main',form=page==='form',active=state.calendar?.active;
@@ -124,6 +128,8 @@ function header(){
 function navigation(){return `<nav class="bottom-nav" aria-label="${esc(t('calendar'))}">${['calendar','categories','settings'].map(id=>`<button type="button" data-action="tab" data-tab="${id}" class="${tab===id?'active':''}" ${tab===id?'aria-current="page"':''}>${icon(id)}<span>${t(id)}</span></button>`).join('')}</nav>`}
 function demo(){return cfg.demo?`<div class="demo">${t('demo')}<select id="demo-user" aria-label="Demo account">${['1','2','3'].map(x=>opt(x,'User '+x,state?.me.id)).join('')}</select></div>`:''}
 function render(){
+ const oldTimeline=$('.timeline'),timelinePosition=oldTimeline?{day:oldTimeline.dataset.date,top:oldTimeline.scrollTop}:null;
+ const oldMonths=$('.month-scroll'),monthPosition=oldMonths&&oldMonths.dataset.focus===selected?monthAnchor(oldMonths):null;
  applyTheme();let html='';
  if(!state)return;
  if(state.me.choose_language){$('#app').innerHTML=`<main class="shell">${header()}<div class="card"><h2>Выберите язык · Choose language</h2>${button('choose-language','Русский','primary full','data-lang="ru"')}<p></p>${button('choose-language','English','full','data-lang="en"')}</div></main>`;return}
@@ -149,7 +155,7 @@ function render(){
  const content=active&&tab==='calendar'&&page==='main'&&!showSearch?`<div class="calendar-motion-viewport"><div class="calendar-motion-page" data-view="${view}">${html}</div></div>`:html;
  $('#app').innerHTML=demo()+`<main class="shell ${page==='main'?'main-screen':'sub-screen'} ${tab==='calendar'&&page==='main'&&!showSearch?'calendar-shell':''}">${header()}${content}</main>`+(active&&page==='main'?navigation():'')+(active&&tab==='calendar'&&page==='main'&&!showSearch?button('new',icon('plus'),'fab','aria-label="'+t('newEvent')+'"'):'');
  paint();
- if(page==='main'&&view==='day'&&tab==='calendar'&&!query){const timeline=$('.timeline');if(timeline)timeline.scrollTop=7*70-20}
+ if(page==='main'&&tab==='calendar'&&!query){positionTimeline(document,timelinePosition);mountMonthScroll(monthPosition)}
 }
 function filterControls(){return `<div class="filters">${select('filter-owner',[['',t('owner')+': '+t('all')],[state.me.id,t('mine')],[(state.members||[]).find(x=>x.id!==state.me.id)?.id||'partner',t('partner')],['both',t('both')]],filter.owner)}${select('filter-category',[['',t('categories')],['none',t('noCategory')],...categories.map(c=>[c.id,catName(c.id)])],filter.category)}${select('filter-status',[['',t('status')+': '+t('all')],...['planned','done','cancelled'].map(x=>[x,t(x)])],filter.status)}</div>`}
 function calendarPage(){
@@ -163,13 +169,15 @@ function calendarPage(){
   for(const [month,entries] of groups)html+=`<h3 class="section-label">${esc(dateLabel(month+'-01',{month:'long',year:'numeric'}))}</h3><div class="search-event-group">${eventList(entries)}</div>`;
   return html+(events.length?'':empty())+'</section>';
  }
- html=`<section class="calendar-controls"><div class="calendar-heading">${button('prev',icon('prev'),'icon',`aria-label="${t('back')}"`)}<div class="grow"><h1 class="month-title${week?' week-title':''}">${esc(heading)}</h1>${week?`<small class="week-range">${esc(week.range)}</small>`:view==='day'?`<small>${esc(dateLabel(selected,{day:'numeric',month:'long'}))} · ${esc(tz())}</small>`:''}</div>${button('next',icon('next'),'icon',`aria-label="${t('next')}"`)}${button('search',icon('search'),'icon',`aria-label="${t('search')}"`)}${button('filters',icon('filters'),`icon ${showFilters?'selected':''}`,`aria-label="${t('filters')}" aria-expanded="${showFilters}"`)}</div><div class="calendar-view-row"><div class="segment" role="group" aria-label="${t('calendar')}">${['month','week','day'].map(v=>button('view',t(v),v===view?'active':'',`data-view="${v}" aria-pressed="${v===view}"`)).join('')}</div>${button('today',t('today'),'today-btn')}</div>${showFilters?filterControls():''}</section>`;
+ html=`<section class="calendar-controls"><div class="calendar-heading">${button('prev',icon('prev'),'icon',`aria-label="${t('back')}"`)}<div class="grow"><h1 class="month-title${week?' week-title':''}">${esc(heading)}</h1>${week?`<small class="week-range">${esc(week.range)}</small>`:view==='day'?`<small>${esc(dateLabel(selected,{day:'numeric',month:'long'}))} · ${esc(tz())}</small>`:''}</div>${button('next',icon('next'),'icon',`aria-label="${t('next')}"`)}${button('search',icon('search'),'icon',`aria-label="${t('search')}"`)}${button('filters',icon('filters'),`icon ${showFilters?'selected':''}`,`aria-label="${t('filters')}" aria-expanded="${showFilters}"`)}</div><div class="calendar-view-row"><div class="segment" role="group" aria-label="${t('calendar')}">${['day','week','month'].map(v=>button('view',t(v),v===view?'active':'',`data-view="${v}" aria-pressed="${v===view}"`)).join('')}</div>${button('today',t('today'),'today-btn')}</div>${showFilters?filterControls():''}</section>`;
  if(view==='month'){
- const days=monthDays(),weekday=Array.from({length:7},(_,i)=>dateLabel(addDays('2026-10-12',i),{weekday:'short'}));
- html+=`<div class="month"><div class="weekdays">${weekday.map(x=>`<div>${esc(x)}</div>`).join('')}</div><div class="days">${days.map(d=>{const entries=events.filter(e=>onDay(e,d));return `<div class="day ${d.slice(0,7)!==selected.slice(0,7)?'outside':''} ${d===isoDay()?'today':''}" data-action="date" data-date="${d}" role="button" tabindex="0" aria-label="${dateLabel(d,{day:'numeric',month:'long'})}"><div class="day-number">${Number(d.slice(-2))}</div>${entries.slice(0,3).map(e=>{const first=eventDay(e)===d,last=e.all_day?addDays(e.end,-1)===d:isoDay(new Date(new Date(e.end_utc).getTime()-1))===d;return `<button class="event-bar ${e.status!=='planned'?'faded':''} ${e.status==='cancelled'?'struck':''} ${!first?'continues-left':''} ${!last?'continues-right':''}" data-bg="${color(e.category_id)}" data-action="event" data-id="${e.id}" data-occ="${esc(e.occurrence)}" aria-label="${esc(title(e))}">${e.status==='done'?'✓ ':''}${first||new Date(d+'T12:00:00Z').getUTCDay()===1?esc(title(e)):'&nbsp;'}</button>`}).join('')}${entries.length>3?`<div class="more">+${entries.length-3} ${t('more')}</div>`:''}</div>`}).join('')}</div></div>`;
+ if(state.me.month_layout==='scroll'){
+  ensureMonthWindow();
+  html+=`<div class="scroll-month-weekdays weekdays">${weekdayLabels()}</div><div class="month-scroll" data-selected="${selected}" data-focus="${selected}">${monthWindow.map(month=>`<section class="scroll-month" data-month="${month}"><h2>${esc(dateLabel(month,{month:'long',year:'numeric'}))}</h2>${monthGrid(month,true)}</section>`).join('')}</div>`;
+ }else html+=monthGrid(selected);
  }else if(view==='week'){
  const daily=events.filter(e=>onDay(e,selected));
- html+=`<div class="week-strip">${weekDays().map(d=>button('week-date',`${esc(dateLabel(d,{weekday:'short'}))}<span class="date-number">${Number(d.slice(-2))}</span>`,`week-date ${d===selected?'selected':''} ${d===isoDay()?'today':''}`,`data-date="${d}" aria-pressed="${d===selected}"`)).join('')}</div><div class="agenda"><div class="agenda-heading"><h2>${esc(dateLabel(selected,{weekday:'long',day:'numeric',month:'long'}))}</h2><small>${daily.length}</small></div>${eventList(daily)}</div>`;
+ html+=`<div class="week-strip">${weekDays().map(d=>button('week-date',`${esc(dateLabel(d,{weekday:'short'}))}<span class="date-number">${Number(d.slice(-2))}</span>${weekIndicator(d)}`,`week-date ${d===selected?'selected':''} ${d===isoDay()?'today':''}`,`data-date="${d}" aria-pressed="${d===selected}"`)).join('')}</div><div class="agenda" data-date="${selected}"><div class="agenda-heading"><h2>${esc(dateLabel(selected,{weekday:'long',day:'numeric',month:'long'}))}</h2><small>${daily.length}</small></div>${eventList(daily)}</div>`;
  }else{
  html+=`<div class="day-layout-row"><span>${t('day_layout')}</span><div class="segment" role="group" aria-label="${t('day_layout')}">${[['timeline','dayTimeline'],['list','dayList']].map(([v,label])=>button('day-layout',t(label),(state.me.day_layout||'timeline')===v?'active':'',`data-layout="${v}" aria-pressed="${(state.me.day_layout||'timeline')===v}"`)).join('')}</div></div>`;
  html+=state.me.day_layout==='list'?dayChecklist():timeline();
@@ -178,8 +186,8 @@ function calendarPage(){
 }
 function dayChecklist(){
  const daily=events.filter(e=>onDay(e,selected)).sort((a,b)=>Number(b.all_day)-Number(a.all_day)||(a.start_utc||a.start).localeCompare(b.start_utc||b.start)||title(a).localeCompare(title(b))),done=daily.filter(e=>e.status==='done').length;
- if(!daily.length)return `<section class="day-checklist">${empty()}</section>`;
- return `<section class="day-checklist" aria-label="${t('dayList')}"><div class="checklist-summary"><span>${daily.length} · ${esc(dateLabel(selected,{day:'numeric',month:'long'}))}</span><span>${done} / ${daily.length} ${t('completedCount')}</span></div><div class="day-tasks">${daily.map(e=>{const attrs=`data-id="${esc(e.id)}" data-occ="${esc(e.occurrence||'')}"`;return `<div class="day-task ${e.status==='done'?'completed':''} ${e.status==='cancelled'?'cancelled-task':''}">${button('toggle-day-done',e.status==='done'?icon('check'):'','task-check',`${attrs} aria-label="${esc(t(e.status==='done'?'undoComplete':'completeEvent')+': '+title(e))}" aria-pressed="${e.status==='done'}"`)}<button type="button" class="day-task-card" data-bg="${esc(color(e.category_id))}" data-action="event" ${attrs}><span class="day-task-title">${esc(title(e))}</span><span class="day-task-time">${icon('clock')}${esc(time(e))}${!e.all_day?' – '+esc(zoned(e.end_utc,{hour:'2-digit',minute:'2-digit'})):''}${e.rrule?' · ↻':''}</span><span class="day-task-meta">${esc(catName(e.category_id))} · ${ownership(e.owner)}${e.status==='cancelled'?' · '+t('cancelled'):''}</span></button>${button('delete-day-event',icon('trash'),'task-delete',`${attrs} aria-label="${esc(t('delete')+': '+title(e))}"`)}</div>`}).join('')}</div></section>`;
+ if(!daily.length)return `<section class="day-checklist" data-date="${selected}">${empty()}</section>`;
+ return `<section class="day-checklist" data-date="${selected}" aria-label="${t('dayList')}"><div class="checklist-summary"><span>${daily.length} · ${esc(dateLabel(selected,{day:'numeric',month:'long'}))}</span><span>${done} / ${daily.length} ${t('completedCount')}</span></div><div class="day-tasks">${daily.map(e=>{const attrs=`data-id="${esc(e.id)}" data-occ="${esc(e.occurrence||'')}"`;return `<div class="day-task ${e.status==='done'?'completed':''} ${e.status==='cancelled'?'cancelled-task':''}">${button('toggle-day-done',e.status==='done'?icon('check'):'','task-check',`${attrs} aria-label="${esc(t(e.status==='done'?'undoComplete':'completeEvent')+': '+title(e))}" aria-pressed="${e.status==='done'}"`)}<button type="button" class="day-task-card" data-bg="${esc(color(e.category_id))}" data-action="event" ${attrs}><span class="day-task-title">${esc(title(e))}</span><span class="day-task-time">${icon('clock')}${esc(time(e))}${!e.all_day?' – '+esc(zoned(e.end_utc,{hour:'2-digit',minute:'2-digit'})):''}${e.rrule?' · ↻':''}</span><span class="day-task-meta">${esc(catName(e.category_id))} · ${ownership(e.owner)}${e.status==='cancelled'?' · '+t('cancelled'):''}</span></button>${button('delete-day-event',icon('trash'),'task-delete',`${attrs} aria-label="${esc(t('delete')+': '+title(e))}"`)}</div>`}).join('')}</div></section>`;
 }
 function listedEvent(el){const e=events.find(e=>e.id===el.dataset.id&&(e.occurrence||'')===(el.dataset.occ||''));if(!e)throw new Error(t('revision_conflict'));return e}
 async function changeEventStatus(e,value){
@@ -198,9 +206,109 @@ function timeline(){
  const minute=iso=>{const parts=new Intl.DateTimeFormat('en-GB',{timeZone:tz(),hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(iso));return Number(parts.find(p=>p.type==='hour').value)*60+Number(parts.find(p=>p.type==='minute').value)};
  const items=timed.map(e=>({event:e,start:eventDay(e)<selected?0:minute(e.start_utc),end:isoDay(new Date(e.end_utc))>selected?1440:minute(e.end_utc)})).sort((a,b)=>a.start-b.start||b.end-a.end);
  const groups=[];for(const item of items){let group=groups.at(-1);if(!group||item.start>=group.end){group={end:item.end,items:[],lanes:[]};groups.push(group)}group.end=Math.max(group.end,item.end);let lane=group.lanes.findIndex(end=>end<=item.start);if(lane<0)lane=group.lanes.length;group.lanes[lane]=item.end;item.lane=lane;group.items.push(item)}
- html+=`<div class="timeline"><div class="timeline-inner">${Array.from({length:24},(_,i)=>`<div class="hour" data-hour="${i}"><span>${String(i).padStart(2,'0')}:00</span></div>`).join('')}${groups.flatMap(g=>g.items.map(x=>{const e=x.event;return `<button class="time-event ${e.status!=='planned'?'faded':''}" data-bg="${color(e.category_id)}" data-top="${x.start/60*70}" data-height="${Math.max(28,(x.end-x.start)/60*70)}" data-lane="${x.lane}" data-lanes="${g.lanes.length}" data-action="event" data-id="${e.id}" data-occ="${esc(e.occurrence)}">${e.status==='done'?'✓ ':e.status==='cancelled'?'⊘ ':''}${esc(title(e))}<small>${esc(time(e))}–${esc(zoned(e.end_utc,{hour:'2-digit',minute:'2-digit'}))}</small></button>`})).join('')}</div></div>`;
+ html+=`<div class="timeline" data-date="${selected}"><div class="timeline-inner">${Array.from({length:24},(_,i)=>`<div class="hour" data-hour="${i}"><span>${String(i).padStart(2,'0')}:00</span></div>`).join('')}${groups.flatMap(g=>g.items.map(x=>{const e=x.event;return `<button class="time-event ${e.status!=='planned'?'faded':''}" data-bg="${color(e.category_id)}" data-top="${x.start/60*70}" data-height="${Math.max(28,(x.end-x.start)/60*70)}" data-lane="${x.lane}" data-lanes="${g.lanes.length}" data-action="event" data-id="${e.id}" data-occ="${esc(e.occurrence)}" title="${t('dragHint')}" aria-label="${esc(title(e)+' · '+ownership(e.owner)+' · '+time(e))}">${e.status==='done'?'✓ ':e.status==='cancelled'?'⊘ ':''}${esc(title(e))}<small>${esc(time(e))}–${esc(zoned(e.end_utc,{hour:'2-digit',minute:'2-digit'}))}</small><small class="time-owner">${esc(ownership(e.owner))}</small></button>`})).join('')}${selected===isoDay()?'<div class="now-line" role="img"></div>':''}</div></div>`;
  return html;
 }
+function newEvent(day=selected,minutes){
+ currentEvent=null;formScope='all';endManuallySet=false;
+ formEvent={title:'',description:'',language:state.me.language,translations:{},...CalendarTime.defaults(day,tz(),state.me.default_duration||60,new Date(),minutes),all_day:false,timezone:tz(),owner:state.me.id,category_id:null,status:'planned',location:'',links:[],rrule:'',reminders:{[state.me.id]:[...state.me.default_reminders]}};
+ page='form';render();
+}
+function weekIndicator(day){
+ const first=events.filter(e=>onDay(e,day)&&e.status==='planned').sort((a,b)=>Number(b.all_day)-Number(a.all_day)||(a.start_utc||a.start).localeCompare(b.start_utc||b.start)||a.id.localeCompare(b.id))[0];
+ return `<span class="week-marker-slot">${first?`<span class="week-marker" data-bg="${color(first.category_id)}" role="img" aria-label="${esc(t('planned')+': '+catName(first.category_id))}"></span>`:''}</span>`;
+}
+function weekdayLabels(){return Array.from({length:7},(_,i)=>`<div>${esc(dateLabel(addDays('2026-10-12',i),{weekday:'short'}))}</div>`).join('')}
+function monthGrid(day,scroll=false){
+ const days=monthDays(day);
+ return `<div class="month${scroll?' scroll-grid':''}">${scroll?'':`<div class="weekdays">${weekdayLabels()}</div>`}<div class="days">${days.map(d=>{
+  if(scroll&&d.slice(0,7)!==day.slice(0,7))return '<div class="month-spacer" aria-hidden="true"></div>';
+  const entries=events.filter(e=>onDay(e,d));
+  return `<div class="day ${d.slice(0,7)!==day.slice(0,7)?'outside':''} ${d===isoDay()?'today':''} ${d===selected?'chosen-date':''}" data-action="date" data-date="${d}" role="button" tabindex="0" aria-label="${esc(dateLabel(d,{day:'numeric',month:'long'}))}"><div class="day-number">${Number(d.slice(-2))}</div>${entries.slice(0,3).map(e=>{
+   const first=eventDay(e)===d,last=e.all_day?addDays(e.end,-1)===d:isoDay(new Date(Date.parse(e.end_utc)-1))===d;
+   return `<button class="event-bar ${e.status!=='planned'?'faded':''} ${e.status==='cancelled'?'struck':''} ${!first?'continues-left':''} ${!last?'continues-right':''}" data-bg="${color(e.category_id)}" data-action="event" data-id="${esc(e.id)}" data-occ="${esc(e.occurrence||'')}" aria-label="${esc(title(e))}">${e.status==='done'?'✓ ':''}${first||new Date(d+'T12:00:00Z').getUTCDay()===1||scroll&&d.endsWith('-01')?esc(title(e)):'&nbsp;'}</button>`;
+  }).join('')}${entries.length>3?`<div class="more">+${entries.length-3} ${t('more')}</div>`:''}</div>`;
+ }).join('')}</div></div>`;
+}
+function ensureMonthWindow(){
+ const month=selected.slice(0,7)+'-01';
+ if(!monthWindow.includes(month))monthWindow=[-1,0,1].map(n=>CalendarNavigation.shift(month,'month',n));
+}
+function calendarRange(){
+ if(view==='month'&&state.me.month_layout==='scroll'){
+  ensureMonthWindow();return [monthDays(monthWindow[0])[0],monthDays(monthWindow.at(-1)).at(-1)];
+ }
+ return view==='month'?monthDays():view==='week'?weekDays():[selected];
+}
+function monthAnchor(el){
+ const sections=$$('.scroll-month',el),item=sections.find(x=>x.offsetTop+x.offsetHeight>el.scrollTop+1)||sections.at(-1);
+ return item?{month:item.dataset.month,offset:el.scrollTop-item.offsetTop}:null;
+}
+function positionMonths(el,anchor){
+ const item=$(`[data-month="${anchor?.month||el.dataset.selected.slice(0,7)+'-01'}"]`,el);
+ if(item)el.scrollTop=item.offsetTop+(anchor?.offset||0);
+}
+function mountMonthScroll(anchor){
+ const el=$('.month-scroll');if(!el)return;positionMonths(el,anchor);let timer;
+ el.addEventListener('scroll',()=>{
+  if(!el.isConnected||view!=='month'||tab!=='calendar'||page!=='main')return;
+  const current=monthAnchor(el);
+  if(current){selected=current.month;el.dataset.focus=selected;$('.month-title').textContent=dateLabel(selected,{month:'long',year:'numeric'})}
+  clearTimeout(timer);timer=setTimeout(async()=>{
+   if(!el.isConnected||view!=='month'||page!=='main'||monthLoading||busy||calendarTouch.active()||calendarSwipe.active())return;
+   const direction=el.scrollTop<180?-1:el.scrollHeight-el.clientHeight-el.scrollTop<180?1:0;if(!direction)return;
+   monthLoading=true;const previous=[...monthWindow];
+   try{
+    const month=CalendarNavigation.shift(direction<0?monthWindow[0]:monthWindow.at(-1),'month',direction);
+    if(direction<0)monthWindow.unshift(month);else monthWindow.push(month);
+    if(monthWindow.length>7){if(direction<0)monthWindow.pop();else monthWindow.shift()}
+    await loadData();if(el.isConnected)render();
+   }catch(error){monthWindow=previous;toast(error.message)}finally{monthLoading=false}
+  },100);
+ },{passive:true});
+}
+function updateNowLines(root=document){
+ const local=CalendarTime.local(new Date(),tz()),minutes=Number(local.slice(11,13))*60+Number(local.slice(14,16));
+ $$('.now-line',root).forEach(el=>{const today=el.closest('.timeline').dataset.date===local.slice(0,10);el.hidden=!today;el.style.top=minutes/60*70+'px';el.setAttribute('aria-label',t('now')+' '+local.slice(11));el.dataset.time=local.slice(11)});
+}
+function positionTimeline(root=document,previous){
+ updateNowLines(root);
+ const el=$('.timeline',root);if(!el)return;
+ if(previous?.day===el.dataset.date){el.scrollTop=previous.top;return}
+ const now=CalendarTime.local(new Date(),tz()),minute=Number(now.slice(11,13))*60+Number(now.slice(14,16));
+ const first=events.filter(e=>!e.all_day&&onDay(e,el.dataset.date)).map(e=>CalendarTime.local(e.start_utc,tz()).slice(11)).sort()[0];
+ const target=el.dataset.date===now.slice(0,10)?minute:first?Number(first.slice(0,2))*60+Number(first.slice(3)):0;
+ el.scrollTop=Math.max(0,target/60*70-el.clientHeight*.25);
+}
+async function openLinkedEvent(){
+ const params=new URLSearchParams(location.search),id=params.get('event'),occ=params.get('occurrence')||'';
+ if(!id||!state.calendar?.active)return false;
+ params.delete('event');params.delete('occurrence');history.replaceState(null,'',location.pathname+(params.size?'?'+params.toString():'')+location.hash);
+ tab='calendar';showSearch=false;query='';view='day';
+ try{await openEvent(id,occ)}catch(error){if(['event_not_found','not_found','forbidden'].includes(error.code))toast(t('eventUnavailable'));else toast(error.message)}
+ return true;
+}
+async function moveTimelineEvent(event,minute,startMinute){
+ const oldScroll=$('.timeline')?.scrollTop;
+ const original=CalendarTime.local(event.start_utc,tz());
+ const continuing=original.slice(0,10)<selected;
+ const target=continuing?Number(original.slice(11,13))*60+Number(original.slice(14,16))+minute-startMinute:minute;
+ const changes=CalendarTime.moveEvent(event,continuing?original.slice(0,10):selected,target,tz());
+ if(changes.start===event.start&&changes.end===event.end)return;
+ const scope=event.rrule?await chooseScope():'all';if(!scope){render();return}
+ busy=true;
+ try{
+  if(event.rrule&&scope!=='all')await api('events/'+event.id+'/occurrence','POST',{occurrence:event.occurrence,revision:event.revision,scope,changes});
+  else{
+   let patch=changes;
+   if(event.rrule){const master=await api('events/'+event.id),delta=(Date.parse(changes.start+'Z')-Date.parse(event.start+'Z'))/60000;patch={...changes,start:CalendarTime.add(master.start,delta),end:CalendarTime.add(master.end,delta)}}
+   const result=await api('events/'+event.id,'PATCH',{revision:event.revision,...patch});if(result.overlap_warning?.length)toast(t('overlap'));
+  }
+  await loadData();render();if(oldScroll!==undefined&&$('.timeline'))$('.timeline').scrollTop=oldScroll;toast(t('saved'));
+ }catch(error){render();toast(t(error.message))}finally{busy=false}
+}
+setInterval(()=>{if(state)updateNowLines()},30000);
+
 function reminderChoices(values,name='reminder'){return `<div class="reminders">${[[1440,'24 h'],[720,'12 h'],[120,'2 h'],[60,'1 h'],[30,'30 min'],[15,'15 min']].map(([n,l])=>`<label><input type="checkbox" name="${name}" value="${n}" ${values.includes(n)?'checked':''}>${l}</label>`).join('')}</div>`}
 function recurrenceEditor(e){
  const c=CalendarRecurrence.parse(e.rrule,e.start,e.timezone),dayNames=CalendarRecurrence.DAYS.map((d,i)=>[d,dateLabel(addDays('2026-10-19',i),{weekday:'short'})]);
@@ -252,7 +360,7 @@ function statusSection(){
 }
 function settingsPage(){
  const me=state.me,votes=state.calendar.votes;
- return `<h1 class="page-title">${t('settings')}</h1><div class="pair-card"><div class="members">${(state.members||[]).map(m=>`<span class="avatar">${esc(m.name?.slice(0,1)||'?')}</span>`).join('')}</div><div><strong>${t('pairTitle')}</strong><small>${(state.members||[]).length} / 2 ${t('seats')}</small></div></div><h3 class="section-label">${t('justYou')}</h3><section class="form-group settings-group"><div class="setting-row"><label for="setting-language">${t('language')}</label><select id="setting-language" name="setting-language">${[['ru','Русский'],['en','English']].map(([v,l])=>opt(v,l,me.language)).join('')}</select></div><div class="setting-row"><label for="setting-timezone">${t('timezone')}</label><input id="setting-timezone" name="setting-timezone" value="${esc(me.timezone)}"></div><div class="setting-row theme-row"><span>${t('theme')}</span><div class="segment">${['light','dark','system'].map(v=>button('theme',t(v),me.theme===v?'active':'',`data-theme="${v}" aria-pressed="${me.theme===v}"`)).join('')}</div></div><details class="default-settings"><summary>${t('defaults')}<small>${me.default_reminders.map(x=>x>=60?x/60+' h':x+' min').join(' · ')||'—'} ›</small></summary><div class="reminder-options"><p class="privacy">${t('defaultHelp')}</p>${reminderChoices(me.default_reminders,'default-reminder')}</div></details><label class="switch-row">${t('notify_at_start')}<input type="checkbox" role="switch" name="setting-notify_at_start" ${me.notify_at_start!==false?'checked':''}></label><label class="switch-row">${t('enabled')}<input type="checkbox" role="switch" name="setting-reminders_enabled" ${me.reminders_enabled?'checked':''}></label><div class="delivery-row"><span>${t('openBot')}</span><span class="delivery-status ${me.bot_can_message&&!me.delivery_error?'ok':''}">${me.bot_can_message&&!me.delivery_error?t('deliveryOk'):t('deliveryError')}</span></div>${!me.bot_can_message||me.delivery_error?`<div class="form-note"><p class="privacy">${t('botStart')}</p>${button('open-bot',t('openBot'),'full')}</div>`:''}</section>${statusSection()}${!state.calendar.second_id?`<section class="form-group padded"><h3>${t('invite')}</h3><p class="privacy">${t('inviteHelp')}</p>${button('invite',t('invite'),'primary full')}${inviteUrl?`<p class="privacy">${esc(inviteUrl)}</p>${button('copy-invite',t('copy'),'full')}`:''}</section>`:''}<h3 class="section-label">${t('connectedCalendars')}</h3><section class="form-group"><div class="provider-row"><span class="provider-icon">G</span><span class="grow">Google<small>${t('notConnected')}</small></span><small>${t('notAvailable')}</small></div><div class="provider-row"><span class="provider-icon">i</span><span class="grow">Apple iCloud<small>${t('notConnected')}</small></span><small>${t('notAvailable')}</small></div></section><p class="privacy section-footnote">${t('integrationsInfo')}</p><h3 class="section-label">${t('sharedData')}</h3><section class="form-group settings-links">${button('trash',`${icon('trash')}<span class="grow">${t('trash')}</span>${icon('next')}`,'setting-link')}${button('backup',`${icon('archive')}<span class="grow">${t('backupExport')}</span><small>ICS · ZIP</small>${icon('next')}`,'setting-link')}</section><h3 class="section-label">${t('leaveOrDelete')}</h3><section class="form-group settings-links">${button('leave',t('leave'),'setting-link danger')}${votes.length?`<div class="notice">${votes.includes(me.id)?t('deletionPending'):t('deletionRequested')}</div>`:''}${!votes.includes(me.id)?button('approve-deletion',`<span>${t('deleteCalendar')}<small>${t('deleteHelp')}</small></span>`,'setting-link danger'):''}${votes.length?button('reject-deletion',t('reject'),'setting-link'):''}</section>`;
+ return `<h1 class="page-title">${t('settings')}</h1><div class="pair-card"><div class="members">${(state.members||[]).map(m=>`<span class="avatar">${esc(m.name?.slice(0,1)||'?')}</span>`).join('')}</div><div><strong>${t('pairTitle')}</strong><small>${(state.members||[]).length} / 2 ${t('seats')}</small></div></div><h3 class="section-label">${t('justYou')}</h3><section class="form-group settings-group"><div class="setting-row"><label for="setting-language">${t('language')}</label><select id="setting-language" name="setting-language">${[['ru','Русский'],['en','English']].map(([v,l])=>opt(v,l,me.language)).join('')}</select></div><div class="setting-row"><label for="setting-timezone">${t('timezone')}</label><input id="setting-timezone" name="setting-timezone" value="${esc(me.timezone)}"></div><div class="setting-row"><label for="setting-day_layout">${t('defaultDayLayout')}</label><select id="setting-day_layout" name="setting-day_layout">${[['list',t('dayList')],['timeline',t('dayTimeline')]].map(([v,l])=>opt(v,l,me.day_layout)).join('')}</select></div><div class="setting-row"><label for="setting-month_layout">${t('month_layout')}</label><select id="setting-month_layout" name="setting-month_layout">${[['paged',t('monthPaged')],['scroll',t('monthScroll')]].map(([v,l])=>opt(v,l,me.month_layout||'paged')).join('')}</select></div><div class="setting-row"><label for="duration-preset">${t('default_duration')}</label><select id="duration-preset" name="duration-preset">${[['30',t('duration30')],['60',t('duration60')],['120',t('duration120')],['custom',t('durationOther')]].map(([v,l])=>opt(v,l,[30,60,120].includes(me.default_duration)?String(me.default_duration):'custom')).join('')}</select></div><div class="setting-row" id="custom-duration-row" ${[30,60,120].includes(me.default_duration)?'hidden':''}><label for="setting-default_duration">${t('durationMinutes')}</label><input id="setting-default_duration" name="setting-default_duration" type="number" min="1" max="525600" step="1" required value="${me.default_duration||60}"></div><div class="setting-row theme-row"><span>${t('theme')}</span><div class="segment">${['light','dark','system'].map(v=>button('theme',t(v),me.theme===v?'active':'',`data-theme="${v}" aria-pressed="${me.theme===v}"`)).join('')}</div></div><details class="default-settings"><summary>${t('defaults')}<small>${me.default_reminders.map(x=>x>=60?x/60+' h':x+' min').join(' · ')||'—'} ›</small></summary><div class="reminder-options"><p class="privacy">${t('defaultHelp')}</p>${reminderChoices(me.default_reminders,'default-reminder')}</div></details><label class="switch-row">${t('notify_at_start')}<input type="checkbox" role="switch" name="setting-notify_at_start" ${me.notify_at_start!==false?'checked':''}></label><label class="switch-row">${t('enabled')}<input type="checkbox" role="switch" name="setting-reminders_enabled" ${me.reminders_enabled?'checked':''}></label><div class="delivery-row"><span>${t('openBot')}</span><span class="delivery-status ${me.bot_can_message&&!me.delivery_error?'ok':''}">${me.bot_can_message&&!me.delivery_error?t('deliveryOk'):t('deliveryError')}</span></div>${!me.bot_can_message||me.delivery_error?`<div class="form-note"><p class="privacy">${t('botStart')}</p>${button('open-bot',t('openBot'),'full')}</div>`:''}</section>${statusSection()}${!state.calendar.second_id?`<section class="form-group padded"><h3>${t('invite')}</h3><p class="privacy">${t('inviteHelp')}</p>${button('invite',t('invite'),'primary full')}${inviteUrl?`<p class="privacy">${esc(inviteUrl)}</p>${button('copy-invite',t('copy'),'full')}`:''}</section>`:''}<h3 class="section-label">${t('connectedCalendars')}</h3><section class="form-group"><div class="provider-row"><span class="provider-icon">G</span><span class="grow">Google<small>${t('notConnected')}</small></span><small>${t('notAvailable')}</small></div><div class="provider-row"><span class="provider-icon">i</span><span class="grow">Apple iCloud<small>${t('notConnected')}</small></span><small>${t('notAvailable')}</small></div></section><p class="privacy section-footnote">${t('integrationsInfo')}</p><h3 class="section-label">${t('sharedData')}</h3><section class="form-group settings-links">${button('trash',`${icon('trash')}<span class="grow">${t('trash')}</span>${icon('next')}`,'setting-link')}${button('backup',`${icon('archive')}<span class="grow">${t('backupExport')}</span><small>ICS · ZIP</small>${icon('next')}`,'setting-link')}</section><h3 class="section-label">${t('leaveOrDelete')}</h3><section class="form-group settings-links">${button('leave',t('leave'),'setting-link danger')}${votes.length?`<div class="notice">${votes.includes(me.id)?t('deletionPending'):t('deletionRequested')}</div>`:''}${!votes.includes(me.id)?button('approve-deletion',`<span>${t('deleteCalendar')}<small>${t('deleteHelp')}</small></span>`,'setting-link danger'):''}${votes.length?button('reject-deletion',t('reject'),'setting-link'):''}</section>`;
 }
 function trashPage(){return `${button('back',`‹ ${t('back')}`,'plain back')}<h2>${t('trash')}</h2><p class="muted">${t('trashHelp')}</p>${events.map(e=>`<div class="card"><h3>${esc(title(e))}</h3><p class="muted">${esc(e.start)} · ${esc(e.deleted_at.slice(0,10))}</p><div class="row">${button('restore-event',t('restore'),'primary',`data-id="${e.id}" data-revision="${e.revision}" data-occ="${esc(e.occurrence||'')}"`)}${button('permanent-event',t('deleteForever'),'danger',`data-id="${e.id}" data-revision="${e.revision}" data-occ="${esc(e.occurrence||'')}"`)}</div></div>`).join('')||empty()}`}
 function backupPage(){
@@ -260,20 +368,20 @@ function backupPage(){
  if(previewData){html+=`<div class="card"><h2>${t('archivePreview')}</h2><p class="muted">${t('archiveInfo')}</p><div class="scrollbox"><h3>${t('categories')}</h3>${previewData.categories.map(c=>`<label class="check-label"><input class="backup-category" type="checkbox" value="${c.id}">${esc(c.data.name)}</label>`).join('')}<h3>${t('differences')}</h3>${previewData.changes.map(e=>`<div>${Object.entries(e.fields).map(([k,v])=>`<div class="backup-field"><label class="check-label"><input type="checkbox" class="backup-field-choice" data-id="${e.id}" data-revision="${e.revision}" data-occ="${esc(e.occurrence||'')}" value="${k}">${t(k)}</label><small>${t('current')}</small><pre>${esc(JSON.stringify(v.current))}</pre><small>${t('archive')}</small><pre>${esc(JSON.stringify(v.archive))}</pre></div>`).join('')}</div>`).join('')||`<p class="muted">${t('noDifferences')}</p>`}<h3>${t('recurrenceExceptions')}</h3>${previewData.override_changes.map(e=>`<div class="backup-field"><p>${esc(e.occurrence)}</p>${Object.entries(e.fields).map(([k,v])=>`<label class="check-label"><input type="checkbox" class="backup-override" data-id="${e.id}" data-occ="${esc(e.occurrence)}" data-revision="${e.revision}" value="${esc(k)}">${t(k)}</label><small>${t('current')}</small><pre>${esc(JSON.stringify(v.current))}</pre><small>${t('archive')}</small><pre>${esc(JSON.stringify(v.archive))}</pre>`).join('')}</div>`).join('')}<h3>${t('mySettings')}</h3>${Object.entries(previewData.profile).map(([k,v])=>`<div class="backup-field"><label class="check-label"><input type="checkbox" class="backup-profile" value="${esc(k)}">${t(k)}</label><small>${t('current')}</small><pre>${esc(JSON.stringify(v.current))}</pre><small>${t('archive')}</small><pre>${esc(JSON.stringify(v.archive))}</pre></div>`).join('')}<h3>${t('missing')}</h3>${previewData.missing.map(e=>`<label class="check-label"><input type="checkbox" class="backup-missing" value="${e.id}">${esc(e.data.title)} · ${esc(e.data.start)}</label>`).join('')}</div>${button('apply-backup',t('applySelected'),'primary full')}</div>`}
  return html;
 }
-async function refresh(){state=await api('state');view=state.me.view;await loadData();render()}
+async function refresh(){state=await api('state');await loadData();render()}
 function navigationTarget(action){return {date:action.type==='move'?CalendarNavigation.shift(selected,view,action.direction):selected,mode:action.type==='view'?action.view:view}}
 function atCalendarTarget(target,rows,fn){
- const old={selected,view,events};
+ const old={selected,view,events,monthWindow};monthWindow=[...monthWindow];
  try{selected=target.date;view=target.mode;if(rows)events=rows;return fn()}
- finally{selected=old.selected;view=old.view;events=old.events}
+ finally{selected=old.selected;view=old.view;events=old.events;monthWindow=old.monthWindow}
 }
 function navigationEntry(target){
- const key=target.date+'|'+target.mode;
- if(navigationCache.has(key))return navigationCache.get(key);
  const params=atCalendarTarget(target,null,()=>{
-  const days=view==='month'?monthDays():view==='week'?weekDays():[selected];
+  const days=calendarRange();
   return new URLSearchParams({start:addDays(days[0],-1),end:addDays(days.at(-1),2),q:'',...filter});
  });
+ const key=params.toString();
+ if(navigationCache.has(key))return navigationCache.get(key);
  const entry={rows:null,promise:null};
  entry.promise=api('events?'+params).then(rows=>{entry.rows=rows;return rows}).catch(error=>{if(navigationCache.get(key)===entry)navigationCache.delete(key);throw error});
  // Speculative requests may fail; the navigation path still reports a real failure.
@@ -289,7 +397,7 @@ function warmNavigation(){
 }
 function navigationPage(target,rows){
  const node=document.createElement('div');node.className='calendar-motion-page';node.dataset.view=target.mode;
- node.innerHTML=atCalendarTarget(target,rows||[],calendarPage);paint(node);
+ node.innerHTML=atCalendarTarget(target,rows||[],calendarPage);paint(node);positionTimeline(node);requestAnimationFrame(()=>{positionTimeline(node);node.dataset.timelineScroll=$('.timeline',node)?.scrollTop||0;const el=$('.month-scroll',node);if(el)positionMonths(el)});
  if(!rows){const loading=document.createElement('span');loading.className='calendar-preview-loading';loading.textContent=t('loading');node.append(loading)}
  return node;
 }
@@ -298,7 +406,7 @@ function navigationPreview(action){
  if(!entry.rows)entry.promise.then(rows=>{
   if(!node.isConnected)return;
   node.replaceChildren(...navigationPage(target,rows).childNodes);
-  const timeline=node.querySelector('.timeline');if(timeline)timeline.scrollTop=7*70-20;
+  positionTimeline(node);
  }).catch(()=>{});
  return node;
 }
@@ -316,16 +424,16 @@ async function loadData(){
  if(page==='trash'){events=await api('events?trash=true');return}
  if(tab==='settings'&&page==='main')systemStatus=await api('system-status');
  if(tab!=='calendar'||page==='backup')return;
- const days=view==='month'?monthDays():view==='week'?weekDays():[selected];
+ const days=calendarRange();
  const params=new URLSearchParams({start:addDays(days[0],-1),end:addDays(days.at(-1),2),q:query,...filter});
- const result=await api('events?'+params);if(version===fetchVersion){events=result;warmNavigation()}
+ const result=await api('events?'+params);if(version===fetchVersion){events=result;if(!query)navigationCache.set(params.toString(),{rows:result,promise:Promise.resolve(result)});warmNavigation()}
 }
 async function changeView(v){view=v;state.me.view=v;await api('settings','PATCH',{view:v});await loadData();render()}
 async function openEvent(id,key){
  const master=await api('events/'+id+(key?'?occurrence='+encodeURIComponent(key):''));
  detailLanguage=state.me.language;
  currentEvent={...master,...(master.selected_instance||master.first_instance||{}),master};
- page='detail';render();
+ selected=eventDay(currentEvent);page='detail';render();
 }
 function captureForm(){
  const f=$('#event-form');if(!f)return;const d=new FormData(f);
@@ -355,7 +463,7 @@ const actions={
  'translate-event':async()=>{await api('events/'+currentEvent.id+'/translate','POST',{});currentEvent.translation_status={state:'pending'};render();toast(t('translationQueued'))},
  'replace-translations':async()=>{if(await confirmDialog(t('replaceManual'),t('replaceManualHelp'))){await api('events/'+currentEvent.id+'/translate','POST',{overwrite_manual:true});currentEvent.translation_status={state:'pending'};render();toast(t('translationQueued'))}},
  'tab':async el=>{tab=el.dataset.tab;page='main';await loadData();render()},
- 'view':el=>changeView(el.dataset.view),
+ 'view':el=>el.dataset.view===view?undefined:navigateSmoothly({type:'view',view:el.dataset.view},CalendarNavigation.motion({preview:navigationPreview})),
  'day-layout':async el=>{state=await api('settings','PATCH',{day_layout:el.dataset.layout});render()},
  'toggle-day-done':async el=>{const e=listedEvent(el);await changeEventStatus(e,e.status==='done'?'planned':'done');await loadData();render()},
  'delete-day-event':el=>deleteCalendarEvent(listedEvent(el)),
@@ -367,7 +475,7 @@ const actions={
  'set-status':async el=>{const e=currentEvent,value=el.dataset.status;if(e.rrule)await api('events/'+e.id+'/occurrence','POST',{occurrence:e.occurrence,revision:e.revision,scope:'one',changes:{status:value}});else await api('events/'+e.id,'PATCH',{revision:e.revision,status:value});await openEvent(e.id,e.occurrence)},
  'other-occurrences':()=>occurrenceDialog(),
  'filters':()=>{showFilters=!showFilters;render()},
- 'today':async()=>{selected=isoDay();await loadData();render()},
+ 'today':async()=>{selected=isoDay();view='day';showSearch=false;query='';$('.timeline')?.removeAttribute('data-date');await loadData();render()},
  'prev':()=>move(-1),'next':()=>move(1),
  'date':async el=>{selected=el.dataset.date;await changeView('day')},
  'week-date':el=>{selected=el.dataset.date;render()},
@@ -377,8 +485,8 @@ const actions={
  'copy-invite':async()=>{await navigator.clipboard.writeText(inviteUrl);toast(t('copied'))},
  'return':async()=>{await api('membership','POST',{returning:true});await refresh()},
  'leave':async()=>{if(await confirmDialog(t('leave'),t('leaveHelp'))){await api('membership','POST',{returning:false});await refresh()}},
- 'new':()=>{currentEvent=null;formScope='all';formEvent={title:'',description:'',language:state.me.language,translations:{},start:selected+'T12:00',end:selected+'T13:00',all_day:false,timezone:tz(),owner:state.me.id,category_id:null,status:'planned',location:'',links:[],rrule:'',reminders:{[state.me.id]:state.me.default_reminders}};page='form';render()},
- 'edit-event':async()=>{formScope=currentEvent.rrule?await chooseScope():'all';if(!formScope)return;formEvent=structuredClone(formScope==='all'?(currentEvent.master||currentEvent):currentEvent);page='form';render()},
+ 'new':()=>newEvent(),
+ 'edit-event':async()=>{endManuallySet=false;formScope=currentEvent.rrule?await chooseScope():'all';if(!formScope)return;formEvent=structuredClone(formScope==='all'?(currentEvent.master||currentEvent):currentEvent);page='form';render()},
  'back':async()=>{if(page==='form'&&currentEvent){page='detail';render();return}page='main';await loadData();render()},
  'delete-event':()=>deleteCalendarEvent(currentEvent),
  'trash':async()=>{page='trash';await loadData();render()},
@@ -398,7 +506,7 @@ const actions={
  'theme':async el=>{state=await api('settings','PATCH',{theme:el.dataset.theme});render()},
  'new-category':()=>categoryDialog(),'edit-category':el=>categoryDialog(categories.find(x=>x.id===el.dataset.id))
 };
-async function move(n){selected=CalendarNavigation.shift(selected,view,n);await loadData();render()}
+async function move(n){await navigateSmoothly({type:'move',direction:n},CalendarNavigation.motion({preview:navigationPreview}))}
 function categoryDialog(category){
  const el=document.createElement('div');el.className='modal-backdrop category-backdrop';const c=category||{name:'',color:'#9B77D1',translations:{}};
  el.innerHTML=`<form id="category-form" class="modal category-sheet" role="dialog" aria-modal="true"><div class="modal-header"><button type="button" id="close-category">${t('cancel')}</button><h2>${t(category?'edit':'newCategory')}</h2><button type="submit">${t('save')}</button></div><label>${t('name')}</label><div class="category-edit">${input('name',c.name,'text','required maxlength="100" aria-label="'+t('name')+'"')}${input('colorPicker',c.color,'color','aria-label="'+t('color')+'"')}</div><p></p>${field('color',input('color',c.color,'text','required pattern="#[0-9a-fA-F]{6}"'))}<div class="swatches">${['#9B77D1','#D47AAE','#D77777','#E0A34B','#D0BD55','#55A77B','#4DA5A8','#598DD4','#7778C9','#888888','#333333','#F3B6D4'].map(x=>`<button class="swatch ${x.toLowerCase()===c.color.toLowerCase()?'selected':''}" type="button" aria-pressed="${x.toLowerCase()===c.color.toLowerCase()}" data-color="${x}" data-bg="${x}" aria-label="${x}"></button>`).join('')}</div>${field('translations',input('ru',c.translations?.ru||'','text','placeholder="Русский"'))}${input('en',c.translations?.en||'','text','placeholder="English"')}<div class="color-preview"><div><span class="dot preview-dot" data-bg="${c.color}"></span>${t('light')}</div><div><span class="dot preview-dot" data-bg="${c.color}"></span>${t('dark')}</div></div><p class="privacy">${t('categoryDelete')}</p>${category&&cfg.integrations?.translation==='configured'?'<button type="button" id="translate-category" class="text-button">'+t('retranslateCategory')+'</button>':''}${category?`<button type="button" id="remove-category" class="danger sheet-delete">${t('delete')}</button>`:''}</form>`;
@@ -419,12 +527,28 @@ const calendarSwipe=CalendarNavigation.mount({
  run:async(action,motion)=>{busy=true;try{await navigateSmoothly(action,motion)}finally{busy=false}},
  onError:error=>toast(error.message)
 });
-$('#app').addEventListener('click',async e=>{const el=e.target.closest('[data-action]');if(!el||busy||calendarSwipe.active())return;e.stopPropagation();const action=actions[el.dataset.action];if(!action)return;busy=true;try{await action(el)}catch(error){toast(error.message)}finally{busy=false}});
+const calendarTouch=CalendarTouch.mount({
+ enabled:()=>Boolean(state?.calendar?.active&&state.calendar.state==='active'&&tab==='calendar'&&page==='main'&&!showSearch&&!busy&&!monthLoading&&!document.querySelector('.modal-backdrop')),
+ getEvent:el=>listedEvent(el),onCreate:newEvent,onMove:moveTimelineEvent,onError:error=>toast(t(error.message)),
+ cancelSwipe:()=>calendarSwipe.cancel(),haptic:()=>{try{tg?.HapticFeedback?.impactOccurred('light')}catch{}}
+});
+$('#app').addEventListener('click',async e=>{const el=e.target.closest('[data-action]');if(!el||busy||calendarSwipe.active()||calendarTouch.active())return;e.stopPropagation();const action=actions[el.dataset.action];if(!action)return;busy=true;try{await action(el)}catch(error){toast(error.message)}finally{busy=false}});
 $('#app').addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('.day')){e.preventDefault();e.target.click()}});
 $('#app').addEventListener('submit',async e=>{if(e.target.id==='event-form'){e.preventDefault();if(busy)return;busy=true;e.target.classList.add('busy');try{await saveForm()}finally{busy=false;$('#event-form')?.classList.remove('busy')}}});
 $('#app').addEventListener('change',async e=>{const el=e.target;try{
  if(el.id==='demo-user'){await login(el.value);return}
- if(el.name==='all_day'){captureForm();if(formEvent.all_day){formEvent.start=formEvent.start.slice(0,10);formEvent.end=addDays(formEvent.start,1)}else{formEvent.start+='T12:00';formEvent.end=formEvent.start.slice(0,10)+'T13:00'}render();return}
+ if(el.name==='start'){
+  const previous={...formEvent};captureForm();
+  if(!formEvent.all_day){const times=CalendarTime.moveStart(previous,formEvent.start,endManuallySet);formEvent={...formEvent,...times};$('[name=end]').value=times.end}
+  else if(formEvent.end<=formEvent.start){formEvent.end=addDays(formEvent.start,1);$('[name=end]').value=formEvent.end}
+  return;
+ }
+ if(el.name==='end'){endManuallySet=true;captureForm();return}
+ if(el.name==='all_day'){captureForm();endManuallySet=false;if(formEvent.all_day){formEvent.start=formEvent.start.slice(0,10);formEvent.end=addDays(formEvent.start,1)}else Object.assign(formEvent,CalendarTime.defaults(formEvent.start.slice(0,10),formEvent.timezone,state.me.default_duration||60));render();return}
+ if(el.name==='duration-preset'){
+  if(el.value==='custom'){$('#custom-duration-row').hidden=false;$('[name=setting-default_duration]').focus();return}
+  state=await api('settings','PATCH',{default_duration:Number(el.value)});render();return;
+ }
  if(el.name==='repeat'||el.name.startsWith('repeat-')){captureForm();render();return}
  if(el.name.startsWith('filter-')){filter[el.name.slice(7)]=el.value;await loadData();render();return}
  if(el.name==='event-status'){
@@ -433,14 +557,14 @@ $('#app').addEventListener('change',async e=>{const el=e.target;try{
  }
  if(el.name==='reminder'&&$$('[name=reminder]:checked').length>3){el.checked=false;toast(t('invalid_reminders'));return}
  if(el.name==='default-reminder'){const values=$$('[name=default-reminder]:checked').map(x=>Number(x.value));if(values.length>3){el.checked=false;toast(t('invalid_reminders'));return}await api('settings','PATCH',{default_reminders:values});state.me.default_reminders=values;return}
- if(el.name.startsWith('setting-')){const key=el.name.slice(8);state=await api('settings','PATCH',{[key]:el.type==='checkbox'?el.checked:el.value});render();return}
+ if(el.name.startsWith('setting-')){const key=el.name.slice(8);state=await api('settings','PATCH',{[key]:el.type==='checkbox'?el.checked:key==='default_duration'?Number(el.value):el.value});render();return}
  }catch(error){toast(error.message);if(el.type==='checkbox')el.checked=!el.checked}});
 let searchTimer;
 $('#app').addEventListener('input',e=>{if(e.target.id==='search'){query=e.target.value;clearTimeout(searchTimer);searchTimer=setTimeout(async()=>{try{const pos=$('#search')?.selectionStart;await loadData();render();$('#search')?.focus();$('#search')?.setSelectionRange(pos,pos)}catch(err){toast(err.message)}},250)}});
 async function login(demoUser='1'){
  const response=await fetch('/api/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg.demo?{demo_user:demoUser}:{init_data:tg?.initData||''})});
  const result=await response.json();if(!response.ok)throw new Error(t(result.error));token=result.token;state=result.state;
- selected=isoDay();view=state.me.view;filter={owner:'',category:'',status:''};query='';page='main';tab='calendar';
+ selected=isoDay();view='day';monthWindow=[];filter={owner:'',category:'',status:''};query='';page='main';tab='calendar';
  // A signed Telegram start_param is used only as an invite token, never as identity.
  const start=tg?.initDataUnsafe?.start_param;
  if(start?.startsWith('join_')&&!state.calendar){state=await api('join','POST',{token:start.slice(5)})}
@@ -451,26 +575,26 @@ async function login(demoUser='1'){
   if(device)state=await api('settings','PATCH',{timezone:device});
   sessionStorage.setItem('timezone_initialized_'+state.me.id,'1');
  }
- await loadData();render();
+ await loadData();render();await openLinkedEvent();
 }
 async function boot(){
  try{tg?.ready();tg?.expand();cfg=await(await fetch('/api/config')).json();if(!cfg.demo&&!tg?.initData){$('#app').innerHTML=`<div class="splash"><div class="brand-mark">oc</div><h1>Our Calendar</h1><p>${t('telegramOnly')}</p></div>`;return}await login()}
  catch(error){$('#app').innerHTML=`<main class="shell"><div class="card"><h1>Our Calendar</h1><p class="error">${esc(error.message)}</p><button id="retry">${t('retry')}</button></div></main>`;$('#retry').onclick=boot}
 }
 matchMedia('(prefers-color-scheme:dark)').addEventListener('change',applyTheme);
-window.addEventListener('focus',async()=>{if(token&&page==='main'&&!busy&&!calendarSwipe.active()){try{await refresh()}catch{}}});
+window.addEventListener('focus',async()=>{if(token&&!busy&&!calendarSwipe.active()&&!calendarTouch.active()){try{if(!await openLinkedEvent()&&page==='main')await refresh()}catch{}}});
 boot();
 
 setInterval(async()=>{
- if(document.hidden||busy||calendarSwipe.active()||!token||document.querySelector('.modal-backdrop'))return;
+ if(document.hidden||busy||monthLoading||calendarSwipe.active()||calendarTouch.active()||!token||document.querySelector('.modal-backdrop'))return;
  try{
-  const next=await api('state');if(calendarSwipe.active())return;
+  const next=await api('state');if(calendarSwipe.active()||calendarTouch.active()||monthLoading)return;
   if(!next.calendar?.active||next.calendar.state!=='active'){state=next;render();return}
   state=next;
   if(page==='main'){
    if(document.activeElement?.matches('input,textarea,select'))return;
    const scroll=window.scrollY,timelineScroll=$('.timeline')?.scrollTop;
-   await loadData();if(calendarSwipe.active())return;render();
+   await loadData();if(calendarSwipe.active()||calendarTouch.active()||monthLoading)return;render();
    if(timelineScroll!==undefined&&$('.timeline'))$('.timeline').scrollTop=timelineScroll;
    window.scrollTo(0,scroll);
   }else if(page==='detail'&&['pending','failed'].includes(currentEvent?.translation_status?.state))await openEvent(currentEvent.id,currentEvent.occurrence);

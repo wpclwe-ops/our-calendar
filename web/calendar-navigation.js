@@ -40,7 +40,7 @@
   let incoming=null,key='',dx=0,ended=false,frame=0,lastType='',animations=[],retired=[];
   const animate=(el,frames)=>{
    if(!el||reduced)return Promise.resolve();
-   const a=el.animate(frames,{duration:280,easing:'cubic-bezier(.22,.75,.2,1)',fill:'forwards'});animations.push(a);
+   const a=el.animate(frames,{duration:380,easing:'cubic-bezier(.16,1,.3,1)',fill:'forwards'});animations.push(a);
    return a.finished.catch(()=>{});
   };
   function cleanup(){
@@ -53,7 +53,7 @@
    if(node||nextKey!==key){const previous=incoming;incoming=null;key=nextKey;
     if(action.type!=='limit'){
      incoming=node||preview(action);incoming.classList.add('motion-preview');incoming.inert=true;incoming.setAttribute('aria-hidden','true');viewport.append(incoming);
-     const timeline=incoming.querySelector('.timeline');if(timeline)timeline.scrollTop=7*70-20;
+     const timeline=incoming.querySelector('.timeline');if(timeline)timeline.scrollTop=Number(incoming.dataset.timelineScroll||0);
     }
     if(previous&&!node&&!reduced){
      // Crossing the long-swipe threshold changes the preview without a hard cut.
@@ -114,7 +114,7 @@
   document.addEventListener('pointerdown',e=>{
    if(drag){cancel();return}if(settling)return;
    const surface=e.target.closest?.('.calendar-shell');
-   if(!e.isPrimary||e.pointerType==='mouse'||!surface||!enabled()||e.target.closest('header,.calendar-controls,.day-layout-row,input,select,textarea'))return;
+   if(!e.isPrimary||e.pointerType==='mouse'||!surface||!enabled()||e.target.closest('header,.calendar-controls,.day-layout-row,.time-event,input,select,textarea'))return;
    drag={id:e.pointerId,x:e.clientX,y:e.clientY,surface,width:surface.clientWidth,view:getView(),axis:null};
   });
   document.addEventListener('pointermove',e=>{

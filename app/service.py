@@ -39,7 +39,7 @@ class Service:
             lang = telegram.get('language_code', 'en').split('-')[0]
             data = {'name': telegram.get('first_name',''), 'language': lang if lang in ('ru','en') else 'en',
                     'choose_language': lang not in ('ru','en'), 'timezone': 'UTC', 'timezone_initialized': False, 'theme': 'system',
-                    'view': 'month', 'day_layout': 'timeline', 'default_reminders': [60], 'reminders_enabled': True, 'notify_at_start': True,
+                    'view': 'day', 'day_layout': 'timeline', 'month_layout': 'paged', 'default_duration': 60, 'default_reminders': [60], 'reminders_enabled': True, 'notify_at_start': True,
                     'bot_can_message': False, 'delivery_error': None}
             c.execute('INSERT INTO users VALUES(?,?)', (user_id, dump(data)))
         return user_id
@@ -47,7 +47,7 @@ class Service:
     def user(self, c, user_id):
         row = c.execute('SELECT data FROM users WHERE id=?', (user_id,)).fetchone()
         require(row is not None, 'unauthorized', 401)
-        return {'id': user_id, 'notify_at_start': True, 'day_layout': 'timeline', **load(row['data'])}
+        return {'id': user_id, 'notify_at_start': True, 'day_layout': 'timeline', 'month_layout': 'paged', 'default_duration': 60, **load(row['data'])}
 
     def calendar(self, c, user_id, active=True):
         row = c.execute('SELECT ca.*,m.active FROM calendars ca JOIN members m ON ca.id=m.calendar_id WHERE m.user_id=?', (user_id,)).fetchone()
@@ -122,12 +122,14 @@ class Service:
             if member:
                 self.calendar(c,user_id)
             me = self.user(c,user_id)
-            require(set(changes) <= {'language','timezone','theme','view','day_layout','default_reminders','reminders_enabled','notify_at_start'},'invalid_settings')
+            require(set(changes) <= {'language','timezone','theme','view','day_layout','month_layout','default_duration','default_reminders','reminders_enabled','notify_at_start'},'invalid_settings')
             if 'language' in changes: require(changes['language'] in ('ru','en'),'invalid_language')
             if 'timezone' in changes: zone(changes['timezone'])
             if 'theme' in changes: require(changes['theme'] in ('light','dark','system'),'invalid_theme')
             if 'view' in changes: require(changes['view'] in ('month','week','day'),'invalid_view')
             if 'day_layout' in changes: require(changes['day_layout'] in ('timeline','list'),'invalid_settings')
+            if 'month_layout' in changes: require(changes['month_layout'] in ('paged','scroll'),'invalid_settings')
+            if 'default_duration' in changes: require(type(changes['default_duration']) is int and 1 <= changes['default_duration'] <= 525600,'invalid_settings')
             if 'default_reminders' in changes: changes['default_reminders'] = offsets(changes['default_reminders'])
             for key in ('reminders_enabled','notify_at_start'):
                 if key in changes: require(type(changes[key]) is bool,'invalid_settings')

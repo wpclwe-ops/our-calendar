@@ -4,6 +4,7 @@ import logging
 import threading
 import urllib.request
 import urllib.error
+from urllib.parse import urlencode, urlsplit, urlunsplit, parse_qsl
 from .service import dump,load
 from .recurrence import UTC,utcnow,stamp,occurrences,instance,zone
 
@@ -15,7 +16,7 @@ TEXT={
        'deletion_started':'Календарь будет удалён через 30 дней. Любой из вас может отменить удаление.',
        'deletion_cancelled':'Удаление календаря отменено', 'restore_requested':'Запрошено восстановление Our Calendar из ZIP. Откройте приложение для подтверждения.',
        'calendar_restored':'Календарь восстановлен. Включите свои напоминания в настройках, когда будете готовы.',
-       'event_started':'Событие начинается','reminder':'Напоминание','open':'Открыть календарь','welcome':'Our Calendar — ваш общий календарь для двоих. Откройте приложение, чтобы начать.',
+       'event_started':'Событие начинается','reminder':'Напоминание','open_event':'Открыть событие','open':'Открыть календарь','welcome':'Our Calendar — ваш общий календарь для двоих. Откройте приложение, чтобы начать.',
        'all_day':'Весь день','both':'Обоим'},
  'en':{'created':'New event','updated':'Event updated','deleted':'Event deleted','restored':'Event restored',
        'joined':'Your partner joined Our Calendar','backup_restored':'Calendar restored from backup',
@@ -23,7 +24,7 @@ TEXT={
        'deletion_started':'Your calendar will be deleted in 30 days. Either participant can cancel.',
        'deletion_cancelled':'Calendar deletion cancelled','restore_requested':'Our Calendar ZIP restoration requested. Open the app to approve.',
        'calendar_restored':'Calendar restored. Enable your own reminders in settings when ready.',
-       'event_started':'Event starting now','reminder':'Reminder','open':'Open calendar','welcome':'Our Calendar — a shared calendar for two. Open the app to get started.',
+       'event_started':'Event starting now','reminder':'Reminder','open_event':'Open event','open':'Open calendar','welcome':'Our Calendar — a shared calendar for two. Open the app to get started.',
        'all_day':'All day','both':'Both'}
 }
 
@@ -48,7 +49,7 @@ class Telegram:
 
     def send(self,user_id,text,lang='en',url=None):
         return self.call('sendMessage',{'chat_id':int(user_id),'text':text[:4096],
-                'reply_markup':{'inline_keyboard':[[{'text':TEXT[lang]['open'],'web_app':{'url':url or self.config.public_url}}]]}})
+                'reply_markup':{'inline_keyboard':[[{'text':TEXT[lang]['open_event' if url else 'open'],'web_app':{'url':url or self.config.public_url}}]]}})
 
     def setup(self):
         self.call('setWebhook',{'url':self.config.public_url+'/api/telegram/webhook','secret_token':self.config.webhook_secret,
@@ -193,7 +194,14 @@ class Worker:
                     latest=self.service.get_event(job['user_id'],job['event_id'],occurrence=occ)
                     payload['data']=latest.get('selected_instance',latest)
                     job={**job,'payload':dump(payload)}
-                self.telegram.send(job['user_id'],self.text(job,person),person['language'])
+                payload=load(job['payload']);url=None
+                if job.get('event_id'):
+                    parts=urlsplit(self.service.config.public_url)
+                    query=dict(parse_qsl(parts.query));query['event']=job['event_id']
+                    occurrence=payload.get('data',{}).get('occurrence')
+                    if occurrence:query['occurrence']=occurrence
+                    url=urlunsplit((parts.scheme,parts.netloc,parts.path,urlencode(query),parts.fragment))
+                self.telegram.send(job['user_id'],self.text(job,person),person['language'],url)
             except TelegramAPIError as exc:
                 with self.service.db.transaction() as c:
                     if exc.code in (400,403):

@@ -97,7 +97,7 @@ def test_day_layout_is_personal_persistent_and_validated(service):
     assert service.state('1')['me']['day_layout']=='timeline'
     service.settings('1',{'day_layout':'list'})
     assert service.state('1')['me']['day_layout']=='list'
-    assert service.state('1')['me']['view']=='month'
+    assert service.state('1')['me']['view']=='day'
     assert service.state('2')['me']['day_layout']=='timeline'
     for invalid in ('agenda','',None,True,[],{}):
         with pytest.raises(Problem):service.settings('1',{'day_layout':invalid})
