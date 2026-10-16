@@ -74,6 +74,7 @@ const radioSegment=(name,items,value)=>`<div class="segment radio-segment" role=
 let state=null,cfg={},events=[],categories=[],tab='calendar',page='main',selected='',view='month',query='',showSearch=false,showFilters=false;
 let filter={owner:'',category:'',status:''},currentEvent=null,formEvent=null,formScope='all',archiveData=null,previewData=null,inviteUrl='';
 let token='',busy=false,fetchVersion=0,detailLanguage='',systemStatus=null;
+const navigationCache=new Map();
 const t=k=>(words[state?.me?.language||'ru'][k]||words.en[k]||k);
 const locale=()=>state?.me?.language==='en'?'en-GB':'ru-RU';
 const tz=()=>state?.me?.timezone||Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -108,11 +109,11 @@ async function api(path,method='GET',body=null,raw=false){
  return raw?response.blob():response.json();
 }
 function applyTheme(){const theme=state?.me.theme||'system';document.body.classList.toggle('dark',theme==='dark'||(theme==='system'&&matchMedia('(prefers-color-scheme:dark)').matches));document.documentElement.lang=state?.me.language||'ru'}
-function paint(){
+function paint(root=document){
  const dark=document.body.classList.contains('dark');
- $$('[data-bg]').forEach(el=>{el.style.backgroundColor=el.dataset.bg;if(el.classList.contains('event-bar')||el.classList.contains('time-event')||el.classList.contains('category-chip')||el.classList.contains('day-task-card')){el.style.backgroundColor=`color-mix(in srgb, ${el.dataset.bg} ${dark?'28':'22'}%, var(--card))`;el.style.color=`color-mix(in srgb, ${el.dataset.bg} ${dark?'45':'65'}%, ${dark?'white':'black'})`}});
- $$('[data-top]').forEach(el=>{el.style.top=el.dataset.top+'px';el.style.height=el.dataset.height+'px';el.style.left=`calc(54px + (100% - 54px) * ${el.dataset.lane} / ${el.dataset.lanes})`;el.style.width=`calc((100% - 54px) / ${el.dataset.lanes})`});$$('.hour').forEach(el=>el.style.top=el.dataset.hour*70+'px');
- if($('.days'))$('.days').style.gridTemplateRows=`repeat(${monthDays().length/7},minmax(0,1fr))`;
+ $$('[data-bg]',root).forEach(el=>{el.style.backgroundColor=el.dataset.bg;if(el.classList.contains('event-bar')||el.classList.contains('time-event')||el.classList.contains('category-chip')||el.classList.contains('day-task-card')){el.style.backgroundColor=`color-mix(in srgb, ${el.dataset.bg} ${dark?'28':'22'}%, var(--card))`;el.style.color=`color-mix(in srgb, ${el.dataset.bg} ${dark?'45':'65'}%, ${dark?'white':'black'})`}});
+ $$('[data-top]',root).forEach(el=>{el.style.top=el.dataset.top+'px';el.style.height=el.dataset.height+'px';el.style.left=`calc(54px + (100% - 54px) * ${el.dataset.lane} / ${el.dataset.lanes})`;el.style.width=`calc((100% - 54px) / ${el.dataset.lanes})`});$$('.hour',root).forEach(el=>el.style.top=el.dataset.hour*70+'px');
+ const days=$('.days',root);if(days)days.style.gridTemplateRows=`repeat(${days.children.length/7},minmax(0,1fr))`;
 }
 function header(){
  const sub=page!=='main',form=page==='form',active=state.calendar?.active;
@@ -145,7 +146,8 @@ function render(){
  else html=settingsPage();
  const active=state.calendar?.active;
  document.body.dataset.page=page;document.body.dataset.tab=tab;document.body.classList.toggle('calendar-screen',Boolean(active&&tab==='calendar'&&page==='main'&&!showSearch));
- $('#app').innerHTML=demo()+`<main class="shell ${page==='main'?'main-screen':'sub-screen'} ${tab==='calendar'&&page==='main'&&!showSearch?'calendar-shell':''}">${header()}${html}</main>`+(active&&page==='main'?navigation():'')+(active&&tab==='calendar'&&page==='main'&&!showSearch?button('new',icon('plus'),'fab','aria-label="'+t('newEvent')+'"'):'');
+ const content=active&&tab==='calendar'&&page==='main'&&!showSearch?`<div class="calendar-motion-viewport"><div class="calendar-motion-page" data-view="${view}">${html}</div></div>`:html;
+ $('#app').innerHTML=demo()+`<main class="shell ${page==='main'?'main-screen':'sub-screen'} ${tab==='calendar'&&page==='main'&&!showSearch?'calendar-shell':''}">${header()}${content}</main>`+(active&&page==='main'?navigation():'')+(active&&tab==='calendar'&&page==='main'&&!showSearch?button('new',icon('plus'),'fab','aria-label="'+t('newEvent')+'"'):'');
  paint();
  if(page==='main'&&view==='day'&&tab==='calendar'&&!query){const timeline=$('.timeline');if(timeline)timeline.scrollTop=7*70-20}
 }
@@ -259,8 +261,55 @@ function backupPage(){
  return html;
 }
 async function refresh(){state=await api('state');view=state.me.view;await loadData();render()}
+function navigationTarget(action){return {date:action.type==='move'?CalendarNavigation.shift(selected,view,action.direction):selected,mode:action.type==='view'?action.view:view}}
+function atCalendarTarget(target,rows,fn){
+ const old={selected,view,events};
+ try{selected=target.date;view=target.mode;if(rows)events=rows;return fn()}
+ finally{selected=old.selected;view=old.view;events=old.events}
+}
+function navigationEntry(target){
+ const key=target.date+'|'+target.mode;
+ if(navigationCache.has(key))return navigationCache.get(key);
+ const params=atCalendarTarget(target,null,()=>{
+  const days=view==='month'?monthDays():view==='week'?weekDays():[selected];
+  return new URLSearchParams({start:addDays(days[0],-1),end:addDays(days.at(-1),2),q:'',...filter});
+ });
+ const entry={rows:null,promise:null};
+ entry.promise=api('events?'+params).then(rows=>{entry.rows=rows;return rows}).catch(error=>{if(navigationCache.get(key)===entry)navigationCache.delete(key);throw error});
+ // Speculative requests may fail; the navigation path still reports a real failure.
+ entry.promise.catch(()=>{});navigationCache.set(key,entry);
+ while(navigationCache.size>12)navigationCache.delete(navigationCache.keys().next().value);
+ return entry;
+}
+function warmNavigation(){
+ if(tab!=='calendar'||page!=='main'||showSearch||!state.calendar?.active)return;
+ const modes=['month','week','day'],i=modes.indexOf(view);
+ for(const direction of [-1,1])navigationEntry(navigationTarget({type:'move',direction}));
+ for(const mode of [modes[i-1],modes[i+1]].filter(Boolean))navigationEntry({date:selected,mode});
+}
+function navigationPage(target,rows){
+ const node=document.createElement('div');node.className='calendar-motion-page';node.dataset.view=target.mode;
+ node.innerHTML=atCalendarTarget(target,rows||[],calendarPage);paint(node);
+ if(!rows){const loading=document.createElement('span');loading.className='calendar-preview-loading';loading.textContent=t('loading');node.append(loading)}
+ return node;
+}
+function navigationPreview(action){
+ const target=navigationTarget(action),entry=navigationEntry(target),node=navigationPage(target,entry.rows);
+ if(!entry.rows)entry.promise.then(rows=>{
+  if(!node.isConnected)return;
+  node.replaceChildren(...navigationPage(target,rows).childNodes);
+  const timeline=node.querySelector('.timeline');if(timeline)timeline.scrollTop=7*70-20;
+ }).catch(()=>{});
+ return node;
+}
+async function navigateSmoothly(action,motion){
+ const target=navigationTarget(action),rows=await navigationEntry(target).promise;
+ const ready=action.type==='view'?api('settings','PATCH',{view:target.mode}):Promise.resolve();
+ const commit=()=>{selected=target.date;view=target.mode;state.me.view=view;events=rows;render();warmNavigation()};
+ if(motion)await motion.finish(action,navigationPage(target,rows),commit,ready);else{await ready;commit()}
+}
 async function loadData(){
- const version=++fetchVersion;
+ const version=++fetchVersion;navigationCache.clear();
  if(!state.calendar?.active||state.calendar.state!=='active')return;
  if(page==='form'||page==='detail')return;
  categories=await api('categories');
@@ -269,7 +318,7 @@ async function loadData(){
  if(tab!=='calendar'||page==='backup')return;
  const days=view==='month'?monthDays():view==='week'?weekDays():[selected];
  const params=new URLSearchParams({start:addDays(days[0],-1),end:addDays(days.at(-1),2),q:query,...filter});
- const result=await api('events?'+params);if(version===fetchVersion)events=result;
+ const result=await api('events?'+params);if(version===fetchVersion){events=result;warmNavigation()}
 }
 async function changeView(v){view=v;state.me.view=v;await api('settings','PATCH',{view:v});await loadData();render()}
 async function openEvent(id,key){
@@ -366,10 +415,11 @@ const calendarSwipe=CalendarNavigation.mount({
  enabled:()=>Boolean(state?.calendar?.active&&state.calendar.state==='active'&&tab==='calendar'&&page==='main'&&!showSearch&&!busy&&!document.querySelector('.modal-backdrop')),
  getView:()=>view,
  label:action=>action.type==='view'?`${['month','week','day'].indexOf(action.view)>['month','week','day'].indexOf(view)?'←':'→'} ${t(action.view)}`:action.type==='limit'?t(view):`${action.direction>0?'←':'→'} ${t(action.direction>0?'next':'back')} · ${t(view)}`,
- run:async action=>{busy=true;try{if(action.type==='view')await changeView(action.view);else await move(action.direction)}finally{busy=false}},
+ startMotion:()=>CalendarNavigation.motion({preview:navigationPreview,haptic:()=>{try{tg?.HapticFeedback?.selectionChanged()}catch{}}}),
+ run:async(action,motion)=>{busy=true;try{await navigateSmoothly(action,motion)}finally{busy=false}},
  onError:error=>toast(error.message)
 });
-$('#app').addEventListener('click',async e=>{const el=e.target.closest('[data-action]');if(!el||busy)return;e.stopPropagation();const action=actions[el.dataset.action];if(!action)return;busy=true;try{await action(el)}catch(error){toast(error.message)}finally{busy=false}});
+$('#app').addEventListener('click',async e=>{const el=e.target.closest('[data-action]');if(!el||busy||calendarSwipe.active())return;e.stopPropagation();const action=actions[el.dataset.action];if(!action)return;busy=true;try{await action(el)}catch(error){toast(error.message)}finally{busy=false}});
 $('#app').addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('.day')){e.preventDefault();e.target.click()}});
 $('#app').addEventListener('submit',async e=>{if(e.target.id==='event-form'){e.preventDefault();if(busy)return;busy=true;e.target.classList.add('busy');try{await saveForm()}finally{busy=false;$('#event-form')?.classList.remove('busy')}}});
 $('#app').addEventListener('change',async e=>{const el=e.target;try{
@@ -408,19 +458,19 @@ async function boot(){
  catch(error){$('#app').innerHTML=`<main class="shell"><div class="card"><h1>Our Calendar</h1><p class="error">${esc(error.message)}</p><button id="retry">${t('retry')}</button></div></main>`;$('#retry').onclick=boot}
 }
 matchMedia('(prefers-color-scheme:dark)').addEventListener('change',applyTheme);
-window.addEventListener('focus',async()=>{if(token&&page==='main'&&!busy){try{await refresh()}catch{}}});
+window.addEventListener('focus',async()=>{if(token&&page==='main'&&!busy&&!calendarSwipe.active()){try{await refresh()}catch{}}});
 boot();
 
 setInterval(async()=>{
  if(document.hidden||busy||calendarSwipe.active()||!token||document.querySelector('.modal-backdrop'))return;
  try{
-  const next=await api('state');
+  const next=await api('state');if(calendarSwipe.active())return;
   if(!next.calendar?.active||next.calendar.state!=='active'){state=next;render();return}
   state=next;
   if(page==='main'){
    if(document.activeElement?.matches('input,textarea,select'))return;
    const scroll=window.scrollY,timelineScroll=$('.timeline')?.scrollTop;
-   await loadData();render();
+   await loadData();if(calendarSwipe.active())return;render();
    if(timelineScroll!==undefined&&$('.timeline'))$('.timeline').scrollTop=timelineScroll;
    window.scrollTo(0,scroll);
   }else if(page==='detail'&&['pending','failed'].includes(currentEvent?.translation_status?.state))await openEvent(currentEvent.id,currentEvent.occurrence);

@@ -15,7 +15,7 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  const context=await browser.newContext({viewport:{width:375,height:812},isMobile:true,hasTouch:true});const page=await context.newPage();await page.route('https://telegram.org/**',r=>r.abort());
  const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('http://127.0.0.1:8000');await page.waitForSelector('.calendar-view-row');
  const cdp=await context.newCDPSession(page);
- const wait=()=>page.waitForFunction(()=>!busy);
+ const wait=()=>page.waitForFunction(()=>!busy&&!calendarSwipe.active());
  const info=()=>page.evaluate(()=>({selected,view,page,query}));
  async function swipe(x1,x2,y=430,dy=0){
   await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:x1,y}]});
@@ -25,6 +25,18 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  }
  async function set(date,mode){await page.evaluate(async({date,mode})=>{selected=date;await changeView(mode)},{date,mode});await wait()}
  await set('2026-10-16','month');
+ // The page follows the finger before release; cancelling returns it without navigation.
+ const startBounds=await page.locator('.bottom-nav').boundingBox();
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:250,y:430}]});
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:220,y:430}]});await page.waitForTimeout(40);
+ assert.notEqual(await page.locator('.calendar-motion-page:not(.motion-preview)').evaluate(el=>getComputedStyle(el).transform),'none');
+ assert.equal(await page.locator('.motion-preview[inert][aria-hidden="true"]').count(),1);
+ assert.equal((await info()).selected,'2026-10-16');assert.deepEqual(await page.locator('.bottom-nav').boundingBox(),startBounds);
+ if(process.env.CALENDAR_SCREENSHOT_DIR)await page.screenshot({path:join(process.env.CALENDAR_SCREENSHOT_DIR,'calendar-following.png')});
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await wait();
+ assert.equal((await info()).selected,'2026-10-16');assert.equal(await page.locator('.motion-preview').count(),0);
+ assert.equal(await page.locator('.calendar-motion-page').evaluate(el=>getComputedStyle(el).transform),'none');
+
  await swipe(250,175);assert.deepEqual(await info(),{selected:'2026-11-16',view:'month',page:'main',query:''});
  await swipe(150,225);assert.equal((await info()).selected,'2026-10-16');
  const h=await swipe(325,60);assert.match(h,/Неделя/);assert.equal((await info()).view,'week');assert.equal((await info()).selected,'2026-10-16');
@@ -57,6 +69,27 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  await page.waitForTimeout(510);await page.locator('.day-task-card').first().tap();await wait();assert.equal((await info()).page,'detail');await page.locator('[data-action="back"]').first().tap();await wait();await set('2026-10-16','week');
  // English heading and dark theme render with the same range.
  await page.evaluate(()=>{state.me.language='en';state.me.theme='dark';selected='2026-10-16';render()});assert.equal(await page.locator('.month-title').textContent(),'Week 3 of October');if(process.env.CALENDAR_SCREENSHOT_DIR)await page.screenshot({path:join(process.env.CALENDAR_SCREENSHOT_DIR,'calendar-week-dark.png')});
- assert.deepEqual(errors,[]);console.log('PASS: real touch short/long swipes in all views, selection, hint, native vertical scroll, cancelled gesture, tap, search/tab isolation, month/year boundaries, 320/375/430px, EN/dark; no page errors');
+ // Failed view persistence rolls back cleanly and leaves the old date/view usable.
+ await set('2026-10-16','month');
+ await page.route('**/api/settings',route=>route.request().method()==='PATCH'?route.fulfill({status:503,contentType:'application/json',body:'{"error":"error"}'}):route.continue());
+ await swipe(325,60);assert.equal((await info()).view,'month');assert.equal((await info()).selected,'2026-10-16');assert.equal(await page.locator('.motion-preview').count(),0);await page.unroute('**/api/settings');
+ // A slow uncached target keeps the old date until its data is ready.
+ await page.evaluate(()=>navigationCache.clear());
+ await page.route('**/api/events?*',async route=>{await new Promise(resolve=>setTimeout(resolve,350));await route.continue()});
+ await swipe(250,175);assert.equal((await info()).selected,'2026-11-16');await page.unroute('**/api/events?*');
+ // Saving a view preference runs in parallel with the animation, not before it.
+ await set('2026-10-16','month');
+ await page.route('**/api/settings',async route=>{if(route.request().method()==='PATCH')await new Promise(resolve=>setTimeout(resolve,650));await route.continue()});
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:325,y:430}]});
+ for(let i=1;i<=10;i++)await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:325-26.5*i,y:430}]});
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await page.waitForTimeout(90);
+ assert.ok(await page.locator('.calendar-motion-viewport').evaluate(el=>el.getAnimations({subtree:true}).some(a=>a.playState==='running')),'transition starts while preference save is pending');
+ await wait();assert.equal((await info()).view,'week');await page.unroute('**/api/settings');
+ // Reduced motion preserves navigation without sliding pages.
+ await page.emulateMedia({reducedMotion:'reduce'});await set('2026-10-16','month');
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:250,y:430}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:175,y:430}]});await page.waitForTimeout(40);
+ assert.equal(await page.locator('.calendar-motion-page').evaluate(el=>getComputedStyle(el).transform),'none');
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await wait();assert.equal((await info()).selected,'2026-11-16');
+ assert.deepEqual(errors,[]);console.log('PASS: finger-following pages, spring-free snapback, fixed navigation, inert previews, slow network, failure rollback, reduced motion');console.log('PASS: real touch short/long swipes in all views, selection, hint, native vertical scroll, cancelled gesture, tap, search/tab isolation, month/year boundaries, 320/375/430px, EN/dark; no page errors');
  }finally{await browser?.close();server.kill();await new Promise(resolve=>server.once('exit',resolve));rmSync(directory,{recursive:true,force:true})}
 })().catch(e=>{console.error(e);process.exit(1)});

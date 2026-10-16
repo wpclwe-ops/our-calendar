@@ -17,3 +17,12 @@
 .calendar-shell,.calendar-shell .agenda,.calendar-shell .timeline,.calendar-shell .day-checklist{touch-action:pan-y pinch-zoom}.calendar-heading .grow{flex:1;min-width:0}.calendar-heading .month-title{white-space:normal;overflow-wrap:normal;font-size:clamp(17px,5vw,25px);line-height:1.2}.calendar-heading .week-range{display:block;font-size:11px;line-height:1.4;margin-top:4px;color:var(--muted)}.calendar-swipe-hint{position:fixed;z-index:70;left:50%;transform:translateX(-50%);bottom:calc(var(--nav-height) + 24px);max-width:90vw;border:1px solid var(--line);border-radius:18px;padding:10px 18px;background:var(--card);color:var(--ink);box-shadow:var(--shadow);font-size:14px;pointer-events:none}.calendar-swipe-hint[data-mode=view]{color:var(--accent);border-color:var(--accent)}
 
 .calendar-heading .week-title{text-transform:none}
+
+/* Composited calendar pages; the Telegram header, navigation and add button stay fixed. */
+.calendar-motion-viewport{position:relative;display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;isolation:isolate;touch-action:pan-y pinch-zoom}
+.calendar-motion-page{display:flex;flex-direction:column;flex:1;min-height:0;background:var(--bg);transform-origin:top center}
+.calendar-motion-page.motion-preview{position:absolute;inset:0;z-index:1;pointer-events:none}
+.motion-active>.calendar-motion-page{will-change:transform;pointer-events:none}
+.calendar-motion-page .month,.calendar-motion-page .week-strip,.calendar-motion-page .timeline,.calendar-motion-page .day-checklist{transform-origin:top center}
+.calendar-preview-loading{position:absolute;bottom:20px;align-self:center;color:var(--muted);font-size:13px;padding:8px 14px;border-radius:16px;background:var(--card)}
+@media(prefers-reduced-motion:reduce){.motion-active>.calendar-motion-page{will-change:auto}}
