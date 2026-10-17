@@ -20,10 +20,21 @@ const {mkdtempSync,rmSync,mkdirSync}=require('node:fs');const {tmpdir}=require('
  const toggle=page.locator('.layout-toggle');const listIcon=await toggle.innerHTML();assert.equal(await toggle.getAttribute('aria-pressed'),'true');
  await screenshot('day-list-dark');await toggle.click();await wait();assert.equal(await toggle.innerHTML(),listIcon);assert.equal(await toggle.getAttribute('aria-pressed'),'false');
  assert.equal(await page.locator('.time-event').first().evaluate(el=>getComputedStyle(el).borderLeftWidth),'0px');
-  assert.equal(await page.locator('.time-event.short-event .time-place').first().textContent(),'Wrocław');
+  assert.equal(await page.locator('.time-event .time-place').count(),0);
+  const firstTimeline=page.locator('.time-event').first();
+  assert.equal(await firstTimeline.locator('.time-event-title').textContent(),'Выставка «Цвет и свет»');
+  assert.equal(await firstTimeline.locator('.time-owner').textContent(),'Обоим');
+  assert.match(await firstTimeline.locator('.time-range').textContent(),/10:00.*10:30/);
+  assert.equal(await firstTimeline.locator('.time-range').evaluate(el=>getComputedStyle(el).display),'block');
+  assert.ok(await firstTimeline.evaluate(el=>{const a=el.querySelector('.time-event-title').getBoundingClientRect(),b=el.querySelector('.time-owner').getBoundingClientRect(),c=el.querySelector('.time-range').getBoundingClientRect();return b.left>=a.left&&c.top>=a.top+a.height-1}));
   assert.equal(await page.locator('.time-event.short-event').first().evaluate(el=>getComputedStyle(el).borderRadius),'6px');
  for(const block of await page.locator('.time-event').all())assert.ok(Math.abs(Number(await block.getAttribute('data-height'))-35)<.01);
- await page.locator('.timeline').evaluate(el=>el.scrollTop=9*70);await screenshot('day-timeline-dark');
+ const actions=page.locator('.calendar-actions'),fab=page.locator('.calendar-actions .fab'),today=page.locator('.calendar-actions .today-btn');
+  assert.equal(await actions.evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)');
+  for(const item of [fab,today]){assert.equal(await item.evaluate(el=>getComputedStyle(el).borderTopWidth),'0px');assert.equal(await item.evaluate(el=>getComputedStyle(el).backgroundColor),await page.locator('.calendar-tools .icon').first().evaluate(el=>getComputedStyle(el,'::before').backgroundColor))}
+  assert.ok(await fab.evaluate(el=>{const a=el.getBoundingClientRect(),b=el.querySelector('svg').getBoundingClientRect();return Math.abs((b.left+b.width/2)-(a.left+a.width/2))<1&&Math.abs((b.top+b.height/2)-(a.top+a.height/2))<1}));
+  assert.equal(await page.locator('.calendar-motion-viewport').evaluate(el=>getComputedStyle(el).marginBottom),'0px');
+  await page.locator('.timeline').evaluate(el=>el.scrollTop=9*70);await screenshot('day-timeline-dark');
  // Separate filter menu, combined owner/category/status filtering, Cancel, and reset.
  await page.locator('[data-action=filters]').click();await page.waitForSelector('.filter-sheet');assert.equal(await page.locator('.filter-sheet select').count(),3);
  await page.locator('.filter-sheet [name=filter-status]').selectOption('done');await page.locator('.filter-sheet [data-close]').click();assert.equal(await page.evaluate(()=>filter.status),'');
@@ -31,10 +42,15 @@ const {mkdtempSync,rmSync,mkdirSync}=require('node:fs');const {tmpdir}=require('
  await page.locator('[data-action=filters]').click();await page.locator('.filter-sheet [data-reset]').click();await page.locator('.filter-sheet [type=submit]').click();await wait();
  await page.evaluate(async()=>{selected='2026-10-17';await changeView('month')});await wait();
  assert.equal(await page.locator('.month-with-agenda .day').count(),35);assert.equal(await page.locator('.month-agenda .day-task').count(),7);
- const monthBox=await page.locator('.month').boundingBox();await page.locator('.month-agenda').evaluate(el=>el.scrollTop=200);assert.equal((await page.locator('.month').boundingBox()).y,monthBox.y);
- assert.ok(await page.locator('.month-agenda').evaluate(el=>el.scrollTop)>0);await page.evaluate(()=>render());assert.ok(await page.locator('.month-agenda').evaluate(el=>el.scrollTop)>0);
+ const monthBox=await page.locator('.month').boundingBox();
+ await page.locator('.month-with-agenda').evaluate(el=>el.scrollTop=200);
+ const monthScrollTop=await page.locator('.month-with-agenda').evaluate(el=>el.scrollTop);
+ assert.ok(monthScrollTop>0,'whole month scrolls, not just tasks');
+ assert.ok((await page.locator('.month').boundingBox()).y<monthBox.y-10,'calendar moves up with tasks');
+ assert.equal(await page.locator('.month-agenda').evaluate(el=>el.scrollTop),0,'task list has no independent scrollport');
+ await page.evaluate(()=>render());assert.ok(Math.abs((await page.locator('.month-with-agenda').evaluate(el=>el.scrollTop))-monthScrollTop)<2,'preserve unified scroll on repaint');
  await page.locator('.day[data-date="2026-10-18"]').click();await wait();assert.equal(await page.evaluate(()=>view),'month');assert.equal(await page.locator('.month-agenda .day-task').count(),0);
- await page.locator('[data-action=today]').click();await wait();await page.locator('.month-agenda').evaluate(el=>el.scrollTop=0);await screenshot('month-full-dark');
+ await page.locator('[data-action=today]').click();await wait();await page.locator('.month-with-agenda').evaluate(el=>el.scrollTop=0);await screenshot('month-full-dark');
  await page.locator('[data-action=month-layout]').click();await wait();assert.equal(await page.locator('.month-agenda').count(),0);
  assert.equal(await page.locator('.month-scroll .day[data-date="2026-10-17"] .event-bar').count(),5);assert.equal(await page.locator('.month-scroll .day[data-date="2026-10-17"] .more').textContent(),'+2');
  const dates=await page.locator('.month-scroll .day').evaluateAll(els=>els.map(el=>el.dataset.date));assert.equal(new Set(dates).size,dates.length);
@@ -53,12 +69,14 @@ const {mkdtempSync,rmSync,mkdirSync}=require('node:fs');const {tmpdir}=require('
  await page.evaluate(async()=>{selected='2026-10-17';await changeView('week')});await wait();assert.equal(await page.locator('.layout-toggle').count(),0);assert.equal(await page.locator('.week-date').count(),7);await screenshot('week-dark');
  await page.evaluate(()=>{state.me.theme='light';render()});await screenshot('week-light');
   await page.locator('.bottom-nav [data-tab=settings]').click();await wait();
-  const settingsOrder=await page.locator('.settings-group > *').evaluateAll(nodes=>nodes.map(el=>el.querySelector('#setting-language')?'language':el.classList.contains('theme-row')?'theme':el.querySelector('[data-action=touchbar]')?'touchbar':el.querySelector('#setting-timezone')?'timezone':el.querySelector('#setting-day_layout')?'day':el.querySelector('#setting-month_layout')?'month':el.classList.contains('default-settings')?'reminders':el.querySelector('[name=setting-notify_at_start]')?'start':el.querySelector('[name=setting-reminders_enabled]')?'send':'other').slice(0,9));
-  assert.deepEqual(settingsOrder,['language','theme','touchbar','timezone','day','month','reminders','start','send']);
-  await page.locator('.settings-links [data-tab=categories]').click();await wait();
+  const settingsOrder=await page.locator('.settings-group > *').evaluateAll(nodes=>nodes.map(el=>el.querySelector('#setting-language')?'language':el.classList.contains('theme-row')?'theme':el.querySelector('[data-action=touchbar]')?'touchbar':el.querySelector('[data-tab=categories]')?'categories':el.querySelector('#setting-timezone')?'timezone':el.querySelector('#setting-day_layout')?'day':el.querySelector('#setting-month_layout')?'month':el.classList.contains('default-settings')?'reminders':el.querySelector('#duration-preset')?'duration':el.querySelector('[name=setting-notify_at_start]')?'start':el.querySelector('[name=setting-reminders_enabled]')?'send':'other').filter(x=>x!=='other').slice(0,9));
+  assert.deepEqual(settingsOrder,['language','theme','touchbar','categories','timezone','day','month','reminders','duration']);
+  assert.equal(await page.locator('.touchbar-settings-row .svg-icon').count(),1,'Touch Bar setting only has a chevron, no calendar icon');
+  assert.equal(await page.locator('.settings-links [data-tab=categories]').count(),0);
+  await page.locator('.categories-settings-row [data-tab=categories]').click();await wait();
   assert.equal(await page.locator('[data-action=back-to-settings]').count(),1);
   await page.locator('[data-action=back-to-settings]').click();await wait();assert.equal(await page.evaluate(()=>tab),'settings');
  await page.reload();await page.waitForSelector('.timeline');assert.equal(await page.evaluate(()=>state.me.day_layout),'timeline');assert.equal(await page.evaluate(()=>state.me.month_layout),'paged');
- assert.deepEqual(errors,[]);console.log('PASS: screenshot review fixes, short-event location, status dialogue, expanded edit form, independent reminders, ordered settings, category back, full and scrolling month, responsive mobile.');
+ assert.deepEqual(errors,[]);console.log('PASS: compact timeline time/owner, gray centered actions, unified month-and-agenda scrolling, settings hierarchy, status dialog and two distinct month modes.');
  }finally{await browser?.close();server.kill();await new Promise(resolve=>server.once('exit',resolve));rmSync(directory,{recursive:true,force:true})}
 })().catch(e=>{console.error(e);process.exit(1)});
