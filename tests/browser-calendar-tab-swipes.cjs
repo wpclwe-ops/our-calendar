@@ -55,12 +55,15 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  await toolbar(['day','settings']);await page.evaluate(()=>navigationCache.clear());
  await page.route('**/api/system-status',r=>r.fulfill({status:503,contentType:'application/json',body:'{"error":"error"}'}));
  await swipe(325,60);assert.equal((await info()).tab,'calendar');assert.equal((await info()).view,'day');assert.equal(await page.locator('.motion-preview').count(),0);await page.unroute('**/api/system-status');
- // Transparent action container; calendar content stays clear of the actual controls.
+ // Content continues behind the controls; the transparent gap passes touches through.
+ await page.evaluate(()=>$('#toast').style.display='none');
  await toolbar(['day','week','month','settings']);
  for(const mode of ['day','week','month']){
   await set('2026-10-16',mode);
   const viewport=await page.locator('.calendar-motion-viewport').boundingBox(),actionsBox=await page.locator('.calendar-actions').boundingBox();
-  assert.ok(viewport.y+viewport.height<=actionsBox.y,mode+' content clears action controls');
+  assert.ok(viewport.y+viewport.height>=actionsBox.y+actionsBox.height/2,mode+' content extends beneath action controls');
+  const gap=await page.evaluate(box=>{const hit=document.elementFromPoint(innerWidth/2,box.y+box.height/2);return {calendar:!!hit?.closest('.calendar-motion-viewport'),target:hit?.outerHTML.slice(0,250)}},actionsBox);
+  assert.ok(gap.calendar,mode+' transparent gap is touchable calendar content: '+JSON.stringify(gap));
   assert.equal(await page.locator('.calendar-actions').evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)');
   assert.equal(await page.locator('.calendar-actions').evaluate(el=>getComputedStyle(el).pointerEvents),'none');
  }
