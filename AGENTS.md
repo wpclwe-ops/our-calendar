@@ -6,5 +6,5 @@
 - Never commit .env, database files, signing keys, tokens or real personal data.
 - Use one process/replica for the SQLite deployment. Preserve the persistent volume and signing-key registry.
 - Do not claim Google/iCloud, automatic translation, live Telegram delivery, or a full production release are complete without implementing and verifying them.
-- Run `python -m pytest -q`, `python -m compileall -q app scripts` and `node --check web/app.js` after meaningful changes.
+- Run `scripts/lint.sh` and `scripts/test.sh` after meaningful changes, and `scripts/test-e2e.sh` after UI changes (CLAUDE.md, "Canonical commands").
 - New functionality needs meaningful behavior/security tests. Avoid tests that only mirror implementation.

@@ -7,3 +7,5 @@ __pycache__
 tests
 docs
 *.zip
+scripts/*.sh
+.treehouse
