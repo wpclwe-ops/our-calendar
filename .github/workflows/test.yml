@@ -25,3 +25,10 @@ jobs:
       - run: node --check web/calendar-time.js
       - run: node --check web/calendar-touch.js
       - run: node --test tests/*.test.cjs
+      - run: npm install --no-save playwright@1.56.0
+      - run: npx playwright install --with-deps chromium
+      - run: node tests/browser-calendar-design.cjs
+      - run: node tests/browser-calendar-tab-swipes.cjs
+      - run: node tests/browser-calendar-touchbar.cjs
+      - run: node tests/browser-calendar-interactions.cjs
+      - run: node tests/browser-calendar-navigation.cjs
