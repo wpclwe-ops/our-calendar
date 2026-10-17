@@ -38,7 +38,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Its own uv cache: both jobs would otherwise race to save the same cache key.
       - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          cache-suffix: e2e
 
       - uses: actions/setup-node@v7
         with:
