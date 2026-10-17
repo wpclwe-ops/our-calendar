@@ -15,11 +15,13 @@ const {mkdtempSync,rmSync,mkdirSync}=require('node:fs');const {tmpdir}=require('
  await page.clock.install({time:new Date('2026-10-17T12:00:00Z')});await page.goto('http://127.0.0.1:8004');await page.waitForSelector('.timeline');
  const wait=()=>page.waitForFunction(()=>!busy&&!calendarSwipe.active()&&!calendarTouch.active()&&!monthLoading);
  const screenshot=async name=>{if(process.env.CALENDAR_SCREENSHOT_DIR){mkdirSync(process.env.CALENDAR_SCREENSHOT_DIR,{recursive:true});await page.screenshot({path:join(process.env.CALENDAR_SCREENSHOT_DIR,name+'.png')})}};
- await page.evaluate(async()=>{state=await api('settings','PATCH',{theme:'dark',day_layout:'list'});for(const e of new Map((await api('events?start=2026-10-01&end=2026-11-01')).map(e=>[e.id,e])).values())await api('events/'+e.id,'DELETE',{revision:e.revision,confirmed:true});const c=await api('categories','POST',{name:'Calendar design',color:'#9B77D1'});for(let i=0;i<7;i++)await api('events','POST',{title:i===0?'Выставка «Цвет и свет»':'Задача '+(i+1),start:`2026-10-17T${String(10+i).padStart(2,'0')}:00`,end:`2026-10-17T${String(10+i).padStart(2,'0')}:30`,timezone:'Europe/Warsaw',category_id:c.id,owner:'both'});await loadData();render()});await wait();
+ await page.evaluate(async()=>{state=await api('settings','PATCH',{theme:'dark',day_layout:'list'});for(const e of new Map((await api('events?start=2026-10-01&end=2026-11-01')).map(e=>[e.id,e])).values())await api('events/'+e.id,'DELETE',{revision:e.revision,confirmed:true});const c=await api('categories','POST',{name:'Calendar design',color:'#9B77D1'});for(let i=0;i<7;i++)await api('events','POST',{title:i===0?'Выставка «Цвет и свет»':'Задача '+(i+1),start:`2026-10-17T${String(10+i).padStart(2,'0')}:00`,end:`2026-10-17T${String(10+i).padStart(2,'0')}:30`,timezone:'Europe/Warsaw',category_id:c.id,owner:'both',location:i===0?'Wrocław':''});await loadData();render()});await wait();
  assert.equal(await page.locator('.month-title').textContent(),'Сегодня');assert.equal(await page.locator('.day-layout-row').count(),0);
  const toggle=page.locator('.layout-toggle');const listIcon=await toggle.innerHTML();assert.equal(await toggle.getAttribute('aria-pressed'),'true');
  await screenshot('day-list-dark');await toggle.click();await wait();assert.equal(await toggle.innerHTML(),listIcon);assert.equal(await toggle.getAttribute('aria-pressed'),'false');
  assert.equal(await page.locator('.time-event').first().evaluate(el=>getComputedStyle(el).borderLeftWidth),'0px');
+  assert.equal(await page.locator('.time-event.short-event .time-place').first().textContent(),'Wrocław');
+  assert.equal(await page.locator('.time-event.short-event').first().evaluate(el=>getComputedStyle(el).borderRadius),'6px');
  for(const block of await page.locator('.time-event').all())assert.ok(Math.abs(Number(await block.getAttribute('data-height'))-35)<.01);
  await page.locator('.timeline').evaluate(el=>el.scrollTop=9*70);await screenshot('day-timeline-dark');
  // Separate filter menu, combined owner/category/status filtering, Cancel, and reset.
@@ -39,10 +41,24 @@ const {mkdtempSync,rmSync,mkdirSync}=require('node:fs');const {tmpdir}=require('
  for(const width of [320,390,430]){await page.setViewportSize({width,height:844});await page.waitForTimeout(80);assert.ok(await page.locator('.month-scroll').evaluate(el=>Math.abs(el.clientHeight/2-el.querySelector('.scroll-week').offsetHeight)<2));assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.ok(await page.locator('.month-scroll .day[data-date="2026-10-17"]').evaluate(el=>{const chip=el.querySelectorAll('.event-bar')[4];return chip.getBoundingClientRect().bottom<=el.getBoundingClientRect().bottom&&el.querySelector('.more').getBoundingClientRect().bottom<=el.getBoundingClientRect().bottom}),'five tasks and overflow fit within date');await screenshot('month-scroll-dark-'+width)}
  await page.locator('.month-scroll .day[data-date="2026-10-17"] .more').click();await wait();assert.equal(await page.locator('.month-agenda .day-task').count(),7);
  await page.locator('.month-agenda [data-action=event]').first().click();await page.waitForSelector('.detail-title');assert.ok((await page.locator('.detail-title').textContent()).length>0);
+  assert.equal(await page.locator('.detail-actions button').count(),2);
+  await page.locator('.detail-badges [data-action=status-options]').click();await page.locator('.event-status-picker [data-status=cancelled]').click();await wait();
+  assert.equal(await page.evaluate(()=>currentEvent.status),'cancelled');
+  await page.locator('[data-action=edit-event].header-save').click();await page.waitForSelector('#event-form');
+  assert.ok(await page.locator('.advanced-section').evaluate(el=>el.open));
+  assert.ok(await page.locator('.title-field input').evaluate(el=>parseFloat(getComputedStyle(el).fontSize)>=24));
+  assert.match(await page.locator('.reminder-group').textContent(),/только для данного события/);
+  await page.locator('[data-action=back]').first().click();await page.waitForSelector('.detail-title');
  await page.locator('[data-action=back]').first().click();await wait();
  await page.evaluate(async()=>{selected='2026-10-17';await changeView('week')});await wait();assert.equal(await page.locator('.layout-toggle').count(),0);assert.equal(await page.locator('.week-date').count(),7);await screenshot('week-dark');
  await page.evaluate(()=>{state.me.theme='light';render()});await screenshot('week-light');
+  await page.locator('.bottom-nav [data-tab=settings]').click();await wait();
+  const settingsOrder=await page.locator('.settings-group > *').evaluateAll(nodes=>nodes.map(el=>el.querySelector('#setting-language')?'language':el.classList.contains('theme-row')?'theme':el.querySelector('[data-action=touchbar]')?'touchbar':el.querySelector('#setting-timezone')?'timezone':el.querySelector('#setting-day_layout')?'day':el.querySelector('#setting-month_layout')?'month':el.classList.contains('default-settings')?'reminders':el.querySelector('[name=setting-notify_at_start]')?'start':el.querySelector('[name=setting-reminders_enabled]')?'send':'other').slice(0,9));
+  assert.deepEqual(settingsOrder,['language','theme','touchbar','timezone','day','month','reminders','start','send']);
+  await page.locator('.settings-links [data-tab=categories]').click();await wait();
+  assert.equal(await page.locator('[data-action=back-to-settings]').count(),1);
+  await page.locator('[data-action=back-to-settings]').click();await wait();assert.equal(await page.evaluate(()=>tab),'settings');
  await page.reload();await page.waitForSelector('.timeline');assert.equal(await page.evaluate(()=>state.me.day_layout),'timeline');assert.equal(await page.evaluate(()=>state.me.month_layout),'paged');
- assert.deepEqual(errors,[]);console.log('PASS: day/list toggle with constant icon, exact timeline duration, filter dialog apply/cancel/reset, full month and independently scrolling selected-day list, 2-week scrolling grid with 5 tasks/date and overflow, details, mode persistence, responsive mobile dark/light.');
+ assert.deepEqual(errors,[]);console.log('PASS: screenshot review fixes, short-event location, status dialogue, expanded edit form, independent reminders, ordered settings, category back, full and scrolling month, responsive mobile.');
  }finally{await browser?.close();server.kill();await new Promise(resolve=>server.once('exit',resolve));rmSync(directory,{recursive:true,force:true})}
 })().catch(e=>{console.error(e);process.exit(1)});
