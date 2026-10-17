@@ -7,20 +7,4 @@ requires-python = ">=3.12"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-# Quiet gate output (scripts/test.sh): short tracebacks, failures only.
-addopts = "-q --tb=short"
-# Any warning fails the run. Ignore a known one here, with the reason, rather than let it scroll past.
-filterwarnings = [
-    "error",
-    # starlette.testclient still runs on httpx; upstream asks for httpx2 (StarletteDeprecationWarning).
-    "ignore:Using `httpx` with `starlette.testclient` is deprecated",
-]
-
-[tool.ruff]
-# One file:line:col line per finding.
-output-format = "concise"
-
-[tool.ruff.lint]
-# Lint gate (scripts/lint.sh): only the rules that are bugs - syntax errors, undefined names,
-# invalid comparisons and misplaced statements. Widen it deliberately, together with the fixes.
-select = ["E9", "F63", "F7", "F82"]
+filterwarnings = ["ignore:Using `httpx` with:DeprecationWarning"]

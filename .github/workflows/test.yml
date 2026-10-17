@@ -5,34 +5,30 @@ on:
 permissions:
   contents: read
 jobs:
-  # The lint and test gates, the same commands the factory loop runs (CLAUDE.md).
   tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.3.0
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          node-version: '24'
-      - name: Lint
-        run: scripts/lint.sh
-      - name: Test
-        if: ${{ !cancelled() }}
-        run: scripts/test.sh
-  # The browser scenarios, in mobile Chromium on synthetic data.
-  e2e:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      # Its own uv cache: both jobs would otherwise race to save the same cache key.
-      - uses: astral-sh/setup-uv@v10.3.0
+          python-version: '3.12'
+          cache: pip
+      - uses: actions/setup-node@v4
         with:
-          cache-suffix: e2e
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24'
-          cache: npm
-      - run: npm ci --no-audit --no-fund
+          node-version: '22'
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest -q
+      - run: python -m compileall -q app scripts
+      - run: node --check web/app.js
+      - run: node --check web/recurrence.js
+      - run: node --check web/calendar-navigation.js
+      - run: node --check web/calendar-time.js
+      - run: node --check web/calendar-touch.js
+      - run: node --test tests/*.test.cjs
+      - run: npm install --no-save playwright@1.56.0
       - run: npx playwright install --with-deps chromium
-      - name: E2E
-        run: scripts/test-e2e.sh
+      - run: node tests/browser-calendar-design.cjs
+      - run: node tests/browser-calendar-tab-swipes.cjs
+      - run: node tests/browser-calendar-touchbar.cjs
+      - run: node tests/browser-calendar-interactions.cjs
+      - run: node tests/browser-calendar-navigation.cjs

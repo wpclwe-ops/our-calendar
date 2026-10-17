@@ -79,12 +79,15 @@ docker compose exec calendar python -m scripts.setup_bot
 ## Проверки
 
 ```bash
-scripts/lint.sh       # ruff, compileall, синтаксис JavaScript, пробелы и маркеры конфликтов
-scripts/test.sh       # Python- и Node-тесты
-scripts/test-e2e.sh   # мобильные браузерные сценарии (Playwright Chromium)
+pip install -r requirements-dev.txt
+python -m pytest -q
+python -m compileall -q app scripts
+node --check web/app.js
+node --check web/recurrence.js
+node --test tests/recurrence.test.cjs
 ```
 
-Скрипты сами устанавливают зависимости через [uv](https://docs.astral.sh/uv/): Python 3.12 и `requirements-dev.txt`. Браузерные сценарии при необходимости выполняют `npm ci` и скачивают Chromium; системные библиотеки для него ставятся один раз командой `npx playwright install-deps chromium`. CI (`.github/workflows/test.yml`) запускает те же команды. Тесты не используют настоящие Telegram-сообщения, внешние календари и реальные пользовательские данные.
+CI повторяет эти проверки. Тесты не используют настоящие Telegram-сообщения, внешние календари и реальные пользовательские данные.
 
 ## Структура
 

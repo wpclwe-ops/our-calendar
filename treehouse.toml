@@ -1,4 +1,0 @@
-# treehouse worktree pool: the factory loop gives each agent its own worktree from it.
-# Worktrees go under .treehouse/ in this repo (ignored by git and Docker).
-max_trees = 16
-root = "./"
