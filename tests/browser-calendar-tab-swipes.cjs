@@ -39,7 +39,7 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:180,y:680}]});
  await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:185,y:500}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await wait();
  assert.ok(await page.locator('.navigation-content').evaluate(el=>el.scrollTop)>120);
- const scrollTop=await page.locator('.navigation-content').evaluate(el=>el.scrollTop);await page.evaluate(()=>render());assert.equal(await page.locator('.navigation-content').evaluate(el=>el.scrollTop),scrollTop);
+ await page.waitForTimeout(650);const scrollTop=await page.locator('.navigation-content').evaluate(el=>el.scrollTop);await page.evaluate(()=>render());assert.equal(await page.locator('.navigation-content').evaluate(el=>el.scrollTop),scrollTop);
  await page.locator('.navigation-content').evaluate(el=>el.scrollTop=0);
  await swipe(325,60,670);assert.equal((await info()).tab,'settings');
  await swipe(60,325,670);assert.equal((await info()).tab,'calendar');assert.equal((await info()).view,'day');
@@ -55,29 +55,27 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  await toolbar(['day','settings']);await page.evaluate(()=>navigationCache.clear());
  await page.route('**/api/system-status',r=>r.fulfill({status:503,contentType:'application/json',body:'{"error":"error"}'}));
  await swipe(325,60);assert.equal((await info()).tab,'calendar');assert.equal((await info()).view,'day');assert.equal(await page.locator('.motion-preview').count(),0);await page.unroute('**/api/system-status');
- // The toolbar occupies no layout strip. Empty space passes through to each calendar view.
+ // Transparent action container; calendar content stays clear of the actual controls.
  await toolbar(['day','week','month','settings']);
  for(const mode of ['day','week','month']){
   await set('2026-10-16',mode);
-  const actionsBox=await page.locator('.calendar-actions').boundingBox();
-  assert.ok(await page.evaluate(y=>Boolean(document.elementFromPoint(10,y)?.closest('.timeline,.agenda,.month,.month-scroll,.day-checklist')),actionsBox.y+20),mode+' extends under actions');
+  const viewport=await page.locator('.calendar-motion-viewport').boundingBox(),actionsBox=await page.locator('.calendar-actions').boundingBox();
+  assert.ok(viewport.y+viewport.height<=actionsBox.y,mode+' content clears action controls');
   assert.equal(await page.locator('.calendar-actions').evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)');
   assert.equal(await page.locator('.calendar-actions').evaluate(el=>getComputedStyle(el).pointerEvents),'none');
-  assert.equal(await page.locator('.calendar-motion-viewport').evaluate(el=>getComputedStyle(el).marginBottom),'0px');
  }
  await page.evaluate(async()=>{state=await api('settings','PATCH',{day_layout:'list',month_layout:'scroll'});await loadData();render()});await wait();await set('2026-10-16','day');
- let actionsBox=await page.locator('.calendar-actions').boundingBox();assert.ok(await page.evaluate(y=>Boolean(document.elementFromPoint(10,y)?.closest('.day-checklist')),actionsBox.y+20));
- await set('2026-10-16','month');actionsBox=await page.locator('.calendar-actions').boundingBox();assert.ok(await page.evaluate(y=>Boolean(document.elementFromPoint(10,y)?.closest('.month-scroll')),actionsBox.y+20));
- // The actual buttons remain clickable, and light/dark preserve visible outlines.
+ assert.ok(await page.locator('.day-checklist').isVisible());await set('2026-10-16','month');assert.ok(await page.locator('.month-scroll').isVisible());
+ // The actual buttons remain clickable, with neutral fills and no outlines in both themes.
  await page.evaluate(()=>$('#toast').style.display='none');
  for(const theme of ['light','dark']){await page.evaluate(theme=>{state.me.theme=theme;render()},theme);await wait();
-  assert.equal(await page.locator('.calendar-actions .fab').evaluate(el=>getComputedStyle(el).borderTopWidth),'1px');
+  assert.equal(await page.locator('.calendar-actions .fab').evaluate(el=>getComputedStyle(el).borderTopWidth),'0px');
   if(process.env.CALENDAR_SCREENSHOT_DIR)await page.screenshot({path:join(process.env.CALENDAR_SCREENSHOT_DIR,'transparent-actions-'+theme+'.png')});
  }
  if(process.env.CALENDAR_SCREENSHOT_DIR){await page.evaluate(async()=>{state=await api('settings','PATCH',{day_layout:'timeline',theme:'dark'});view='day';await loadData();render()});await wait();await page.screenshot({path:join(process.env.CALENDAR_SCREENSHOT_DIR,'transparent-timeline-dark.png')});await set('2026-10-16','month');}
  await page.locator('[data-action="today"]').tap();await wait();assert.equal((await info()).selected,'2026-10-16');await page.locator('[data-action="new"]').tap();await wait();assert.equal((await info()).page,'form');await back();
  await page.emulateMedia({reducedMotion:'reduce'});await set('2026-10-16','month');await swipe(325,60);assert.equal((await info()).tab,'settings');await swipe(60,325,650);assert.equal((await info()).view,'month');
  for(const width of [320,390,430]){await page.setViewportSize({width,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));}
- assert.deepEqual(errors,[]);console.log('PASS: personal-order tab swipes, hidden views, categories/settings both ways, native settings scroll, short date swipes, cancellation/failure rollback/reduced motion, transparent pass-through action area in all calendar views and outlined working buttons');
+ assert.deepEqual(errors,[]);console.log('PASS: personal-order tab swipes, hidden views, categories/settings both ways, native settings scroll, short date swipes, cancellation/failure rollback/reduced motion, transparent action container and unobscured calendar content, neutral working buttons in both themes');
  }finally{await browser?.close();server.kill();await new Promise(resolve=>server.once('exit',resolve));rmSync(directory,{recursive:true,force:true})}
 })().catch(e=>{console.error(e);process.exit(1)});
