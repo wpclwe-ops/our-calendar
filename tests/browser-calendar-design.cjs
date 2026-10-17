@@ -19,6 +19,10 @@ const {mkdtempSync,rmSync,mkdirSync}=require('node:fs');const {tmpdir}=require('
  assert.equal(await page.locator('.month-title').textContent(),'Сегодня');assert.equal(await page.locator('.day-layout-row').count(),0);
  const toggle=page.locator('.layout-toggle');const listIcon=await toggle.innerHTML();assert.equal(await toggle.getAttribute('aria-pressed'),'true');
  await screenshot('day-list-dark');await toggle.click();await wait();assert.equal(await toggle.innerHTML(),listIcon);assert.equal(await toggle.getAttribute('aria-pressed'),'false');
+ await toggle.click();await wait();
+ await page.locator('.day-checklist').evaluate(el=>el.scrollTop=el.scrollHeight);
+ assert.ok(await page.locator('.day-task').last().evaluate(el=>{const a=el.getBoundingClientRect(),b=document.querySelector('.calendar-actions').getBoundingClientRect();return a.bottom<=b.top}),'last task can scroll clear of floating controls');
+ await toggle.click();await wait();
  assert.equal(await page.locator('.time-event').first().evaluate(el=>getComputedStyle(el).borderLeftWidth),'0px');
   assert.equal(await page.locator('.time-event .time-place').count(),0);
   const firstTimeline=page.locator('.time-event').first();
@@ -49,11 +53,18 @@ const {mkdtempSync,rmSync,mkdirSync}=require('node:fs');const {tmpdir}=require('
  assert.ok((await page.locator('.month').boundingBox()).y<monthBox.y-10,'calendar moves up with tasks');
  assert.equal(await page.locator('.month-agenda').evaluate(el=>el.scrollTop),0,'task list has no independent scrollport');
  await page.evaluate(()=>render());assert.ok(Math.abs((await page.locator('.month-with-agenda').evaluate(el=>el.scrollTop))-monthScrollTop)<2,'preserve unified scroll on repaint');
+ await page.locator('[data-action=today]').click();await wait();
+ assert.equal(await page.locator('.month-with-agenda').evaluate(el=>el.scrollTop),0,'Today reveals the calendar even when today is already selected');
  await page.locator('.day[data-date="2026-10-18"]').click();await wait();assert.equal(await page.evaluate(()=>view),'month');assert.equal(await page.locator('.month-agenda .day-task').count(),0);
  await page.locator('[data-action=today]').click();await wait();await page.locator('.month-with-agenda').evaluate(el=>el.scrollTop=0);await screenshot('month-full-dark');
  await page.locator('[data-action=month-layout]').click();await wait();assert.equal(await page.locator('.month-agenda').count(),0);
  assert.equal(await page.locator('.month-scroll .day[data-date="2026-10-17"] .event-bar').count(),5);assert.equal(await page.locator('.month-scroll .day[data-date="2026-10-17"] .more').textContent(),'+2');
  const dates=await page.locator('.month-scroll .day').evaluateAll(els=>els.map(el=>el.dataset.date));assert.equal(new Set(dates).size,dates.length);
+ for(const height of [568,667]){
+  await page.setViewportSize({width:320,height});await page.waitForTimeout(100);
+  assert.ok(await page.locator('.month-scroll .day[data-date="2026-10-17"]').evaluate(el=>{const cell=el.getBoundingClientRect(),last=el.querySelector('.more').getBoundingClientRect();return last.bottom<=cell.bottom&&last.height>0}),'five tasks and overflow remain reachable in a short WebView: '+height);
+  await screenshot('month-scroll-short-'+height);
+ }
  for(const width of [320,390,430]){await page.setViewportSize({width,height:844});await page.waitForTimeout(80);assert.ok(await page.locator('.month-scroll').evaluate(el=>Math.abs(el.clientHeight/2-el.querySelector('.scroll-week').offsetHeight)<2));assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));const fit=await page.locator('.month-scroll .day[data-date="2026-10-17"]').evaluate(el=>{const chip=el.querySelectorAll('.event-bar')[4],last=el.querySelector('.more'),cell=el.getBoundingClientRect();return {ok:chip.getBoundingClientRect().bottom<=cell.bottom&&last.getBoundingClientRect().bottom<=cell.bottom,cell:cell.height,chip:Math.round(chip.getBoundingClientRect().bottom-cell.top),more:Math.round(last.getBoundingClientRect().bottom-cell.top),scroll:el.closest('.month-scroll').clientHeight,width:innerWidth}});assert.ok(fit.ok,'five tasks and overflow fit within date: '+JSON.stringify(fit));await screenshot('month-scroll-dark-'+width)}
  await page.locator('.month-scroll .day[data-date="2026-10-17"] .more').click();await wait();assert.equal(await page.locator('.month-agenda .day-task').count(),7);
  await page.locator('.month-agenda [data-action=event]').first().click();await page.waitForSelector('.detail-title');assert.ok((await page.locator('.detail-title').textContent()).length>0);

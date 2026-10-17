@@ -89,7 +89,6 @@ body.dark{--ink:#f6f2fa;--accent:#c3a5ec;--nav:#232128}
 body.dark .calendar-tools .icon.selected:before{background:#3b3048}
 .calendar-tools .svg-icon{height:19px;width:19px}
 .period-prev{grid-column:2}.period-next{grid-column:3}
-.calendar-shell .calendar-motion-viewport{margin-bottom:78px}
 .bottom-nav{left:50%;right:auto;transform:translateX(-50%);width:calc(100% - 48px);max-width:880px;height:70px;bottom:max(12px,env(safe-area-inset-bottom,0px));padding:5px;border:0;border-radius:26px;background:var(--card)}
 .bottom-nav button{height:60px;min-height:60px;padding:0 4px;border-radius:22px;font-size:12px;font-weight:400;line-height:1.15;text-align:center}
 .bottom-nav button.active{background:var(--soft);color:var(--ink);font-weight:400}
@@ -126,13 +125,6 @@ body.dark .week-date.selected{background:#3b3048}
 .timeline{background:var(--bg);padding-bottom:12px;scroll-padding-bottom:12px;margin:8px var(--calendar-gutter) 0}
 .timeline-inner{margin-right:0}
 .hour{border-color:var(--line)}.hour span{font-size:12px;line-height:16px}
-.time-event{border:0;border-radius:12px;min-height:0;padding:6px 12px;font-size:17px;line-height:21px;overflow:hidden}
-.time-event-heading{display:block}
-.time-event-heading>span{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;line-height:21px;overflow-wrap:anywhere}
-.time-event-heading .time-owner{display:block;font-size:11px;line-height:14px;margin-top:3px}
-.time-event .time-range{font-size:12px;line-height:15px;margin-top:3px}
-.short-event .time-owner,.short-event .time-range{display:none}
-.short-event .time-event-heading>span{-webkit-line-clamp:1}
 .all-day-row{padding:0 var(--calendar-gutter) 12px;border:0;background:var(--bg)}
 .all-day-row .event-title{font-size:17px}
 .month-with-agenda{display:flex;flex-direction:column;flex:1;min-height:0;padding:0 var(--calendar-gutter)}
@@ -160,7 +152,7 @@ body.dark .week-date.selected{background:#3b3048}
 .filter-sheet .filter-actions{display:flex;gap:12px;margin-top:24px}
 .filter-sheet .filter-actions button{flex:1;width:auto;margin:0}
 @media(max-width:370px){:root{--calendar-gutter:20px}.calendar-controls{padding-left:20px;padding-right:20px}.calendar-heading{gap:6px}.calendar-heading .month-title{font-size:30px}.calendar-heading .week-title{font-size:25px}.bottom-nav{width:calc(100% - 40px)}.calendar-actions{left:20px;right:20px}.day-task{gap:12px;padding:12px}.day-task-card{padding:0}.day-task-title{font-size:17px}.day-task-time{font-size:12px}.day-task-meta{font-size:11px}.calendar-heading .calendar-tools .icon{width:44px;min-width:44px;padding:4px}}
-/* A short WebView still exposes all five entries and the overflow action. */
+/* Size containment allows compact entries in a short Telegram WebView. */
 .month-scroll{container-type:size}
 @container(max-height:500px){.scroll-week .month-event-title{-webkit-line-clamp:1}}
 .time-event{font-weight:500}
@@ -189,17 +181,7 @@ body.dark .week-date.selected{background:#3b3048}
 .event-form .reminder-group{padding:16px}
 .event-form .reminder-group h3{font-size:16px}
 .event-form .reminder-group .privacy{margin-top:12px;line-height:1.45}
-.time-event{border-radius:7px}
-.time-event .time-place{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:14px;margin-top:2px;opacity:.86}
-.time-event.short-event{display:flex;align-items:center;padding:0 8px;font-size:13px;line-height:17px;border-radius:6px}
-.time-event.short-event .time-event-heading{display:flex;align-items:center;width:100%;gap:5px;min-width:0}
-.time-event.short-event .time-event-heading>span{display:block;min-width:0;flex:1;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;font-size:13px;line-height:17px}
-.time-event.short-event .time-owner,.time-event.short-event .time-range{display:none}
-.time-event.short-event .time-place{flex:0 1 36%;display:block;min-width:0;margin:0;font-size:10px;line-height:14px}
-.month-agenda{overflow-y:auto;overscroll-behavior-y:contain;min-height:0;scroll-padding-bottom:20px}
-.month-with-agenda{min-height:0;overflow:hidden}
-.calendar-actions{bottom:calc(max(12px,env(safe-area-inset-bottom,0px)) + 78px);background:transparent!important}
-.calendar-actions .fab,.calendar-actions .today-btn{background:transparent!important;border:1px solid var(--accent);box-shadow:none}
+.calendar-actions{bottom:calc(max(12px,env(safe-area-inset-bottom,0px)) + 78px)}
 .touchbar-settings-row{padding:0;min-height:52px}
 .touchbar-settings-row .setting-link{min-height:52px;border:0;padding:13px 14px}
 .page-title-row:has(.category-back){display:flex;flex-wrap:wrap;align-items:center}
@@ -215,6 +197,7 @@ body.dark .week-date.selected{background:#3b3048}
 .month-with-agenda .month-agenda{flex:none;min-height:auto;height:auto;overflow:visible;margin-top:16px;padding:0}
 /* Calendar reaches behind the actions; no separate bottom band. */
 .calendar-shell .calendar-motion-viewport{margin-bottom:0}
+.timeline,.agenda,.day-checklist{padding-bottom:104px;scroll-padding-bottom:104px}
 .calendar-actions{background:transparent!important;border:0;box-shadow:none;backdrop-filter:none;pointer-events:none}
 .calendar-actions::before,.calendar-actions::after{content:none!important}
 .calendar-actions .fab,.calendar-actions .today-btn{background:var(--card)!important;border:0!important;box-shadow:none!important;color:var(--accent)}
@@ -222,7 +205,7 @@ body.dark .week-date.selected{background:#3b3048}
 .calendar-actions .fab .svg-icon{display:block;width:25px;height:25px;margin:0;vertical-align:initial}
 .calendar-actions .today-btn{display:flex;align-items:center;justify-content:center}
 /* Title and owner on the same line, time directly beneath — no place field. */
-.time-event{display:flex;flex-direction:column;justify-content:center;align-items:stretch;gap:1px;min-height:30px;padding:2px 8px;border-radius:7px;font-size:14px;line-height:15px;overflow:hidden}
+.time-event{display:flex;flex-direction:column;justify-content:center;align-items:stretch;gap:1px;min-height:30px;padding:2px 8px;border:0;border-radius:7px;font-size:14px;line-height:15px;overflow:hidden}
 .time-event .time-event-heading{display:flex;align-items:baseline;justify-content:space-between;gap:6px;width:100%;min-width:0}
 .time-event .time-event-heading>.time-event-title{display:block;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;-webkit-line-clamp:unset;font-size:14px;line-height:15px}
 .time-event .time-event-heading .time-owner{display:block;flex:0 1 auto;min-width:0;max-width:42%;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;font-size:10px;line-height:12px}
@@ -236,5 +219,17 @@ body.dark .week-date.selected{background:#3b3048}
 .categories-settings-row{padding:0;min-height:52px}
 .categories-settings-row .setting-link{padding:13px 14px;min-height:52px;border:0}
 
-/* Keep five event chips and the overflow link inside narrow two-week cells. */
+/* The two-week viewport also works when Telegram leaves little vertical space. */
+@container(max-height:460px){
+ .scroll-week .month-event-time{display:none}
+ .scroll-week .month-event-title{-webkit-line-clamp:1}
+}
+@container(max-height:340px){
+ .scroll-week .date-caption{padding-top:0;margin-bottom:2px}
+ .scroll-week .month-caption{position:static;font-size:8px;height:10px;line-height:10px}
+ .scroll-week .day-number{height:22px;width:22px;font-size:12px}
+ .scroll-week .event-bar{padding:0 2px;margin-bottom:2px}
+ .scroll-week .month-event-title{font-size:10px;line-height:11px}
+ .scroll-week .more{font-size:10px;line-height:12px;padding:0}
+}
 @media(max-width:430px){.month-scroll .scroll-week .month-event-title{-webkit-line-clamp:1}}
