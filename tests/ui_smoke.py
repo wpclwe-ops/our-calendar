@@ -28,7 +28,6 @@ async def check(output):
         await page.goto('http://127.0.0.1:8123');await page.wait_for_selector('.fab')
         await page.locator('.fab').click();await page.locator('[name=title]').fill('QA второй вторник')
         await page.locator('[name=start]').fill('2026-10-13T12:00');await page.locator('[name=end]').fill('2026-10-13T13:00')
-        await page.locator('.advanced-section>summary').click()
         await page.locator('[name=repeat]').select_option('MONTHLY')
         await page.locator('[name=repeat-month-mode]').select_option('ordinal')
         await page.locator('[name=repeat-ordinal]').select_option('2');await page.locator('[name=repeat-weekday]').select_option('TU')

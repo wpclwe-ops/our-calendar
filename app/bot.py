@@ -121,13 +121,22 @@ class Worker:
             for row in rows:
                 data=load(row['data'])
                 overrides={v['occurrence']:load(v['data']) for v in c.execute('SELECT * FROM overrides WHERE event_id=?',(row['id'],))}
-                expanded={k:instance(data,k,a,b,overrides.get(k)) for k,a,b in occurrences(data,now-timedelta(days=2),horizon)}
+                # Search narrow windows around each reminder offset. A reminder a week
+                # before an event must be scheduled now, even when the event itself
+                # lies beyond the three-day outbox horizon. Do not expand a year's
+                # worth of recurrences merely because one offset is a year long.
+                offsets={0}
+                for source in [data,*overrides.values()]:
+                    for values in source.get('reminders',{}).values():offsets.update(values)
+                windows=[(now+timedelta(minutes=m)-timedelta(days=2),horizon+timedelta(minutes=m,days=1)) for m in offsets]
+                expanded={k:instance(data,k,a,b,overrides.get(k)) for first,last in windows for k,a,b in occurrences(data,first,last)}
                 for k,ov in overrides.items():
                     if k not in expanded and 'start' in ov:
                         from .recurrence import base_datetime
                         # A moved instance has its own complete timing in the override.
                         it=dict(data);it.update(ov); it['rrule']=''
-                        for _,a,b in occurrences(it,now-timedelta(days=2),horizon): expanded[k]=instance(it,k,a,b)
+                        for first,last in windows:
+                            for _,a,b in occurrences(it,first,last):expanded[k]=instance(it,k,a,b)
                 for key,event in expanded.items():
                     if event.get('deleted') or event['status']!='planned':continue
                     for member in c.execute('SELECT * FROM members WHERE calendar_id=? AND active=1',(row['calendar_id'],)).fetchall():
