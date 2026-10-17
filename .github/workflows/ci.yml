@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: ['main']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The pipeline gates, run exactly as .no-mistakes.yaml runs them.
+  lint-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Lint
+        run: scripts/lint.sh
+
+      - name: Test
+        if: ${{ !cancelled() }}
+        run: scripts/test.sh
+
+  # The browser scenarios, in mobile Chromium on synthetic data.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      - run: npx playwright install --with-deps chromium
+
+      - name: E2E
+        run: scripts/test-e2e.sh

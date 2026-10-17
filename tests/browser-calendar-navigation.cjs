@@ -13,7 +13,9 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  await new Promise((resolve,reject)=>{server.stderr.on('data',d=>{if(String(d).includes('Uvicorn running'))resolve()});server.on('exit',c=>reject(new Error('server exit '+c)))});
  browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH}:{})});
  const context=await browser.newContext({viewport:{width:375,height:812},isMobile:true,hasTouch:true});const page=await context.newPage();await page.route('https://telegram.org/**',r=>r.abort());
- const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('http://127.0.0.1:8000');await page.waitForSelector('.calendar-controls');
+ // Fixed clock, as in the other scenarios: the day timeline scrolls to "now" on today and the demo
+ // seed puts events on the real today, so the wall clock must not decide what lies under a swipe.
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.clock.install({time:new Date('2026-10-17T02:30:00Z')});await page.goto('http://127.0.0.1:8000');await page.waitForSelector('.calendar-controls');
  const cdp=await context.newCDPSession(page);
  const wait=()=>page.waitForFunction(()=>!busy&&!calendarSwipe.active());
  const info=()=>page.evaluate(()=>({selected,view,page,query}));

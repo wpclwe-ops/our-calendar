@@ -1,0 +1,13 @@
+{
+  "name": "our-calendar",
+  "scripts": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wpclwe-ops/our-calendar.git"
+  },
+  "private": true,
+  "devDependencies": {
+    "@callum/dev-system": "github:cbundy/dev-system#semver:0.x",
+    "playwright": "1.56.0"
+  }
+}

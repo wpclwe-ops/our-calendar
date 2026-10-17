@@ -1,0 +1,89 @@
+# no-mistakes pipeline config.
+# Marker convention (see templates/README.md for the full explanation):
+#   "synced" blocks are owned by dev-system and overwritten by `callum-dev update`.
+#   "repo-owned" blocks are yours - `callum-dev update` merges around them and never clobbers them.
+
+# --- repo-owned: edit freely ---
+# Fill in this repo's real lint/test commands. Fresh no-mistakes worktrees have no
+# dependencies installed, so if your package manager needs an install step, run it
+# here before the actual command - do not assume node_modules/vendor/etc. already exist.
+# These are the canonical commands from CLAUDE.md. They need no install step: each script
+# gets ruff, Python 3.12 and requirements-dev.txt through uv on first use. The browser
+# scenarios (scripts/test-e2e.sh) are not a pipeline gate: CI's e2e job runs them.
+commands:
+  lint: "scripts/lint.sh"
+  test: "scripts/test.sh"
+
+# Add repo-specific ignore paths below this line. Keep the synced defaults above intact.
+ignore_patterns:
+  - "vendor/**"
+  - ".claude/**"
+
+# Optional documentation ownership policy, read only from the trusted default branch.
+# Delete this block if the repo has no special docs-ownership rule to state.
+document:
+  instructions: |
+    The product docs are in Russian; keep them in Russian. docs/Our_Calendar_TZ.docx is the
+    agreed specification and is never edited; docs/SPECIFICATION.ru.txt is its searchable
+    text copy. docs/IMPLEMENTATION.md owns how the build maps to the specification and what
+    is still missing. docs/QA.md owns the verification record of each release, and
+    docs/RELEASE_CHECKLIST.md the acceptance checklist. docs/OPERATIONS.md owns running the
+    service, docs/RAILWAY_DEPLOYMENT.md the hosting setup, and docs/PRIVACY.md data handling.
+    README.md owns the introduction, setup and per-release change notes. AGENTS.md owns the
+    product and security rules for agents; CLAUDE.md owns the agent workflow and commands.
+# --- end repo-owned ---
+
+# --- synced: do not edit (managed by dev-system) ---
+auto_fix:
+  rebase: 3
+  review: 3
+  test: 3
+  document: 3
+  lint: 5
+  ci: 3
+
+# PR description policy, read only from the trusted default branch. Synced as a whole: YAML
+# allows one `pr:` key, so a repo cannot override `template` in a repo-owned block - edit its
+# copy of .github/pull_request_template.md instead (callum-dev update 3-way merges it).
+# template: the agent fills this file; its top-level "#" headings are enforced, and a failed
+#   fill refuses to publish rather than falling back to a generic body. Needs no-mistakes 1.75.0+.
+# publish_intent: false stops the run's --intent brief being pasted into the PR as "## Intent".
+# appendix: minimal keeps one risk line and the pipeline attestation, and leaves test
+#   transcripts and round history out of the PR body (they stay in the run log). That keeps
+#   the body small and free of raw tool output. Needs no-mistakes 1.85.0+; older versions
+#   ignore it and publish the full appendix.
+pr:
+  template: .github/pull_request_template.md
+  publish_intent: false
+  appendix: minimal
+
+# The pipeline's agent order is set fleet-wide in each workspace's global no-mistakes config,
+# from dev-system's images/base/models.env (env DEV_NM_AGENTS). To override it for this repo,
+# set `agent:` in a repo-owned block - that replaces the global order entirely.
+
+# The model pin (agent_config) and the review roles (review_agents) are GLOBAL-ONLY keys:
+# no-mistakes ignores them here without warning. They live in the global no-mistakes config,
+# as a managed block the dev-system base image's dev-init rewrites on every start
+# (images/base/models.env, fetched from dev-system's main branch with the image's copy as
+# fallback; env DEV_MODELS_URL, DEV_CODEX_MODEL / DEV_CLAUDE_MODEL / DEV_CLAUDE_EFFORT /
+# DEV_REVIEW_AGENT / DEV_REVIEW_MODEL / DEV_REVIEW_EFFORT; images/base/README.md), or
+# written by the deprecated callum-tools feature (option `codexModel`).
+
+# Optional sections below are synced defaults, commented out. Uncomment in a repo-owned
+# block (do not uncomment here - dev-system updates will re-comment this synced copy) if
+# this repo wants to opt in.
+
+# commit:
+#   fix_message: "chore(no-mistakes-{{.Step}}): {{.Summary}}"
+
+# intent:
+#   enabled: true
+#   threshold: 0.2
+#   slack_days: 3
+#   disabled_readers: []
+
+# test:
+#   evidence:
+#     store_in_repo: true
+#     dir: .no-mistakes/evidence
+# --- end synced ---
