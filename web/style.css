@@ -206,3 +206,32 @@ body.dark .week-date.selected{background:#3b3048}
 .page-title-row .category-back{flex-basis:100%;display:flex;align-items:center;gap:4px;min-height:32px;padding:0;background:none;color:var(--accent);font-size:13px;font-weight:500;text-align:left}
 .page-title-row .category-back svg{width:15px;height:15px}
 @media(max-width:370px){.event-form .title-field input{font-size:24px}.event-form .form-row input[type=datetime-local]{font-size:12px}}
+
+/* Refinements requested after iOS review, 17 October 2026. */
+/* Both month modes remain separate: page grid and agenda share ONE scrollport. */
+.month-with-agenda{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior-y:contain;touch-action:pan-y pinch-zoom;overflow-anchor:none;scroll-padding-bottom:108px;padding-bottom:104px}
+.month-with-agenda>.month{flex:none;min-height:max-content}
+.month-with-agenda>.month .weekdays{flex:none}
+.month-with-agenda .month-agenda{flex:none;min-height:auto;height:auto;overflow:visible;margin-top:16px;padding:0}
+/* Calendar reaches behind the actions; no separate bottom band. */
+.calendar-shell .calendar-motion-viewport{margin-bottom:0}
+.calendar-actions{background:transparent!important;border:0;box-shadow:none;backdrop-filter:none;pointer-events:none}
+.calendar-actions::before,.calendar-actions::after{content:none!important}
+.calendar-actions .fab,.calendar-actions .today-btn{background:var(--card)!important;border:0!important;box-shadow:none!important;color:var(--accent)}
+.calendar-actions .fab{display:grid;place-items:center;padding:0!important;width:46px;height:46px;line-height:1}
+.calendar-actions .fab .svg-icon{display:block;width:25px;height:25px;margin:0;vertical-align:initial}
+.calendar-actions .today-btn{display:flex;align-items:center;justify-content:center}
+/* Title and owner on the same line, time directly beneath — no place field. */
+.time-event{display:flex;flex-direction:column;justify-content:center;align-items:stretch;gap:1px;min-height:30px;padding:2px 8px;border-radius:7px;font-size:14px;line-height:15px;overflow:hidden}
+.time-event .time-event-heading{display:flex;align-items:baseline;justify-content:space-between;gap:6px;width:100%;min-width:0}
+.time-event .time-event-heading>.time-event-title{display:block;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;-webkit-line-clamp:unset;font-size:14px;line-height:15px}
+.time-event .time-event-heading .time-owner{display:block;flex:0 1 auto;min-width:0;max-width:42%;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;font-size:10px;line-height:12px}
+.time-event .time-range{display:block;flex:none;min-width:0;margin:0;font-size:11px;line-height:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.time-event.short-event{display:flex;flex-direction:column;align-items:stretch;justify-content:center;min-height:30px;padding:2px 6px;gap:0;border-radius:6px}
+.time-event.short-event .time-event-heading{display:flex;align-items:baseline;justify-content:space-between;gap:4px}
+.time-event.short-event .time-event-heading>.time-event-title{display:block;flex:1;min-width:0;line-height:14px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.time-event.short-event .time-event-heading .time-owner{display:block;flex:0 1 auto;max-width:45%;margin:0;font-size:10px;line-height:12px}
+.time-event.short-event .time-range{display:block;line-height:11px;font-size:10px;margin:0}
+/* Personal navigation preferences inside one settings group. */
+.categories-settings-row{padding:0;min-height:52px}
+.categories-settings-row .setting-link{padding:13px 14px;min-height:52px;border:0}
