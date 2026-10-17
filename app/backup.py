@@ -10,7 +10,7 @@ from zipfile import ZipFile, ZIP_DEFLATED, BadZipFile
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 from cryptography.hazmat.primitives.serialization import Encoding, PrivateFormat, PublicFormat, NoEncryption, load_pem_private_key
 from .security import require, Problem
-from .service import dump, load, uid, EVENT_FIELDS
+from .service import dump, load, uid, offsets, EVENT_FIELDS
 from .recurrence import stamp,utcnow
 
 MAX_ARCHIVE = 10 * 1024 * 1024
@@ -80,6 +80,8 @@ class Backups:
             cal=data['calendar']; require(cal['first_id'] in data['members'],'invalid_archive')
             require(cal['second_id'] is None or cal['second_id'] in data['members'],'invalid_archive')
             require(len({v['id'] for v in data['events']})==len(data['events']),'invalid_archive')
+            for prefs in data['members'].values():
+                if 'default_reminders' in prefs:prefs['default_reminders']=offsets(prefs['default_reminders'])[:1]
             return data
         except Problem: raise
         except Exception:
