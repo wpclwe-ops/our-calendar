@@ -164,3 +164,45 @@ body.dark .week-date.selected{background:#3b3048}
 .month-scroll{container-type:size}
 @container(max-height:500px){.scroll-week .month-event-title{-webkit-line-clamp:1}}
 .time-event{font-weight:500}
+
+/* Annotated iOS review, 17 October 2026. Keep the two distinct month modes intact. */
+.event-detail .detail-badges{margin-bottom:5px}
+.event-detail .detail-title{margin-bottom:12px}
+.event-detail>.form-group{margin-bottom:10px}
+.event-detail .detail-block{padding:13px 14px}
+.event-detail .detail-block h3,.event-detail .description-card h3{font-weight:700;font-size:14px}
+.event-detail .detail-block h3 strong,.event-detail .description-card h3 strong{font-weight:700}
+.event-detail .description-card{padding:14px}
+.event-detail .description-card p{margin:16px 0 20px}
+.event-detail .description-card [data-action=translate-event]{display:block;margin-top:16px;margin-bottom:2px}
+.event-detail .status-chip{min-height:0;min-width:0;padding:4px 9px;border-radius:16px;font-size:11px;font-weight:500;line-height:1.4}
+.event-detail .status-chip:after{content:"⌄";margin-left:5px;opacity:.7}
+.event-detail .detail-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
+.event-status-picker .status-choice{display:block;width:100%;text-align:left;margin:8px 0;font-size:15px}
+.event-form .title-field{padding:17px 14px}
+.event-form .title-field input{font-size:26px;line-height:1.25;font-weight:700}
+.event-form .basic-fields>.switch-row input[type=checkbox]{width:17px;height:17px;min-width:17px;min-height:17px}
+.event-form .form-row input[type=date],.event-form .form-row input[type=datetime-local]{text-align:center;min-width:0}
+.event-form .form-row input[type=date]::-webkit-date-and-time-value,.event-form .form-row input[type=datetime-local]::-webkit-date-and-time-value{text-align:center;min-width:0}
+.event-form .form-row input[type=date]::-webkit-datetime-edit,.event-form .form-row input[type=datetime-local]::-webkit-datetime-edit{text-align:center;margin:0 auto}
+.event-form .advanced-section>summary{padding:14px 8px 16px}
+.event-form .reminder-group{padding:16px}
+.event-form .reminder-group h3{font-size:16px}
+.event-form .reminder-group .privacy{margin-top:12px;line-height:1.45}
+.time-event{border-radius:7px}
+.time-event .time-place{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:14px;margin-top:2px;opacity:.86}
+.time-event.short-event{display:flex;align-items:center;padding:0 8px;font-size:13px;line-height:17px;border-radius:6px}
+.time-event.short-event .time-event-heading{display:flex;align-items:center;width:100%;gap:5px;min-width:0}
+.time-event.short-event .time-event-heading>span{display:block;min-width:0;flex:1;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;font-size:13px;line-height:17px}
+.time-event.short-event .time-owner,.time-event.short-event .time-range{display:none}
+.time-event.short-event .time-place{flex:0 1 36%;display:block;min-width:0;margin:0;font-size:10px;line-height:14px}
+.month-agenda{overflow-y:auto;overscroll-behavior-y:contain;min-height:0;scroll-padding-bottom:20px}
+.month-with-agenda{min-height:0;overflow:hidden}
+.calendar-actions{bottom:calc(max(12px,env(safe-area-inset-bottom,0px)) + 78px);background:transparent!important}
+.calendar-actions .fab,.calendar-actions .today-btn{background:transparent!important;border:1px solid var(--accent);box-shadow:none}
+.touchbar-settings-row{padding:0;min-height:52px}
+.touchbar-settings-row .setting-link{min-height:52px;border:0;padding:13px 14px}
+.page-title-row:has(.category-back){display:flex;flex-wrap:wrap;align-items:center}
+.page-title-row .category-back{flex-basis:100%;display:flex;align-items:center;gap:4px;min-height:32px;padding:0;background:none;color:var(--accent);font-size:13px;font-weight:500;text-align:left}
+.page-title-row .category-back svg{width:15px;height:15px}
+@media(max-width:370px){.event-form .title-field input{font-size:24px}.event-form .form-row input[type=datetime-local]{font-size:12px}}
