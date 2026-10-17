@@ -9,7 +9,7 @@ from .recurrence import (UTC, utcnow, stamp, zone, validate_timing, occurrences,
                          TIME_FIELDS, local_datetime, recurrence_starts)
 
 PALETTE = ['#9B77D1','#D47AAE','#D77777','#E0A34B','#D0BD55','#55A77B','#4DA5A8','#598DD4','#7778C9','#888888','#333333','#F3B6D4']
-REMINDERS = {1440,720,120,60,30,15}
+MAX_REMINDER_MINUTES = 525600
 EVENT_FIELDS = {'title','description','language','translations','start','end','all_day','timezone','fold','end_fold',
                 'owner','category_id','status','location','links','rrule','reminders'}
 IMPORTANT = {'start','end','all_day','timezone','status','location','rrule'}
@@ -24,7 +24,7 @@ def load(value):
     return json.loads(value)
 
 def offsets(values):
-    require(isinstance(values, list) and len(values) <= 3 and all(type(v) is int and v in REMINDERS for v in values), 'invalid_reminders')
+    require(isinstance(values, list) and len(values) <= 3 and all(type(v) is int and 1 <= v <= MAX_REMINDER_MINUTES for v in values), 'invalid_reminders')
     require(len(set(values)) == len(values), 'invalid_reminders')
     return sorted(values, reverse=True)
 
