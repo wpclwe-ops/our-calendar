@@ -16,7 +16,7 @@ const {mkdtempSync,rmSync,mkdirSync}=require('node:fs');const {tmpdir}=require('
  const wait=()=>page.waitForFunction(()=>!busy&&!calendarSwipe.active()&&!calendarTouch.active()&&!monthLoading);
  const screenshot=async name=>{if(process.env.CALENDAR_SCREENSHOT_DIR){mkdirSync(process.env.CALENDAR_SCREENSHOT_DIR,{recursive:true});await page.screenshot({path:join(process.env.CALENDAR_SCREENSHOT_DIR,name+'.png')})}};
  await page.evaluate(async()=>{state=await api('settings','PATCH',{theme:'dark',day_layout:'list'});for(const e of new Map((await api('events?start=2026-10-01&end=2026-11-01')).map(e=>[e.id,e])).values())await api('events/'+e.id,'DELETE',{revision:e.revision,confirmed:true});const c=await api('categories','POST',{name:'Calendar design',color:'#9B77D1'});for(let i=0;i<7;i++)await api('events','POST',{title:i===0?'Выставка «Цвет и свет»':'Задача '+(i+1),start:`2026-10-17T${String(10+i).padStart(2,'0')}:00`,end:`2026-10-17T${String(10+i).padStart(2,'0')}:30`,timezone:'Europe/Warsaw',category_id:c.id,owner:'both',location:i===0?'Wrocław':''});await loadData();render()});await wait();
- assert.equal(await page.locator('.month-title').textContent(),'Сегодня');assert.equal(await page.locator('.day-layout-row').count(),0);
+ assert.equal(await page.locator('.month-title').textContent(),'17 октября');assert.equal(await page.locator('.day-layout-row').count(),0);
  const toggle=page.locator('.layout-toggle');const listIcon=await toggle.innerHTML();assert.equal(await toggle.getAttribute('aria-pressed'),'true');
  await screenshot('day-list-dark');await toggle.click();await wait();assert.equal(await toggle.innerHTML(),listIcon);assert.equal(await toggle.getAttribute('aria-pressed'),'false');
  await toggle.click();await wait();
@@ -72,9 +72,9 @@ const {mkdtempSync,rmSync,mkdirSync}=require('node:fs');const {tmpdir}=require('
   await page.locator('.detail-badges [data-action=status-options]').click();await page.locator('.event-status-picker [data-status=cancelled]').click();await wait();
   assert.equal(await page.evaluate(()=>currentEvent.status),'cancelled');
   await page.locator('[data-action=edit-event].header-save').click();await page.waitForSelector('#event-form');
-  assert.ok(await page.locator('.advanced-section').evaluate(el=>el.open));
+  assert.equal(await page.locator('.advanced-section').count(),0);
   assert.ok(await page.locator('.title-field input').evaluate(el=>parseFloat(getComputedStyle(el).fontSize)>=24));
-  assert.match(await page.locator('.reminder-group').textContent(),/только для данного события/);
+  assert.equal(await page.locator('.event-reminders select[data-reminder-preset]').count(),1);
   await page.locator('[data-action=back]').first().click();await page.waitForSelector('.detail-title');
  await page.locator('[data-action=back]').first().click();await wait();
  await page.evaluate(async()=>{selected='2026-10-17';await changeView('week')});await wait();assert.equal(await page.locator('.layout-toggle').count(),0);assert.equal(await page.locator('.week-date').count(),7);await screenshot('week-dark');
@@ -87,6 +87,51 @@ const {mkdtempSync,rmSync,mkdirSync}=require('node:fs');const {tmpdir}=require('
   await page.locator('.categories-settings-row [data-tab=categories]').click();await wait();
   assert.equal(await page.locator('[data-action=back-to-settings]').count(),1);
   await page.locator('[data-action=back-to-settings]').click();await wait();assert.equal(await page.evaluate(()=>tab),'settings');
+ // Native reminders share one control in Settings and the event form.
+ const defaults=page.locator('[data-reminder-editor=default]');
+ assert.equal(await defaults.locator('details').count(),0);
+ assert.equal(await defaults.locator('[data-reminder-preset] option:checked').textContent(),'За 1 час');
+ await defaults.locator('[data-reminder-preset]').selectOption('custom');
+ await page.waitForFunction(()=>state.me.default_reminders.includes(45));
+ await defaults.locator('[data-action=add-reminder]').click();await wait();
+ await defaults.locator('[data-action=add-reminder]').click();await wait();
+ assert.equal(await defaults.locator('[data-reminder-preset]').count(),3);
+ assert.equal(await defaults.locator('[data-action=add-reminder]').count(),0);
+ assert.deepEqual(await page.evaluate(()=>state.me.default_reminders),[45,30,15]);
+ await screenshot('settings-native-reminders');
+ await page.locator('.bottom-nav [data-view=day]').click();await wait();
+ await page.evaluate(async()=>{selected='2026-10-09';await loadData();render()});
+ assert.equal(await page.locator('.month-title').textContent(),'9 октября');
+ assert.equal(await page.locator('.calendar-heading .day-weekday').textContent(),'пятница');
+ assert.equal((await page.locator('.calendar-heading').textContent()).match(/9 октября/g).length,1);
+ await page.locator('[data-action=new]').click();await page.waitForSelector('#event-form');
+ assert.equal(await page.locator('.advanced-section').count(),0);
+ assert.ok(await page.locator('[name=location]').isVisible());
+ assert.ok(await page.locator('.event-reminders').evaluate(el=>{const repeat=document.querySelector('[name=repeat]').closest('.form-row');return repeat.nextElementSibling===el}),'reminder directly follows repetition');
+ await page.locator('[name=title]').fill('Произвольное напоминание');
+ let eventReminders=page.locator('[data-reminder-editor=event]');
+ await eventReminders.locator('[data-reminder-preset]').nth(2).selectOption('none');
+ await eventReminders.locator('[data-reminder-preset]').nth(1).selectOption('none');
+ await eventReminders.locator('[data-reminder-amount]').fill('7');
+ await eventReminders.locator('[data-reminder-unit]').selectOption('1440');
+ assert.deepEqual(await page.evaluate(()=>formEvent.reminders[state.me.id]),[10080]);
+ assert.equal(await page.inputValue('[name=title]'),'Произвольное напоминание');
+ for(const width of [320,390]){
+  await page.setViewportSize({width,height:844});
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  assert.ok(await page.locator('.all-day-switch').evaluate(row=>{const input=row.querySelector('input'),a=input.getBoundingClientRect(),b=row.getBoundingClientRect();return a.width===46&&a.height===28&&Math.abs(a.y+a.height/2-b.y-b.height/2)<2}));
+  assert.equal(await page.locator('[name=start]').evaluate(el=>getComputedStyle(el).textAlign),'center');
+  await screenshot('event-native-reminders-'+width);
+ }
+ await page.locator('[name=all_day]').check();await wait();
+ assert.equal(await page.locator('[name=start]').getAttribute('type'),'date');
+ assert.equal(await page.inputValue('[name=title]'),'Произвольное напоминание');
+ assert.deepEqual(await page.evaluate(()=>formEvent.reminders[state.me.id]),[10080]);
+ await page.locator('[name=all_day]').uncheck();await wait();
+ await page.locator('[type=submit][form=event-form]').click();await page.waitForSelector('.detail-title');
+ assert.deepEqual(await page.evaluate(()=>currentEvent.reminders[state.me.id]),[10080]);
+ assert.deepEqual(await page.evaluate(()=>currentEvent.reminders['2']),[60]);
+ await page.locator('[data-action=back]').first().click();await wait();
  await page.reload();await page.waitForSelector('.timeline');assert.equal(await page.evaluate(()=>state.me.day_layout),'timeline');assert.equal(await page.evaluate(()=>state.me.month_layout),'paged');
  assert.deepEqual(errors,[]);console.log('PASS: compact timeline time/owner, gray centered actions, unified month-and-agenda scrolling, settings hierarchy, status dialog and two distinct month modes.');
  }finally{await browser?.close();server.kill();await new Promise(resolve=>server.once('exit',resolve));rmSync(directory,{recursive:true,force:true})}
