@@ -173,7 +173,7 @@ body.dark .week-date.selected{background:#3b3048}
 .event-status-picker .status-choice{display:block;width:100%;text-align:left;margin:8px 0;font-size:15px}
 .event-form .title-field{padding:17px 14px}
 .event-form .title-field input{font-size:26px;line-height:1.25;font-weight:700}
-.event-form .basic-fields>.switch-row input[type=checkbox]{width:17px;height:17px;min-width:17px;min-height:17px}
+.event-form .all-day-switch input[role=switch]{width:46px;height:28px;min-width:46px;min-height:28px;align-self:center}
 .event-form .form-row input[type=date],.event-form .form-row input[type=datetime-local]{text-align:center;min-width:0}
 .event-form .form-row input[type=date]::-webkit-date-and-time-value,.event-form .form-row input[type=datetime-local]::-webkit-date-and-time-value{text-align:center;min-width:0}
 .event-form .form-row input[type=date]::-webkit-datetime-edit,.event-form .form-row input[type=datetime-local]::-webkit-datetime-edit{text-align:center;margin:0 auto}
@@ -233,3 +233,26 @@ body.dark .week-date.selected{background:#3b3048}
  .scroll-week .more{font-size:10px;line-height:12px;padding:0}
 }
 @media(max-width:430px){.month-scroll .scroll-week .month-event-title{-webkit-line-clamp:1}}
+
+/* Native, compact reminders and the event form, 0.6.2. */
+.category-navigation{margin:0 0 14px}
+.category-navigation .category-back{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:10px 14px;background:var(--soft);border-radius:14px;font-size:15px;font-weight:500}
+.category-navigation .category-back svg{width:18px;height:18px}
+.event-form .all-day-switch{display:flex;align-items:center;justify-content:space-between;margin:0}
+.event-form .date-time-control{display:flex;align-items:center;justify-content:center;flex:0 1 240px;min-width:0;margin-left:auto}
+.event-form .form-row .date-time-control input{display:block;width:100%;max-width:100%;min-width:0;margin:6px 0;padding:10px 4px;text-align:center;appearance:none;-webkit-appearance:none;font-size:14px;line-height:20px;min-height:40px}
+.event-form .date-time-control input::-webkit-date-and-time-value{display:block;width:100%;min-height:20px;text-align:center;margin:0}
+.event-form .date-time-control input::-webkit-datetime-edit{display:block;min-width:0;padding:0;text-align:center}
+.event-form .date-time-control input::-webkit-calendar-picker-indicator{margin:0;padding:0}
+.reminder-editor{min-width:0}
+.reminder-editor.default-settings{border:0}
+.reminder-row{display:block;min-width:0}
+.reminder-choice{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:52px;width:100%;min-width:0}
+.reminder-choice>label{margin:0;color:var(--ink);font-size:14px;line-height:1.4;flex:1;min-width:0;max-width:57%}
+.reminder-choice>select{width:auto;max-width:52%;min-width:0;min-height:44px;border:0;background:transparent;padding:8px 0;color:var(--muted);font-size:14px;text-align:right}
+.reminder-editor .setting-row{padding-top:0;padding-bottom:0}
+.reminder-custom:not([hidden]){display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:0 0 12px}
+.reminder-editor .reminder-custom input{width:88px;min-width:0;max-width:42%;text-align:center;font-size:16px;border:1px solid var(--line);padding:10px;background:var(--bg)}
+.reminder-custom select{width:auto;max-width:55%;border:1px solid var(--line);border-radius:10px;background:var(--bg);padding:10px;min-height:44px;font-size:14px;text-align:center}
+.reminder-editor .add-reminder{display:block;margin:0;padding:8px 14px;font-size:12px;font-weight:400;min-height:40px}
+@media(max-width:370px){.event-form .form-row .date-time-control input{font-size:12px}.reminder-choice>label,.reminder-choice>select{font-size:13px}}
