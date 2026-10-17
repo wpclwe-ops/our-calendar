@@ -546,7 +546,7 @@ const actions={
  'set-status':async el=>{const e=currentEvent,value=el.dataset.status;if(e.rrule)await api('events/'+e.id+'/occurrence','POST',{occurrence:e.occurrence,revision:e.revision,scope:'one',changes:{status:value}});else await api('events/'+e.id,'PATCH',{revision:e.revision,status:value});await openEvent(e.id,e.occurrence)},
  'other-occurrences':()=>occurrenceDialog(),
  'filters':()=>filterDialog(),
- 'today':async()=>{selected=isoDay();showSearch=false;query='';$('.timeline')?.removeAttribute('data-date');$('.month-scroll')?.removeAttribute('data-focus');await loadData();render()},
+ 'today':async()=>{selected=isoDay();showSearch=false;query='';$('.timeline')?.removeAttribute('data-date');$('.month-scroll')?.removeAttribute('data-focus');$('.month-with-agenda,.day-checklist')?.removeAttribute('data-date');await loadData();render()},
  'prev':()=>move(-1),'next':()=>move(1),
  'date':async el=>{const previousMonth=selected.slice(0,7);selected=el.dataset.date;if(previousMonth!==selected.slice(0,7))await loadData();render()},
  'week-date':el=>{selected=el.dataset.date;render()},
