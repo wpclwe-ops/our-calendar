@@ -15,7 +15,7 @@ timezone:'Часовой пояс',repeat:'Повторение',none:'Без п
 interval:'Каждые N периодов',rule:'Правило RRULE',ruleHelp:'Например: FREQ=MONTHLY;BYDAY=2TU — каждый второй вторник месяца.',
 notify_at_start:'Уведомлять в момент начала события',reminders:'Мои напоминания',reminderHelp:'До трёх интервалов. Настройки партнёра независимы.',save:'Сохранить',cancel:'Отмена',back:'Назад',edit:'Изменить',delete:'Удалить',
 confirmDelete:'Точно удалить?',deleteForever:'Удалить навсегда',restore:'Восстановить',saved:'Сохранено',overlap:'Внимание: есть пересечение с другим событием.',
-language:'Язык',theme:'Тема',light:'Светлая',dark:'Тёмная',system:'Системная',defaults:'Напоминания по умолчанию',
+language:'Язык',theme:'Тема',light:'Светлая',dark:'Тёмная',system:'Системная',defaults:'Напоминание по умолчанию',
 defaultHelp:'Применяются только к новым событиям.',enabled:'Отправлять мои напоминания',botStart:'Чтобы получать уведомления, откройте бота и нажмите «Запустить».',
 openBot:'Открыть бота',deliveryOk:'Бот может отправлять сообщения',deliveryError:'Сообщения не доставляются. Откройте бота.',
 trash:'Корзина',trashHelp:'Удалённые события хранятся 30 дней.',backup:'Резервная копия',downloadZip:'Скачать ZIP',downloadIcs:'Скачать ICS',
@@ -50,7 +50,7 @@ empty:'A little space for your plans',emptyHelp:'Add an event and it will appear
 advanced:'More options',owner:'For whom',category:'Category',status:'Status',location:'Location',description:'Description',links:'Links (one per line)',timezone:'Timezone',repeat:'Repeat',
 none:'Does not repeat',daily:'Daily',weekly:'Weekly',monthly:'Monthly',yearly:'Yearly',custom:'Custom',interval:'Every N periods',rule:'RRULE',ruleHelp:'Example: FREQ=MONTHLY;BYDAY=2TU — every second Tuesday of the month.',
 notify_at_start:'Notify me when an event starts',reminders:'My reminders',reminderHelp:'Up to three. Your partner has independent settings.',save:'Save',cancel:'Cancel',back:'Back',edit:'Edit',delete:'Delete',confirmDelete:'Delete this event?',deleteForever:'Delete permanently',restore:'Restore',saved:'Saved',overlap:'This event overlaps another event.',
-language:'Language',theme:'Theme',light:'Light',dark:'Dark',system:'System',defaults:'Default reminders',defaultHelp:'Only applied to new events.',enabled:'Send my reminders',
+language:'Language',theme:'Theme',light:'Light',dark:'Dark',system:'System',defaults:'Default reminder',defaultHelp:'Only applied to new events.',enabled:'Send my reminders',
 botStart:'To receive messages, open the bot and press Start.',openBot:'Open bot',deliveryOk:'The bot can send messages',deliveryError:'Messages cannot be delivered. Open the bot.',
 trash:'Trash',trashHelp:'Deleted events are kept for 30 days.',backup:'Backup',downloadZip:'Download ZIP',downloadIcs:'Download ICS',restoreZip:'Restore from ZIP',archivePreview:'Restoration preview',
 missing:'Missing events',differences:'Changed fields',applySelected:'Restore selected',chooseFile:'Select ZIP archive',preview:'Compare with calendar',archiveInfo:'Select individual fields and events. External connections will not be restored.',noDifferences:'No differences',current:'Current',archive:'Archive',
@@ -74,12 +74,12 @@ Object.assign(words.ru,{touchBar:'Touch Bar',touch_bar:'Touch Bar',touchBarHelp:
 Object.assign(words.en,{touchBar:'Touch Bar',touch_bar:'Touch Bar',touchBarHelp:'Choose and reorder the bottom navigation buttons. Settings always stays last.',moveUp:'Move up',moveDown:'Move down',alwaysVisible:'Always visible'});
 Object.assign(words.ru,{changeStatus:'Изменить статус события',eventReminders:'Мои напоминания · это событие',eventReminderHelp:'Эти интервалы действуют только для данного события и только для вас. Настройки напоминаний партнёра независимы.',backToSettings:'К настройкам'});
 Object.assign(words.en,{changeStatus:'Change event status',eventReminders:'My reminders · this event',eventReminderHelp:'These intervals apply only to this event and to you. Your partner manages their own reminders.',backToSettings:'Back to settings'});
-Object.assign(words.ru,{reminder:'Напоминание',additionalReminder:'Ещё напоминание',noReminder:'Не напоминать',remindBefore:'За ',reminderOther:'Другое…',reminderAmount:'За сколько напомнить',reminderUnit:'Единица времени',reminderMinutes:'Минуты',reminderHours:'Часы',reminderDays:'Дни',addReminder:'Добавить напоминание',invalidCustomReminder:'Введите целый интервал от 1 минуты до 365 дней.',backToSettings:'В настройки',ambiguous_local_time_choose_fold:'Укажите первый или второй вариант в разделе «Переход на зимнее время».'});
-Object.assign(words.en,{reminder:'Reminder',additionalReminder:'Another reminder',noReminder:'No reminder',remindBefore:'Before: ',reminderOther:'Other…',reminderAmount:'How far in advance',reminderUnit:'Time unit',reminderMinutes:'Minutes',reminderHours:'Hours',reminderDays:'Days',addReminder:'Add reminder',invalidCustomReminder:'Enter a whole interval from 1 minute to 365 days.',ambiguous_local_time_choose_fold:'Select the first or second occurrence under “When the clocks go back”.'});
+Object.assign(words.ru,{invalid_default_reminder:'Выберите одно напоминание по умолчанию.',reminder:'Напоминание',additionalReminder:'Ещё напоминание',noReminder:'Не напоминать',remindBefore:'За ',reminderOther:'Другое…',reminderAmount:'За сколько напомнить',reminderUnit:'Единица времени',reminderMinutes:'Минуты',reminderHours:'Часы',reminderDays:'Дни',addReminder:'Добавить напоминание',invalidCustomReminder:'Введите целый интервал от 1 минуты до 365 дней.',backToSettings:'В настройки',ambiguous_local_time_choose_fold:'Укажите первый или второй вариант в разделе «Переход на зимнее время».'});
+Object.assign(words.en,{invalid_default_reminder:'Choose one default reminder.',reminder:'Reminder',additionalReminder:'Another reminder',noReminder:'No reminder',remindBefore:'Before: ',reminderOther:'Other…',reminderAmount:'How far in advance',reminderUnit:'Time unit',reminderMinutes:'Minutes',reminderHours:'Hours',reminderDays:'Days',addReminder:'Add reminder',invalidCustomReminder:'Enter a whole interval from 1 minute to 365 days.',ambiguous_local_time_choose_fold:'Select the first or second occurrence under “When the clocks go back”.'});
 const icons={calendar:'<rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/>',categories:'<path d="M3.5 12.2V4.5a1 1 0 0 1 1-1h7.7l8.3 8.3a1.4 1.4 0 0 1 0 2l-6.2 6.2a1.4 1.4 0 0 1-2 0z"/><circle cx="8" cy="8" r="1.4"/>',settings:'<path d="M10.3 2.5h3.4l.5 2.1 1.7.7 1.8-1.1 2.4 2.4-1.1 1.8.7 1.7 2.1.5v3.4l-2.1.5-.7 1.7 1.1 1.8-2.4 2.4-1.8-1.1-1.7.7-.5 2.1h-3.4l-.5-2.1-1.7-.7-1.8 1.1-2.4-2.4 1.1-1.8-.7-1.7-2.1-.5v-3.4l2.1-.5.7-1.7-1.1-1.8 2.4-2.4 1.8 1.1 1.7-.7z"/><circle cx="12" cy="12" r="3"/>',search:'<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>',filters:'<path d="M4 6h16M7 12h10M10 18h4"/>',prev:'<path d="M15 5l-7 7 7 7"/>',next:'<path d="M9 5l7 7-7 7"/>',plus:'<path d="M12 5v14M5 12h14"/>',repeat:'<path d="M4 8h15l-3-3M20 16H5l3 3M20 8v3M4 16v-3"/>',check:'<path d="M5 12l4 4L19 6"/>',clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',pin:'<path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0z"/><circle cx="12" cy="10" r="2"/>',trash:'<path d="M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7"/>',archive:'<rect x="3" y="3" width="18" height="5" rx="1"/><path d="M5 8v13h14V8M10 12h4"/>',close:'<path d="M6 6l12 12M6 18L18 6"/>'};
 const icon=name=>`<svg class="svg-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name]||icons.calendar}</svg>`;
 Object.assign(words.ru,{applyFilters:'Применить'});Object.assign(words.en,{applyFilters:'Apply'});
-Object.assign(icons,{list:'<circle cx="5" cy="6" r="1.5"/><path d="M10 6h10M10 12h10M10 18h10"/><circle cx="5" cy="12" r="1.5"/><circle cx="5" cy="18" r="1.5"/>',scroll:'<rect x="5" y="7" width="14" height="10" rx="2"/><path d="M5 3h14M5 21h14"/>',sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/>'});
+Object.assign(icons,{down:'<path d="M6 9l6 6 6-6"/>',list:'<circle cx="5" cy="6" r="1.5"/><path d="M10 6h10M10 12h10M10 18h10"/><circle cx="5" cy="12" r="1.5"/><circle cx="5" cy="18" r="1.5"/>',scroll:'<rect x="5" y="7" width="14" height="10" rx="2"/><path d="M5 3h14M5 21h14"/>',sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/>'});
 const radioSegment=(name,items,value)=>`<div class="segment radio-segment" role="group" aria-label="${esc(t(({category_id:'category','filter-category':'category','filter-owner':'owner','filter-status':'status','event-status':'status'}[name]||name)))}">${items.map(([v,l])=>`<label><input type="radio" name="${name}" value="${esc(v)}" ${v===value?'checked':''}><span>${esc(l)}</span></label>`).join('')}</div>`;
 let state=null,cfg={},events=[],categories=[],tab='calendar',page='main',selected='',view='day',query='',showSearch=false,showFilters=false;
 let filter={owner:'',category:'',status:''},currentEvent=null,formEvent=null,formScope='all',archiveData=null,previewData=null,inviteUrl='';
@@ -233,7 +233,7 @@ function calendarPage(){
 function taskList(items){
  const daily=[...items].sort((a,b)=>Number(b.all_day)-Number(a.all_day)||(a.start_utc||a.start).localeCompare(b.start_utc||b.start)||title(a).localeCompare(title(b)));
  if(!daily.length)return empty();
- return `<div class="day-tasks">${daily.map(e=>{const attrs=`data-id="${esc(e.id)}" data-occ="${esc(e.occurrence||'')}"`;return `<div class="day-task ${e.status==='done'?'completed':''} ${e.status==='cancelled'?'cancelled-task':''}"><span class="day-task-stripe" data-bg="${esc(color(e.category_id))}"></span><button type="button" class="day-task-card" data-action="event" ${attrs}><span class="day-task-title">${esc(title(e))}</span><span class="day-task-time">${icon('clock')}${esc(time(e))}${!e.all_day?' – '+esc(zoned(e.end_utc,{hour:'2-digit',minute:'2-digit'})):''}${e.rrule?' · ↻':''}</span><span class="day-task-meta"><span data-fg="${esc(color(e.category_id))}">${esc(catName(e.category_id))}</span> · ${ownership(e.owner)}${e.status==='cancelled'?' · '+t('cancelled'):''}</span></button><span class="task-actions">${button('toggle-day-done',e.status==='done'?icon('check'):'','task-check',`${attrs} aria-label="${esc(t(e.status==='done'?'undoComplete':'completeEvent')+': '+title(e))}" aria-pressed="${e.status==='done'}"`)}${button('delete-day-event',icon('trash'),'task-delete',`${attrs} aria-label="${esc(t('delete')+': '+title(e))}"`)}</span></div>`}).join('')}</div>`;
+ return `<div class="day-tasks">${daily.map(e=>{const attrs=`data-id="${esc(e.id)}" data-occ="${esc(e.occurrence||'')}"`;return `<div class="day-task ${e.status==='done'?'completed':''} ${e.status==='cancelled'?'cancelled-task':''}"><span class="day-task-stripe" data-bg="${esc(color(e.category_id))}"></span><button type="button" class="day-task-card" data-action="event" ${attrs}><span class="day-task-title">${esc(title(e))}</span><span class="day-task-time">${icon('clock')}${esc(time(e))}${!e.all_day?' – '+esc(zoned(e.end_utc,{hour:'2-digit',minute:'2-digit'})):''}${e.rrule?' · ↻':''}</span><span class="day-task-meta"><span data-fg="${esc(color(e.category_id))}">${esc(catName(e.category_id))}</span> · ${ownership(e.owner)}${e.status==='cancelled'?' · '+t('cancelled'):''}</span></button><span class="task-actions">${button('toggle-day-done',e.status==='done'?icon('check'):'','task-check',`${attrs} aria-label="${esc(t(e.status==='done'?'undoComplete':'completeEvent')+': '+title(e))}" aria-pressed="${e.status==='done'}"`)}</span></div>`}).join('')}</div>`;
 }
 function dayChecklist(){return `<section class="day-checklist" data-date="${selected}" aria-label="${t('dayList')}">${taskList(events.filter(e=>onDay(e,selected)))}</section>`}
 function listedEvent(el){const e=events.find(e=>e.id===el.dataset.id&&(e.occurrence||'')===(el.dataset.occ||''));if(!e)throw new Error(t('revision_conflict'));return e}
@@ -364,17 +364,23 @@ setInterval(()=>{if(state)updateNowLines()},30000);
 
 const reminderPresets=[15,30,60,120,720,1440];
 function reminderEditor(values,scope='event'){
- const defaults=scope==='default',rows=values.length?values:[null];
+ const defaults=scope==='default',rows=values.length?(defaults?values.slice(0,1):values):[null];
  return `<div class="reminder-editor ${defaults?'default-settings':'event-reminders'}" data-reminder-editor="${scope}">${rows.map((n,i)=>{
   const custom=n!==null&&!reminderPresets.includes(n),factor=n&&n%1440===0?1440:n&&n%60===0?60:1;
   const name=`${scope}-reminder-${i}`,label=i?t('additionalReminder'):t(defaults?'defaults':'reminder');
-  return `<div class="${defaults?'setting-row':'form-row'} reminder-row"><div class="reminder-choice"><label for="${name}">${label}</label><select id="${name}" name="${name}" data-reminder-preset aria-label="${label}">${[['none',t('noReminder')],...reminderPresets.map(v=>[String(v),t('remindBefore')+reminderLabel(v)]),['custom',t('reminderOther')]].map(([v,l])=>opt(v,l,n===null?'none':custom?'custom':String(n))).join('')}</select></div><div class="reminder-custom" ${custom?'':'hidden'}><input type="number" data-reminder-amount min="1" max="525600" step="1" value="${custom?n/factor:45}" required ${custom?'':'disabled'} aria-label="${t('reminderAmount')}"><select data-reminder-unit ${custom?'':'disabled'} aria-label="${t('reminderUnit')}">${[[1,t('reminderMinutes')],[60,t('reminderHours')],[1440,t('reminderDays')]].map(([v,l])=>opt(String(v),l,String(custom?factor:1))).join('')}</select></div></div>`;
- }).join('')}${values.length<3&&values.length?button('add-reminder',t('addReminder'),'text-button add-reminder',`data-scope="${scope}"`):''}</div>`;
+  return `<div class="${defaults?'setting-row':'form-row'} reminder-row"><div class="reminder-choice"><label for="${name}">${label}</label><select id="${name}" name="${name}" data-reminder-preset aria-label="${label}">${[['none',t('noReminder')],...reminderPresets.map(v=>[String(v),t('remindBefore')+reminderLabel(v).replace(/минута$/,'минуту')]),['custom',t('reminderOther')]].map(([v,l])=>opt(v,l,n===null?'none':custom?'custom':String(n))).join('')}</select></div><div class="reminder-custom" ${custom?'':'hidden'}><input type="number" data-reminder-amount min="1" max="525600" step="1" value="${custom?n/factor:45}" required ${custom?'':'disabled'} aria-label="${t('reminderAmount')}"><select data-reminder-unit ${custom?'':'disabled'} aria-label="${t('reminderUnit')}">${[[1,t('reminderMinutes')],[60,t('reminderHours')],[1440,t('reminderDays')]].map(([v,l])=>opt(String(v),l,String(custom?factor:1))).join('')}</select></div></div>`;
+ }).join('')}${!defaults&&values.length<3&&values.length?button('add-reminder',t('addReminder'),'text-button add-reminder',`data-scope="${scope}"`):''}</div>`;
 }
 function readReminders(root){
  const values=$$('.reminder-row',root).map(row=>{const preset=$('[data-reminder-preset]',row).value;if(preset==='none')return null;const n=preset==='custom'?Number($('[data-reminder-amount]',row).value)*Number($('[data-reminder-unit]',row).value):Number(preset);if(!Number.isInteger(n)||n<1||n>525600)throw new Error(t('invalidCustomReminder'));return n}).filter(v=>v!==null);
  if(values.length>3||new Set(values).size!==values.length)throw new Error(t('invalid_reminders'));
  return values;
+}
+function syncReminderChoice(el){
+ if(!el.matches('[data-reminder-preset]'))return;
+ const row=el.closest('.reminder-row'),custom=el.value==='custom';
+ $('.reminder-custom',row).hidden=!custom;
+ $$('.reminder-custom input,.reminder-custom select',row).forEach(input=>input.disabled=!custom);
 }
 function recurrenceEditor(e){
  const c=CalendarRecurrence.parse(e.rrule,e.start,e.timezone),dayNames=CalendarRecurrence.DAYS.map((d,i)=>[d,dateLabel(addDays('2026-10-19',i),{weekday:'short'})]);
@@ -416,7 +422,44 @@ function detail(){
  const lang=detailLanguage||state.me.language,tr=e.translations?.[lang];
  const when=e.all_day?dateLabel(e.start,{weekday:'short',day:'numeric',month:'long',year:'numeric'})+' · '+t('allDay'):`${zoned(e.start_utc,{weekday:'short',day:'numeric',month:'long'})} · ${time(e)} – ${zoned(e.end_utc,{hour:'2-digit',minute:'2-digit'})}`;
  const content=tr?.description||e.description;
- return `<article class="event-detail"><div class="detail-badges"><span class="category-chip" data-bg="${color(e.category_id)}">${esc(catName(e.category_id))}</span>${button('status-options',t(e.status),'status-chip',`aria-label="${t('changeStatus')}" aria-haspopup="dialog"`)}<span class="owner-chip">${ownership(e.owner)}</span></div><h1 class="detail-title">${esc(tr?.title||e.title)}</h1><section class="form-group"><div class="detail-block with-icon">${icon('clock')}<div><strong>${esc(when)}</strong><small>${t('yourTime')} · ${esc(tz())}</small>${!e.all_day&&e.timezone!==tz()?`<div class="source-time"><span>${t('sourceTime')}</span><br>${esc(e.start.replace('T',' '))} → ${esc(e.end.replace('T',' '))}<br>${esc(e.timezone)}</div>`:''}</div></div>${e.rrule?`<div class="detail-block with-icon">${icon('repeat')}<div><span class="muted">${t('repeat')}</span><p>${esc(recurrenceLabel(e))}</p>${button('other-occurrences',t('otherOccurrences'),'text-button')}</div></div>`:''}</section>${e.location||e.links.length?`<section class="form-group"><div class="detail-block with-icon">${icon('pin')}<div><h3><strong>${t('location')}</strong></h3>${e.location?`<p>${esc(e.location)}</p>`:''}${e.links.map(l=>`<p><a href="${esc(l)}" target="_blank" rel="noreferrer noopener">${esc(l)}</a></p>`).join('')}</div></div></section>`:''}${content||Object.keys(e.translations||{}).length?`<section class="form-group description-card"><div class="row spread"><h3><strong>${t('description')}</strong></h3><div class="segment language-segment">${['en','ru'].map(l=>button('detail-language',l.toUpperCase(),lang===l?'active':'',`data-lang="${l}" aria-pressed="${lang===l}"`)).join('')}</div></div><p>${esc(content)}</p>${tr?.stale?`<small>${t('stale')}</small>`:''}${cfg.integrations?.translation==='configured'?button('translate-event',t('translateAgain'),'text-button'):''}</section>`:''}<section class="form-group"><div class="detail-block"><div class="row spread"><h3>${t('reminders')}</h3>${button('edit-event',t('edit'),'text-button')}</div><small>${t('personalReminders')}</small><p>${state.me.notify_at_start!==false?esc(t('notify_at_start'))+'<br>':''}${(e.reminders[state.me.id]||[]).map(reminderLabel).join(' · ')||'—'}</p><small>${t('partnerReminders')}</small></div></section>${e.translation_status?.state==='pending'?`<p class="privacy">${t('translationQueued')}</p>`:e.translation_status?.state==='failed'?`<p class="error">${t('translationFailed')}</p>`:''}${cfg.integrations?.translation==='configured'&&Object.values(e.translations||{}).some(v=>v.manual)?button('replace-translations',t('replaceManual'),'text-button danger'):''}${cfg.integrations?.translation==='configured'&&!content&&!Object.keys(e.translations||{}).length?button('translate-event',t('translateAgain'),'text-button'):''}<div class="detail-actions">${button('set-status',t(e.status==='done'?'resumeEvent':'markDone'),'soft-button',`data-status="${e.status==='done'?'planned':'done'}"`)}${button('delete-event',t('delete'),'danger destructive')}</div></article>`;
+ return `<article class="event-detail"><div class="detail-badges"><span class="category-chip" data-bg="${color(e.category_id)}">${esc(catName(e.category_id))}</span>${button('status-options',`<span>${t(e.status)}</span>${icon('down')}`,'status-chip',`aria-label="${t('changeStatus')}" aria-haspopup="dialog"`)}<span class="owner-chip">${ownership(e.owner)}</span></div><h1 class="detail-title">${esc(tr?.title||e.title)}</h1><section class="form-group"><div class="detail-block with-icon">${icon('clock')}<div><strong>${esc(when)}</strong><small>${t('yourTime')} · ${esc(tz())}</small>${!e.all_day&&e.timezone!==tz()?`<div class="source-time"><span>${t('sourceTime')}</span><br>${esc(e.start.replace('T',' '))} → ${esc(e.end.replace('T',' '))}<br>${esc(e.timezone)}</div>`:''}</div></div>${e.rrule?`<div class="detail-block with-icon">${icon('repeat')}<div><span class="muted">${t('repeat')}</span><p>${esc(recurrenceLabel(e))}</p>${button('other-occurrences',t('otherOccurrences'),'text-button')}</div></div>`:''}</section>${e.location||e.links.length?`<section class="form-group"><div class="detail-block with-icon">${icon('pin')}<div><h3><strong>${t('location')}</strong></h3>${e.location?`<p>${esc(e.location)}</p>`:''}${e.links.map(l=>`<p><a href="${esc(l)}" target="_blank" rel="noreferrer noopener">${esc(l)}</a></p>`).join('')}</div></div></section>`:''}${content||Object.keys(e.translations||{}).length?`<section class="form-group description-card"><div class="row spread"><h3><strong>${t('description')}</strong></h3><div class="segment language-segment">${['en','ru'].map(l=>button('detail-language',l.toUpperCase(),lang===l?'active':'',`data-lang="${l}" aria-pressed="${lang===l}"`)).join('')}</div></div><p>${esc(content)}</p>${tr?.stale?`<small>${t('stale')}</small>`:''}${cfg.integrations?.translation==='configured'?button('translate-event',t('translateAgain'),'text-button'):''}</section>`:''}<section class="form-group detail-reminders"><div class="detail-block"><div class="row spread"><h3>${t('reminders')}</h3>${button('edit-reminders',t('edit'),'text-button')}</div><p>${state.me.notify_at_start!==false?esc(t('notify_at_start'))+'<br>':''}${(e.reminders[state.me.id]||[]).map(reminderLabel).join(' · ')||'—'}</p></div></section>${e.translation_status?.state==='pending'?`<p class="privacy">${t('translationQueued')}</p>`:e.translation_status?.state==='failed'?`<p class="error">${t('translationFailed')}</p>`:''}${cfg.integrations?.translation==='configured'&&Object.values(e.translations||{}).some(v=>v.manual)?button('replace-translations',t('replaceManual'),'text-button danger'):''}${cfg.integrations?.translation==='configured'&&!content&&!Object.keys(e.translations||{}).length?button('translate-event',t('translateAgain'),'text-button'):''}<div class="detail-actions">${button('set-status',t(e.status==='done'?'resumeEvent':'markDone'),'soft-button',`data-status="${e.status==='done'?'planned':'done'}"`)}${button('delete-event',t('delete'),'danger destructive')}</div></article>`;
+}
+function eventReminderDialog(){
+ const event=currentEvent;if(!event||$('.reminder-backdrop'))return;
+ clearTimeout(toast.timer);$('#toast').style.display='none';
+ const el=document.createElement('div');el.className='modal-backdrop reminder-backdrop';
+ let draft=[...(event.reminders[state.me.id]||[])];
+ el.innerHTML=`<form class="modal event-reminder-sheet" role="dialog" aria-modal="true" aria-labelledby="reminder-sheet-title"><div class="modal-header"><h2 id="reminder-sheet-title">${t('reminders')}</h2><button type="button" data-close aria-label="${t('close')}">${icon('close')}</button></div><div class="reminder-sheet-body"></div><p class="error reminder-sheet-error" role="alert"></p><div class="reminder-sheet-actions"><button type="button" data-close>${t('cancel')}</button><button type="submit" class="primary">${t('save')}</button></div></form>`;
+ const body=$('.reminder-sheet-body',el),error=$('.reminder-sheet-error',el),form=$('form',el);
+ const draw=()=>body.innerHTML=reminderEditor(draft,'dialog');
+ const close=()=>{el.remove();$('.detail-reminders [data-action=edit-reminders]')?.focus()};
+ draw();
+ el.addEventListener('click',e=>{
+  if(busy)return;
+  if(e.target===el||e.target.closest('[data-close]')){close();return}
+  if(e.target.closest('[data-action=add-reminder]'))try{
+   const values=readReminders(body);if(values.length>=3)return;
+   draft=[...values,reminderPresets.find(n=>!values.includes(n))];draw();error.textContent='';
+  }catch(err){error.textContent=err.message}
+ });
+ el.addEventListener('change',e=>{
+  if(busy||!e.target.closest('[data-reminder-editor]'))return;
+  try{syncReminderChoice(e.target);draft=readReminders(body);draw();error.textContent=''}catch(err){error.textContent=err.message}
+ });
+ el.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&!busy){e.preventDefault();close()}
+  if(e.key==='Tab'){const controls=$$('button,input:not([disabled]),select:not([disabled])',form).filter(x=>x.getClientRects().length),first=controls[0],last=controls.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}}
+ });
+ form.addEventListener('submit',async e=>{
+  e.preventDefault();if(busy)return;
+  try{
+   const reminders=readReminders(body);busy=true;form.classList.add('busy');
+   if(event.rrule)await api('events/'+event.id+'/occurrence','POST',{occurrence:event.occurrence,revision:event.revision,scope:'one',changes:{reminders}});
+   else await api('events/'+event.id,'PATCH',{revision:event.revision,reminders});
+   await openEvent(event.id,event.occurrence);close();toast(t('saved'));
+  }catch(err){error.textContent=err.message}finally{busy=false;form.classList.remove('busy')}
+ });
+ document.body.append(el);$('[data-close]',el).focus();
 }
 function eventStatusDialog(){
  const e=currentEvent;if(!e)return;
@@ -541,7 +584,7 @@ const actions={
  'choose-language':async el=>{state=await api('settings','PATCH',{language:el.dataset.lang});await loadData();render()},
  'translate-event':async()=>{await api('events/'+currentEvent.id+'/translate','POST',{});currentEvent.translation_status={state:'pending'};render();toast(t('translationQueued'))},
  'replace-translations':async()=>{if(await confirmDialog(t('replaceManual'),t('replaceManualHelp'))){await api('events/'+currentEvent.id+'/translate','POST',{overwrite_manual:true});currentEvent.translation_status={state:'pending'};render();toast(t('translationQueued'))}},
- 'add-reminder':async el=>{const defaults=el.dataset.scope==='default';if(!defaults)captureForm();const values=defaults?state.me.default_reminders:formEvent.reminders[state.me.id];if(values.length>=3)return;const next=[...values,reminderPresets.find(n=>!values.includes(n))];if(defaults)state=await api('settings','PATCH',{default_reminders:next});else formEvent.reminders[state.me.id]=next;render()},
+ 'add-reminder':el=>{if(el.dataset.scope!=='event')return;captureForm();const values=formEvent.reminders[state.me.id];if(values.length>=3)return;formEvent.reminders[state.me.id]=[...values,reminderPresets.find(n=>!values.includes(n))];render()},
  'touchbar':()=>{page='touchbar';render()},
  'back-to-settings':async()=>{tab='settings';page='main';await loadData();render()},
  'touchbar-move':el=>{const items=[...touchBarItems()],i=items.indexOf(el.dataset.item),j=i+Number(el.dataset.direction);if(i<0||j<0||j>=items.length-1)return;[items[i],items[j]]=[items[j],items[i]];return saveTouchBar(items)},
@@ -552,13 +595,13 @@ const actions={
  'month-layout':async()=>{const month_layout=state.me.month_layout==='scroll'?'paged':'scroll';state=await api('settings','PATCH',{month_layout});await loadData();render()},
  'month-day-list':async el=>{selected=el.dataset.date;state=await api('settings','PATCH',{month_layout:'paged'});await loadData();render()},
  'toggle-day-done':async el=>{const e=listedEvent(el);await changeEventStatus(e,e.status==='done'?'planned':'done');await loadData();render()},
- 'delete-day-event':el=>deleteCalendarEvent(listedEvent(el)),
  'search':async()=>{showSearch=!showSearch;if(!showSearch)query='';await loadData();render();$('#search')?.focus()},
  'clear-search':async()=>{query='';await loadData();render();$('#search')?.focus()},
  'reset-filters':async()=>{filter={owner:'',category:'',status:''};await loadData();render()},
  'close-app':()=>tg?.close(),
  'detail-language':el=>{detailLanguage=el.dataset.lang;render()},
  'status-options':()=>eventStatusDialog(),
+ 'edit-reminders':()=>eventReminderDialog(),
  'set-status':async el=>{const e=currentEvent,value=el.dataset.status;if(e.rrule)await api('events/'+e.id+'/occurrence','POST',{occurrence:e.occurrence,revision:e.revision,scope:'one',changes:{status:value}});else await api('events/'+e.id,'PATCH',{revision:e.revision,status:value});await openEvent(e.id,e.occurrence)},
  'other-occurrences':()=>occurrenceDialog(),
  'filters':()=>filterDialog(),
@@ -644,8 +687,8 @@ $('#app').addEventListener('change',async e=>{const el=e.target;try{
   const id=currentEvent.id,key=currentEvent.occurrence;page='main';await loadData();await openEvent(id,key);return;
  }
  if(el.closest('[data-reminder-editor]')){
-  const editor=el.closest('[data-reminder-editor]'),row=el.closest('.reminder-row');
-  if(el.matches('[data-reminder-preset]')){const custom=el.value==='custom';$('.reminder-custom',row).hidden=!custom;$$('.reminder-custom input,.reminder-custom select',row).forEach(input=>input.disabled=!custom)}
+  const editor=el.closest('[data-reminder-editor]');
+  syncReminderChoice(el);
   const values=readReminders(editor);
   if(editor.dataset.reminderEditor==='default'){busy=true;try{state=await api('settings','PATCH',{default_reminders:values});render()}catch(error){render();throw error}finally{busy=false}}
   else{captureForm();render()}
