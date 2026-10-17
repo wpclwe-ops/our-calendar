@@ -74,6 +74,8 @@ Object.assign(words.ru,{touchBar:'Touch Bar',touch_bar:'Touch Bar',touchBarHelp:
 Object.assign(words.en,{touchBar:'Touch Bar',touch_bar:'Touch Bar',touchBarHelp:'Choose and reorder the bottom navigation buttons. Settings always stays last.',moveUp:'Move up',moveDown:'Move down',alwaysVisible:'Always visible'});
 const icons={calendar:'<rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/>',categories:'<path d="M3.5 12.2V4.5a1 1 0 0 1 1-1h7.7l8.3 8.3a1.4 1.4 0 0 1 0 2l-6.2 6.2a1.4 1.4 0 0 1-2 0z"/><circle cx="8" cy="8" r="1.4"/>',settings:'<circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/>',search:'<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>',filters:'<path d="M4 6h16M7 12h10M10 18h4"/>',prev:'<path d="M15 5l-7 7 7 7"/>',next:'<path d="M9 5l7 7-7 7"/>',plus:'<path d="M12 5v14M5 12h14"/>',repeat:'<path d="M4 8h15l-3-3M20 16H5l3 3M20 8v3M4 16v-3"/>',check:'<path d="M5 12l4 4L19 6"/>',clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',pin:'<path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0z"/><circle cx="12" cy="10" r="2"/>',trash:'<path d="M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7"/>',archive:'<rect x="3" y="3" width="18" height="5" rx="1"/><path d="M5 8v13h14V8M10 12h4"/>',close:'<path d="M6 6l12 12M6 18L18 6"/>'};
 const icon=name=>`<svg class="svg-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name]||icons.calendar}</svg>`;
+Object.assign(words.ru,{applyFilters:'Применить'});Object.assign(words.en,{applyFilters:'Apply'});
+Object.assign(icons,{list:'<circle cx="5" cy="6" r="1.5"/><path d="M10 6h10M10 12h10M10 18h10"/><circle cx="5" cy="12" r="1.5"/><circle cx="5" cy="18" r="1.5"/>',scroll:'<rect x="5" y="7" width="14" height="10" rx="2"/><path d="M5 3h14M5 21h14"/>',sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/>'});
 const radioSegment=(name,items,value)=>`<div class="segment radio-segment" role="group" aria-label="${esc(t(({category_id:'category','filter-category':'category','filter-owner':'owner','filter-status':'status','event-status':'status'}[name]||name)))}">${items.map(([v,l])=>`<label><input type="radio" name="${name}" value="${esc(v)}" ${v===value?'checked':''}><span>${esc(l)}</span></label>`).join('')}</div>`;
 let state=null,cfg={},events=[],categories=[],tab='calendar',page='main',selected='',view='day',query='',showSearch=false,showFilters=false;
 let filter={owner:'',category:'',status:''},currentEvent=null,formEvent=null,formScope='all',archiveData=null,previewData=null,inviteUrl='';
@@ -117,7 +119,8 @@ async function api(path,method='GET',body=null,raw=false){
 function applyTheme(){const theme=state?.me.theme||'system';document.body.classList.toggle('dark',theme==='dark'||(theme==='system'&&matchMedia('(prefers-color-scheme:dark)').matches));document.documentElement.lang=state?.me.language||'ru'}
 function paint(root=document){
  const dark=document.body.classList.contains('dark');
- $$('[data-bg]',root).forEach(el=>{el.style.backgroundColor=el.dataset.bg;if(el.classList.contains('event-bar')||el.classList.contains('time-event')||el.classList.contains('category-chip')||el.classList.contains('day-task-card')){el.style.backgroundColor=`color-mix(in srgb, ${el.dataset.bg} ${dark?'28':'22'}%, var(--card))`;el.style.color=`color-mix(in srgb, ${el.dataset.bg} ${dark?'45':'65'}%, ${dark?'white':'black'})`}});
+ $$('[data-bg]',root).forEach(el=>{el.style.backgroundColor=el.dataset.bg;if(el.classList.contains('event-bar')||el.classList.contains('time-event')||el.classList.contains('category-chip')){el.style.backgroundColor=`color-mix(in srgb, ${el.dataset.bg} ${dark?'22':'16'}%, var(--card))`;el.style.color=`color-mix(in srgb, ${el.dataset.bg} ${dark?'45':'65'}%, ${dark?'white':'black'})`}});
+ $$('[data-fg]',root).forEach(el=>el.style.color=el.dataset.fg);
  $$('[data-top]',root).forEach(el=>{el.style.top=el.dataset.top+'px';el.style.height=el.dataset.height+'px';el.style.left=`calc(54px + (100% - 54px) * ${el.dataset.lane} / ${el.dataset.lanes})`;el.style.width=`calc((100% - 54px) / ${el.dataset.lanes})`});$$('.hour',root).forEach(el=>el.style.top=el.dataset.hour*70+'px');
  $$('.days',root).forEach(days=>days.style.gridTemplateRows=`repeat(${days.children.length/7},minmax(0,1fr))`);
 }
@@ -128,7 +131,7 @@ function header(){
  return `<header class="header ${tg?.initData&&!sub?'telegram-native':''}"><div class="header-side">${left}</div><div class="header-title">${form?t(currentEvent?'editEvent':'newEvent'):'Our Calendar'}${!form?'<small>mini app</small>':''}</div><div class="header-side right">${right}</div></header>`;
 }
 function touchBarItems(){return state.me.touch_bar||['day','month','settings']}
-function navigation(){return `<nav class="bottom-nav" aria-label="${esc(t('calendar'))}">${touchBarItems().map(id=>{const mode=['day','week','month'].includes(id),active=mode?tab==='calendar'&&view===id:tab===id;return `<button type="button" data-action="${mode?'nav-view':'tab'}" ${mode?`data-view="${id}"`:`data-tab="${id}"`} class="${active?'active':''}" ${active?'aria-current="page"':''}>${icon(id==='day'?'clock':id==='week'||id==='month'?'calendar':id)}<span>${t(id)}</span></button>`}).join('')}</nav>`}
+function navigation(){return `<nav class="bottom-nav" aria-label="${esc(t('calendar'))}">${touchBarItems().map(id=>{const mode=['day','week','month'].includes(id),active=mode?tab==='calendar'&&view===id:tab===id;return `<button type="button" data-action="${mode?'nav-view':'tab'}" ${mode?`data-view="${id}"`:`data-tab="${id}"`} class="${active?'active':''}" ${active?'aria-current="page"':''}><span class="touchbar-content">${icon(id==='day'?'sun':id==='week'||id==='month'?'calendar':id)}<span>${t(id)}</span></span></button>`}).join('')}</nav>`}
 function touchBarPage(){
  const items=touchBarItems(),available=['day','week','month','categories'].filter(id=>!items.includes(id));
  return `<h1>${t('touchBar')}</h1><p class="privacy">${t('touchBarHelp')}</p><section class="form-group touchbar-editor">${[...items,...available].map(id=>{const index=items.indexOf(id),fixed=id==='settings',checked=index>=0;return `<div class="touchbar-row" data-item="${id}"><label><input type="checkbox" name="touchbar-item" value="${id}" ${checked?'checked':''} ${fixed?'disabled':''}>${t(id)}${fixed?`<small>${t('alwaysVisible')}</small>`:''}</label>${checked&&!fixed?`<button type="button" class="touchbar-handle icon" data-drag="${id}" aria-label="${esc(t(id))}" title="${esc(t('touchBarHelp'))}">☰</button>${button('touchbar-move',icon('prev'),'icon',`data-item="${id}" data-direction="-1" aria-label="${t('moveUp')}" ${index===0?'disabled':''}`)}${button('touchbar-move',icon('next'),'icon',`data-item="${id}" data-direction="1" aria-label="${t('moveDown')}" ${index===items.length-2?'disabled':''}`)}`:''}</div>`}).join('')}</section>`;
@@ -148,6 +151,7 @@ function demo(){return cfg.demo?`<div class="demo">${t('demo')}<select id="demo-
 function render(){
  const oldNavigation=$('.calendar-motion-page:not(.motion-preview) .navigation-content'),navigationPosition=oldNavigation?{tab:document.body.dataset.tab,top:oldNavigation.scrollTop}:null;
  monthResize?.disconnect();monthResize=null;
+ const oldAgenda=$('.month-agenda,.day-checklist'),agendaPosition=oldAgenda?{day:oldAgenda.dataset.date,top:oldAgenda.scrollTop}:null;
  const oldTimeline=$('.timeline'),timelinePosition=oldTimeline?{day:oldTimeline.dataset.date,top:oldTimeline.scrollTop}:null;
  const oldMonths=$('.month-scroll'),monthPosition=oldMonths&&oldMonths.dataset.focus===selected?monthAnchor(oldMonths):null;
  applyTheme();let html='';
@@ -177,14 +181,26 @@ function render(){
  const content=mainNavigation?`<div class="calendar-motion-viewport"><div class="calendar-motion-page" data-view="${activeNavigation()}">${tab==='calendar'?html:`<div class="navigation-content">${html}</div>`}</div></div>`:html;
  $('#app').innerHTML=demo()+`<main class="shell ${page==='main'?'main-screen':'sub-screen'} ${mainNavigation?(tab==='calendar'?'calendar-shell':'navigation-shell'):''}">${header()}${content}</main>`+(active&&page==='main'?navigation():'')+(active&&tab==='calendar'&&page==='main'&&!showSearch?`<div class="calendar-actions">${button('today',t('today'),'today-btn')}${button('new',icon('plus'),'fab','aria-label="'+t('newEvent')+'"')}</div>`:'');
  paint();
+ const agenda=$('.month-agenda,.day-checklist');if(agendaPosition&&agenda?.dataset.date===agendaPosition.day)agenda.scrollTop=agendaPosition.top;
  if(page==='main'&&navigationPosition?.tab===tab){const content=$('.navigation-content');if(content)content.scrollTop=navigationPosition.top}
  if(page==='touchbar')mountTouchBar();
  if(page==='main'&&tab==='calendar'&&!query){positionTimeline(document,timelinePosition);mountMonthScroll(monthPosition)}
 }
 function filterControls(){return `<div class="filters">${select('filter-owner',[['',t('owner')+': '+t('all')],[state.me.id,t('mine')],[(state.members||[]).find(x=>x.id!==state.me.id)?.id||'partner',t('partner')],['both',t('both')]],filter.owner)}${select('filter-category',[['',t('categories')],['none',t('noCategory')],...categories.map(c=>[c.id,catName(c.id)])],filter.category)}${select('filter-status',[['',t('status')+': '+t('all')],...['planned','done','cancelled'].map(x=>[x,t(x)])],filter.status)}</div>`}
+function filterDialog(){
+ if($('.filter-backdrop'))return;
+ const el=document.createElement('div');el.className='modal-backdrop filter-backdrop';
+ el.innerHTML=`<form class="modal filter-sheet" role="dialog" aria-modal="true" aria-labelledby="filter-title"><div class="modal-header"><h2 id="filter-title">${t('filters')}</h2><button type="button" data-close aria-label="${t('close')}">${icon('close')}</button></div>${filterControls()}<div class="filter-actions"><button type="button" data-reset>${t('resetFilters')}</button><button type="submit" class="primary">${t('applyFilters')}</button></div></form>`;
+ $$('.filters select',el).forEach(control=>{const label=document.createElement('label');label.textContent=t({'filter-owner':'owner','filter-category':'categories','filter-status':'status'}[control.name]);control.before(label);label.append(control)});
+ const close=()=>{el.remove();showFilters=false;$('[data-action=filters]')?.focus()};
+ el.addEventListener('click',e=>{if(e.target===el||e.target.closest('[data-close]'))close();if(e.target.closest('[data-reset]'))$$('select',el).forEach(s=>s.value='')});
+ el.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();close()}if(e.key==='Tab'){const controls=$$('button,select',el),first=controls[0],last=controls.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}}});
+ $('form',el).addEventListener('submit',async e=>{e.preventDefault();if(busy)return;busy=true;const previous={...filter};try{const data=new FormData(e.target);filter={owner:data.get('filter-owner'),category:data.get('filter-category'),status:data.get('filter-status')};await loadData();render();close()}catch(error){filter=previous;toast(error.message)}finally{busy=false}});
+ document.body.append(el);showFilters=true;$('[data-close]',el).focus();
+}
 function calendarPage(){
  const week=view==='week'?CalendarNavigation.weekHeading(selected,state.me.language):null;
- const heading=week?week.title:view==='day'?dateLabel(selected,{weekday:'long'}):dateLabel(selected,{month:'long',year:'numeric'});
+ const heading=week?week.title:view==='day'?(selected===isoDay()?t('today'):dateLabel(selected,{day:'numeric',month:'long'})):dateLabel(selected,{month:'long'});
  let html='';
  if(showSearch){
   html=`<section class="search-page"><div class="search-box">${icon('search')}<input id="search" type="search" value="${esc(query)}" placeholder="${t('search')}" aria-label="${t('search')}">${button(query?'clear-search':'search',icon('close'),'icon',`aria-label="${t(query?'clearSearch':'close')}"`)}</div>${filterControls()}<div class="search-summary"><span>${events.length} ${t('results')}</span>${button('reset-filters',t('resetFilters'),'text-button')}</div>`;
@@ -193,26 +209,28 @@ function calendarPage(){
   for(const [month,entries] of groups)html+=`<h3 class="section-label">${esc(dateLabel(month+'-01',{month:'long',year:'numeric'}))}</h3><div class="search-event-group">${eventList(entries)}</div>`;
   return html+(events.length?'':empty())+'</section>';
  }
- html=`<section class="calendar-controls"><div class="calendar-heading">${button('prev',icon('prev'),'icon',`aria-label="${t('back')}"`)}<div class="grow"><h1 class="month-title${week?' week-title':''}">${esc(heading)}</h1>${week?`<small class="week-range">${esc(week.range)}</small>`:view==='day'?`<small>${esc(dateLabel(selected,{day:'numeric',month:'long'}))} · ${esc(tz())}</small>`:''}</div>${button('next',icon('next'),'icon',`aria-label="${t('next')}"`)}${button('search',icon('search'),'icon',`aria-label="${t('search')}"`)}${button('filters',icon('filters'),`icon ${showFilters?'selected':''}`,`aria-label="${t('filters')}" aria-expanded="${showFilters}"`)}</div>${showFilters?filterControls():''}</section>`;
+ const subtitle=week?`<small class="week-range">${esc(week.range)}</small>`:view==='day'?`<small class="day-weekday">${esc(dateLabel(selected,{weekday:'long'}))}</small><small>${esc(dateLabel(selected,{day:'numeric',month:'long'}))}</small>`:`<small class="calendar-year">${esc(dateLabel(selected,{year:'numeric'}))}</small>`;
+ const layoutButton=view==='day'?button('day-layout',icon('list'),`icon layout-toggle ${state.me.day_layout==='list'?'selected':''}`,`data-layout="${state.me.day_layout==='list'?'timeline':'list'}" aria-label="${t('day_layout')}: ${t(state.me.day_layout==='list'?'dayList':'dayTimeline')}" aria-pressed="${state.me.day_layout==='list'}"`):view==='month'?button('month-layout',icon(state.me.month_layout==='scroll'?'scroll':'calendar'),'icon layout-toggle',`aria-label="${t('month_layout')}: ${t(state.me.month_layout==='scroll'?'monthScroll':'monthPaged')}"`):'<span aria-hidden="true"></span>';
+ html=`<section class="calendar-controls"><div class="calendar-heading"><div class="grow"><h1 class="month-title${week?' week-title':''}">${esc(heading)}</h1>${subtitle}</div><div class="calendar-tools">${button('search',icon('search'),'icon',`aria-label="${t('search')}"`)}${button('filters',icon('filters'),`icon ${Object.values(filter).some(Boolean)?'selected':''}`,`aria-label="${t('filters')}" aria-haspopup="dialog"`)}${layoutButton}${button('prev',icon('prev'),'icon period-prev',`aria-label="${t('back')}"`)}${button('next',icon('next'),'icon period-next',`aria-label="${t('next')}"`)}</div></div></section>`;
  if(view==='month'){
  if(state.me.month_layout==='scroll'){
   ensureMonthWindow();
   html+=`<div class="scroll-month-weekdays weekdays">${weekdayLabels()}</div><div class="month-scroll" data-selected="${selected}" data-focus="${selected}">${scrollingWeeks()}</div>`;
- }else html+=monthGrid(selected);
+ }else html+=`<section class="month-with-agenda">${monthGrid(selected)}<div class="agenda month-agenda" data-date="${selected}"><div class="agenda-heading"><h2>${esc(dateLabel(selected,{weekday:'long',day:'numeric',month:'long'}))}</h2></div>${taskList(events.filter(e=>onDay(e,selected)))}</div></section>`;
  }else if(view==='week'){
  const daily=events.filter(e=>onDay(e,selected));
- html+=`<div class="week-strip">${weekDays().map(d=>button('week-date',`${esc(dateLabel(d,{weekday:'short'}))}<span class="date-number">${Number(d.slice(-2))}</span>${weekIndicator(d)}`,`week-date ${d===selected?'selected':''} ${d===isoDay()?'today':''}`,`data-date="${d}" aria-pressed="${d===selected}"`)).join('')}</div><div class="agenda" data-date="${selected}"><div class="agenda-heading"><h2>${esc(dateLabel(selected,{weekday:'long',day:'numeric',month:'long'}))}</h2><small>${daily.length}</small></div>${eventList(daily)}</div>`;
+ html+=`<div class="week-strip">${weekDays().map(d=>button('week-date',`${esc(dateLabel(d,{weekday:'short'}))}<span class="date-number">${Number(d.slice(-2))}</span>${weekIndicator(d)}`,`week-date ${d===selected?'selected':''} ${d===isoDay()?'today':''}`,`data-date="${d}" aria-pressed="${d===selected}"`)).join('')}</div><div class="agenda" data-date="${selected}"><div class="agenda-heading"><h2>${esc(dateLabel(selected,{weekday:'long',day:'numeric',month:'long'}))}</h2><small>${daily.length}</small></div>${taskList(daily)}</div>`;
  }else{
- html+=`<div class="day-layout-row"><span>${t('day_layout')}</span><div class="segment" role="group" aria-label="${t('day_layout')}">${[['timeline','dayTimeline'],['list','dayList']].map(([v,label])=>button('day-layout',t(label),(state.me.day_layout||'timeline')===v?'active':'',`data-layout="${v}" aria-pressed="${(state.me.day_layout||'timeline')===v}"`)).join('')}</div></div>`;
  html+=state.me.day_layout==='list'?dayChecklist():timeline();
  }
  return html;
 }
-function dayChecklist(){
- const daily=events.filter(e=>onDay(e,selected)).sort((a,b)=>Number(b.all_day)-Number(a.all_day)||(a.start_utc||a.start).localeCompare(b.start_utc||b.start)||title(a).localeCompare(title(b))),done=daily.filter(e=>e.status==='done').length;
- if(!daily.length)return `<section class="day-checklist" data-date="${selected}">${empty()}</section>`;
- return `<section class="day-checklist" data-date="${selected}" aria-label="${t('dayList')}"><div class="checklist-summary"><span>${daily.length} · ${esc(dateLabel(selected,{day:'numeric',month:'long'}))}</span><span>${done} / ${daily.length} ${t('completedCount')}</span></div><div class="day-tasks">${daily.map(e=>{const attrs=`data-id="${esc(e.id)}" data-occ="${esc(e.occurrence||'')}"`;return `<div class="day-task ${e.status==='done'?'completed':''} ${e.status==='cancelled'?'cancelled-task':''}">${button('toggle-day-done',e.status==='done'?icon('check'):'','task-check',`${attrs} aria-label="${esc(t(e.status==='done'?'undoComplete':'completeEvent')+': '+title(e))}" aria-pressed="${e.status==='done'}"`)}<button type="button" class="day-task-card" data-bg="${esc(color(e.category_id))}" data-action="event" ${attrs}><span class="day-task-title">${esc(title(e))}</span><span class="day-task-time">${icon('clock')}${esc(time(e))}${!e.all_day?' – '+esc(zoned(e.end_utc,{hour:'2-digit',minute:'2-digit'})):''}${e.rrule?' · ↻':''}</span><span class="day-task-meta">${esc(catName(e.category_id))} · ${ownership(e.owner)}${e.status==='cancelled'?' · '+t('cancelled'):''}</span></button>${button('delete-day-event',icon('trash'),'task-delete',`${attrs} aria-label="${esc(t('delete')+': '+title(e))}"`)}</div>`}).join('')}</div></section>`;
+function taskList(items){
+ const daily=[...items].sort((a,b)=>Number(b.all_day)-Number(a.all_day)||(a.start_utc||a.start).localeCompare(b.start_utc||b.start)||title(a).localeCompare(title(b)));
+ if(!daily.length)return empty();
+ return `<div class="day-tasks">${daily.map(e=>{const attrs=`data-id="${esc(e.id)}" data-occ="${esc(e.occurrence||'')}"`;return `<div class="day-task ${e.status==='done'?'completed':''} ${e.status==='cancelled'?'cancelled-task':''}"><span class="day-task-stripe" data-bg="${esc(color(e.category_id))}"></span><button type="button" class="day-task-card" data-action="event" ${attrs}><span class="day-task-title">${esc(title(e))}</span><span class="day-task-time">${icon('clock')}${esc(time(e))}${!e.all_day?' – '+esc(zoned(e.end_utc,{hour:'2-digit',minute:'2-digit'})):''}${e.rrule?' · ↻':''}</span><span class="day-task-meta"><span data-fg="${esc(color(e.category_id))}">${esc(catName(e.category_id))}</span> · ${ownership(e.owner)}${e.status==='cancelled'?' · '+t('cancelled'):''}</span></button><span class="task-actions">${button('toggle-day-done',e.status==='done'?icon('check'):'','task-check',`${attrs} aria-label="${esc(t(e.status==='done'?'undoComplete':'completeEvent')+': '+title(e))}" aria-pressed="${e.status==='done'}"`)}${button('delete-day-event',icon('trash'),'task-delete',`${attrs} aria-label="${esc(t('delete')+': '+title(e))}"`)}</span></div>`}).join('')}</div>`;
 }
+function dayChecklist(){return `<section class="day-checklist" data-date="${selected}" aria-label="${t('dayList')}">${taskList(events.filter(e=>onDay(e,selected)))}</section>`}
 function listedEvent(el){const e=events.find(e=>e.id===el.dataset.id&&(e.occurrence||'')===(el.dataset.occ||''));if(!e)throw new Error(t('revision_conflict'));return e}
 async function changeEventStatus(e,value){
  if(e.rrule)await api('events/'+e.id+'/occurrence','POST',{occurrence:e.occurrence,revision:e.revision,scope:'one',changes:{status:value}});
@@ -230,7 +248,7 @@ function timeline(){
  const minute=iso=>{const parts=new Intl.DateTimeFormat('en-GB',{timeZone:tz(),hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(iso));return Number(parts.find(p=>p.type==='hour').value)*60+Number(parts.find(p=>p.type==='minute').value)};
  const items=timed.map(e=>({event:e,start:eventDay(e)<selected?0:minute(e.start_utc),end:isoDay(new Date(e.end_utc))>selected?1440:minute(e.end_utc)})).sort((a,b)=>a.start-b.start||b.end-a.end);
  const groups=[];for(const item of items){let group=groups.at(-1);if(!group||item.start>=group.end){group={end:item.end,items:[],lanes:[]};groups.push(group)}group.end=Math.max(group.end,item.end);let lane=group.lanes.findIndex(end=>end<=item.start);if(lane<0)lane=group.lanes.length;group.lanes[lane]=item.end;item.lane=lane;group.items.push(item)}
- html+=`<div class="timeline" data-date="${selected}"><div class="timeline-inner">${Array.from({length:24},(_,i)=>`<div class="hour" data-hour="${i}"><span>${String(i).padStart(2,'0')}:00</span></div>`).join('')}${groups.flatMap(g=>g.items.map(x=>{const e=x.event;return `<button class="time-event ${e.status!=='planned'?'faded':''}" data-bg="${color(e.category_id)}" data-top="${x.start/60*70}" data-height="${Math.max(28,(x.end-x.start)/60*70)}" data-lane="${x.lane}" data-lanes="${g.lanes.length}" data-action="event" data-id="${e.id}" data-occ="${esc(e.occurrence)}" title="${t('dragHint')}" aria-label="${esc(title(e)+' · '+ownership(e.owner)+' · '+time(e))}"><span class="time-event-heading"><span>${e.status==='done'?'✓ ':e.status==='cancelled'?'⊘ ':''}${esc(title(e))}</span><small class="time-owner">${esc(ownership(e.owner))}</small></span><small>${esc(time(e))}–${esc(zoned(e.end_utc,{hour:'2-digit',minute:'2-digit'}))}</small></button>`})).join('')}${selected===isoDay()?'<div class="now-line" role="img"></div>':''}</div></div>`;
+ html+=`<div class="timeline" data-date="${selected}"><div class="timeline-inner">${Array.from({length:24},(_,i)=>`<div class="hour" data-hour="${i}"><span>${String(i).padStart(2,'0')}:00</span></div>`).join('')}${groups.flatMap(g=>g.items.map(x=>{const e=x.event;return `<button class="time-event ${(x.end-x.start)<60?'short-event':''} ${e.status!=='planned'?'faded':''}" data-bg="${color(e.category_id)}" data-top="${x.start/60*70}" data-height="${(x.end-x.start)/60*70}" data-lane="${x.lane}" data-lanes="${g.lanes.length}" data-action="event" data-id="${e.id}" data-occ="${esc(e.occurrence)}" title="${t('dragHint')}" aria-label="${esc(title(e)+' · '+ownership(e.owner)+' · '+time(e))}"><span class="time-event-heading"><span>${e.status==='done'?'✓ ':e.status==='cancelled'?'⊘ ':''}${esc(title(e))}</span><small class="time-owner">${esc(ownership(e.owner))}</small></span><small class="time-range">${esc(time(e))}–${esc(zoned(e.end_utc,{hour:'2-digit',minute:'2-digit'}))}</small></button>`})).join('')}${selected===isoDay()?'<div class="now-line" role="img"></div>':''}</div></div>`;
  return html;
 }
 function newEvent(day=selected,minutes){
@@ -244,11 +262,12 @@ function weekIndicator(day){
 }
 function weekdayLabels(){return Array.from({length:7},(_,i)=>`<div>${esc(dateLabel(addDays('2026-10-12',i),{weekday:'short'}))}</div>`).join('')}
 function monthCell(d,day,scroll=false){
- const entries=events.filter(e=>onDay(e,d));
- return `<div class="day ${!scroll&&d.slice(0,7)!==day.slice(0,7)?'outside':''} ${d===isoDay()?'today':''} ${d===selected?'chosen-date':''}" data-action="date" data-date="${d}" role="button" tabindex="0" aria-label="${esc(dateLabel(d,{day:'numeric',month:'long'}))}"><div class="date-caption">${scroll&&d.endsWith('-01')?`<small class="month-caption">${esc(dateLabel(d,{month:'short'}))}</small>`:''}<div class="day-number">${Number(d.slice(-2))}</div></div>${entries.slice(0,3).map(e=>{
+ const entries=events.filter(e=>onDay(e,d)).sort((a,b)=>Number(b.all_day)-Number(a.all_day)||(a.start_utc||a.start).localeCompare(b.start_utc||b.start));
+ const marks=scroll?entries.slice(0,5).map(e=>{
   const first=eventDay(e)===d,last=e.all_day?addDays(e.end,-1)===d:isoDay(new Date(Date.parse(e.end_utc)-1))===d;
-  return `<button class="event-bar ${e.status!=='planned'?'faded':''} ${e.status==='cancelled'?'struck':''} ${!first?'continues-left':''} ${!last?'continues-right':''}" data-bg="${color(e.category_id)}" data-action="event" data-id="${esc(e.id)}" data-occ="${esc(e.occurrence||'')}" aria-label="${esc(title(e))}">${e.status==='done'?'✓ ':''}${first||new Date(d+'T12:00:00Z').getUTCDay()===1?esc(title(e)):'&nbsp;'}</button>`;
- }).join('')}${entries.length>3?`<div class="more">+${entries.length-3} ${t('more')}</div>`:''}</div>`;
+  return `<button class="event-bar ${e.status!=='planned'?'faded':''} ${e.status==='cancelled'?'struck':''} ${!first?'continues-left':''} ${!last?'continues-right':''}" data-bg="${color(e.category_id)}" data-action="event" data-id="${esc(e.id)}" data-occ="${esc(e.occurrence||'')}" aria-label="${esc(title(e)+' · '+time(e))}"><span class="month-event-title">${e.status==='done'?'✓ ':''}${esc(title(e))}</span><span class="month-event-time">${esc(time(e))}</span></button>`;
+ }).join('')+(entries.length>5?button('month-day-list','+'+(entries.length-5),'more',`data-date="${d}" aria-label="${esc(dateLabel(d,{day:'numeric',month:'long'}))}: ${entries.length} ${t('more')}"`):''):`<span class="month-markers">${entries.slice(0,3).map(e=>`<span data-bg="${color(e.category_id)}"></span>`).join('')}</span>`;
+ return `<div class="day ${!scroll&&d.slice(0,7)!==day.slice(0,7)?'outside':''} ${d===isoDay()?'today':''} ${d===selected?'chosen-date':''}" data-action="date" data-date="${d}" role="button" tabindex="0" aria-label="${esc(dateLabel(d,{day:'numeric',month:'long'}))}"><div class="date-caption">${scroll&&d.endsWith('-01')?`<small class="month-caption">${esc(dateLabel(d,{month:'short'}))}</small>`:''}<div class="day-number">${Number(d.slice(-2))}</div></div>${marks}</div>`;
 }
 function monthGrid(day){return `<div class="month"><div class="weekdays">${weekdayLabels()}</div><div class="days">${monthDays(day).map(d=>monthCell(d,day)).join('')}</div></div>`}
 function scrollingWeeks(){
@@ -282,7 +301,7 @@ function mountMonthScroll(anchor){
  el.addEventListener('scroll',()=>{
   if(!el.isConnected||view!=='month'||tab!=='calendar'||page!=='main')return;
   const current=monthAnchor(el);
-  if(current){if(selected<current.week||selected>addDays(current.week,13)){const last=CalendarNavigation.shift(monthWindow.at(-1),'month',1);selected=current.week<monthWindow[0]?monthWindow[0]:current.week>=last?addDays(last,-1):current.week}el.dataset.focus=selected;$('.month-title').textContent=dateLabel(addDays(current.week,3),{month:'long',year:'numeric'})}
+  if(current){if(selected<current.week||selected>addDays(current.week,13)){const last=CalendarNavigation.shift(monthWindow.at(-1),'month',1);selected=current.week<monthWindow[0]?monthWindow[0]:current.week>=last?addDays(last,-1):current.week}el.dataset.focus=selected;$('.month-title').textContent=dateLabel(addDays(current.week,3),{month:'long'});const year=$('.calendar-year');if(year)year.textContent=dateLabel(addDays(current.week,3),{year:'numeric'})}
   clearTimeout(timer);timer=setTimeout(async()=>{
    if(!el.isConnected||view!=='month'||page!=='main'||monthLoading||busy||calendarTouch.active()||calendarSwipe.active())return;
    const direction=el.scrollTop<180?-1:el.scrollHeight-el.clientHeight-el.scrollTop<180?1:0;if(!direction)return;
@@ -503,6 +522,8 @@ const actions={
  'tab':async el=>{tab=el.dataset.tab;page='main';showSearch=false;query='';await loadData();render()},
  'view':el=>el.dataset.view===view?undefined:navigateSmoothly({type:'view',view:el.dataset.view},CalendarNavigation.motion({preview:navigationPreview})),
  'day-layout':async el=>{state=await api('settings','PATCH',{day_layout:el.dataset.layout});render()},
+ 'month-layout':async()=>{const month_layout=state.me.month_layout==='scroll'?'paged':'scroll';state=await api('settings','PATCH',{month_layout});await loadData();render()},
+ 'month-day-list':async el=>{selected=el.dataset.date;state=await api('settings','PATCH',{month_layout:'paged'});await loadData();render()},
  'toggle-day-done':async el=>{const e=listedEvent(el);await changeEventStatus(e,e.status==='done'?'planned':'done');await loadData();render()},
  'delete-day-event':el=>deleteCalendarEvent(listedEvent(el)),
  'search':async()=>{showSearch=!showSearch;if(!showSearch)query='';await loadData();render();$('#search')?.focus()},
@@ -512,10 +533,10 @@ const actions={
  'detail-language':el=>{detailLanguage=el.dataset.lang;render()},
  'set-status':async el=>{const e=currentEvent,value=el.dataset.status;if(e.rrule)await api('events/'+e.id+'/occurrence','POST',{occurrence:e.occurrence,revision:e.revision,scope:'one',changes:{status:value}});else await api('events/'+e.id,'PATCH',{revision:e.revision,status:value});await openEvent(e.id,e.occurrence)},
  'other-occurrences':()=>occurrenceDialog(),
- 'filters':()=>{showFilters=!showFilters;render()},
+ 'filters':()=>filterDialog(),
  'today':async()=>{selected=isoDay();showSearch=false;query='';$('.timeline')?.removeAttribute('data-date');$('.month-scroll')?.removeAttribute('data-focus');await loadData();render()},
  'prev':()=>move(-1),'next':()=>move(1),
- 'date':async el=>{selected=el.dataset.date;await changeView('day')},
+ 'date':async el=>{const previousMonth=selected.slice(0,7);selected=el.dataset.date;if(previousMonth!==selected.slice(0,7))await loadData();render()},
  'week-date':el=>{selected=el.dataset.date;render()},
  'event':el=>openEvent(el.dataset.id,el.dataset.occ),
  'create':async()=>{await api('calendar','POST',{});await refresh()},
