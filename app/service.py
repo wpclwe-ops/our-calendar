@@ -47,7 +47,11 @@ class Service:
     def user(self, c, user_id):
         row = c.execute('SELECT data FROM users WHERE id=?', (user_id,)).fetchone()
         require(row is not None, 'unauthorized', 401)
-        return {'id': user_id, 'notify_at_start': True, 'day_layout': 'timeline', 'month_layout': 'paged', 'touch_bar': ['day','month','settings'], 'default_duration': 60, **load(row['data'])}
+        prefs={'id': user_id, 'notify_at_start': True, 'day_layout': 'timeline', 'month_layout': 'paged', 'touch_bar': ['day','month','settings'], 'default_duration': 60, **load(row['data'])}
+        # Older profiles could contain three defaults. Existing event reminders
+        # remain untouched; only the template for newly created events is singular.
+        prefs['default_reminders']=offsets(prefs.get('default_reminders',[60]))[:1]
+        return prefs
 
     def calendar(self, c, user_id, active=True):
         row = c.execute('SELECT ca.*,m.active FROM calendars ca JOIN members m ON ca.id=m.calendar_id WHERE m.user_id=?', (user_id,)).fetchone()
@@ -134,7 +138,9 @@ class Service:
                 require(isinstance(items, list) and 1 <= len(items) <= 5 and all(isinstance(v,str) and v in ('day','week','month','categories','settings') for v in items), 'invalid_settings')
                 require(len(set(items)) == len(items) and items[-1] == 'settings', 'invalid_settings')
             if 'default_duration' in changes: require(type(changes['default_duration']) is int and 1 <= changes['default_duration'] <= 525600,'invalid_settings')
-            if 'default_reminders' in changes: changes['default_reminders'] = offsets(changes['default_reminders'])
+            if 'default_reminders' in changes:
+                changes['default_reminders'] = offsets(changes['default_reminders'])
+                require(len(changes['default_reminders'])<=1,'invalid_default_reminder')
             for key in ('reminders_enabled','notify_at_start'):
                 if key in changes: require(type(changes[key]) is bool,'invalid_settings')
             me.update(changes); me.pop('id')
