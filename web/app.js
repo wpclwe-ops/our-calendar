@@ -498,7 +498,7 @@ function detail(){
  const hasDescription=[e.description,...Object.values(e.translations||{}).map(v=>v.description)].some(v=>String(e.google_links?.length?readableGoogleDescription(v||''):v||'').trim());
  const linkedProviders=[e.google_links?.length?'Google Calendar':null,e.icloud_links?.length?'iCloud Calendar':null].filter(Boolean);
  const needsReview=[...(e.google_links||[]),...(e.icloud_links||[])].some(l=>['conflict','remote_deleted'].includes(l.state));
- return `<article class="event-detail">${linkedProviders.length?`<p class="privacy">${linkedProviders.join(' + ')} · ${t('gImportOnly')} ${needsReview?t('gNeedsDecision'):''}</p>`:''}<div class="detail-badges"><span class="category-chip" data-bg="${color(e.category_id)}">${esc(catName(e.category_id))}</span>${button('status-options',`<span>${t(e.status)}</span>${icon('down')}`,'status-chip',`aria-label="${t('changeStatus')}" aria-haspopup="dialog"`)}<span class="owner-chip">${ownership(e.owner)}</span></div><h1 class="detail-title">${esc(title(e,lang))}</h1><section class="form-group"><div class="detail-block with-icon">${icon('clock')}<div><strong>${esc(when)}</strong><small>${t('yourTime')} · ${esc(tz())}</small>${!e.all_day&&e.timezone!==tz()?`<div class="source-time"><span>${t('sourceTime')}</span><br>${esc(e.start.replace('T',' '))} → ${esc(e.end.replace('T',' '))}<br>${esc(e.timezone)}</div>`:''}</div></div>${e.rrule?`<div class="detail-block with-icon">${icon('repeat')}<div><span class="muted">${t('repeat')}</span><p>${esc(recurrenceLabel(e))}</p>${button('other-occurrences',t('otherOccurrences'),'text-button')}</div></div>`:''}</section>${e.location||e.links.length?`<section class="form-group"><div class="detail-block with-icon">${icon('pin')}<div><h3><strong>${t('location')}</strong></h3>${e.location?`<p>${esc(e.location)}</p>`:''}${e.links.map(l=>`<p><a href="${esc(l)}" target="_blank" rel="noreferrer noopener">${esc(l)}</a></p>`).join('')}</div></div></section>`:''}${hasDescription?`<section class="form-group description-card"><h3><strong>${t('description')}</strong></h3><p>${esc(displayDescription)}</p>${tr?.stale?`<small>${t('stale')}</small>`:''}</section>`:''}<section class="form-group detail-reminders"><div class="detail-block"><div class="row spread"><h3>${t('reminders')}</h3>${button('edit-reminders',t('edit'),'text-button')}</div><p>${state.me.notify_at_start!==false?esc(t('notify_at_start'))+'<br>':''}${(e.reminders[state.me.id]||[]).map(reminderLabel).join(' · ')||'—'}</p></div></section>${e.translation_status?.state==='pending'?`<p class="privacy">${t('translationQueued')}</p>`:e.translation_status?.state==='failed'?`<p class="error">${t('translationFailed')}</p>`:''}${cfg.integrations?.translation==='configured'&&Object.values(e.translations||{}).some(v=>v.manual)?button('replace-translations',t('replaceManual'),'text-button danger'):''}${smartDetail()}<div class="detail-actions">${button('set-status',t(e.status==='done'?'resumeEvent':'markDone'),'soft-button',`data-status="${e.status==='done'?'planned':'done'}"`)}${button('delete-event',t('delete'),'danger destructive')}</div></article>`;
+ return `<article class="event-detail">${linkedProviders.length?`<p class="privacy">${linkedProviders.join(' + ')} · ${t('gImportOnly')} ${needsReview?t('gNeedsDecision'):''}</p>`:''}<div class="detail-badges">${button('category-options',`<span>${esc(catName(e.category_id))}</span>${icon('down')}`,'category-chip',`data-bg="${color(e.category_id)}" aria-label="${esc(t('category')+': '+catName(e.category_id))}" aria-haspopup="dialog"`)}${button('status-options',`<span>${t(e.status)}</span>${icon('down')}`,'status-chip',`aria-label="${t('changeStatus')}" aria-haspopup="dialog"`)}<span class="owner-chip">${ownership(e.owner)}</span></div><h1 class="detail-title">${esc(title(e,lang))}</h1><section class="form-group"><div class="detail-block with-icon">${icon('clock')}<div><strong>${esc(when)}</strong><small>${t('yourTime')} · ${esc(tz())}</small>${!e.all_day&&e.timezone!==tz()?`<div class="source-time"><span>${t('sourceTime')}</span><br>${esc(e.start.replace('T',' '))} → ${esc(e.end.replace('T',' '))}<br>${esc(e.timezone)}</div>`:''}</div></div>${e.rrule?`<div class="detail-block with-icon">${icon('repeat')}<div><span class="muted">${t('repeat')}</span><p>${esc(recurrenceLabel(e))}</p>${button('other-occurrences',t('otherOccurrences'),'text-button')}</div></div>`:''}</section>${e.location||e.links.length?`<section class="form-group"><div class="detail-block with-icon">${icon('pin')}<div><h3><strong>${t('location')}</strong></h3>${e.location?`<p>${esc(e.location)}</p>`:''}${e.links.map(l=>`<p><a href="${esc(l)}" target="_blank" rel="noreferrer noopener">${esc(l)}</a></p>`).join('')}</div></div></section>`:''}${hasDescription?`<section class="form-group description-card"><h3><strong>${t('description')}</strong></h3><p>${esc(displayDescription)}</p>${tr?.stale?`<small>${t('stale')}</small>`:''}</section>`:''}<section class="form-group detail-reminders"><div class="detail-block"><div class="row spread"><h3>${t('reminders')}</h3>${button('edit-reminders',t('edit'),'text-button')}</div><p>${state.me.notify_at_start!==false?esc(t('notify_at_start'))+'<br>':''}${(e.reminders[state.me.id]||[]).map(reminderLabel).join(' · ')||'—'}</p></div></section>${e.translation_status?.state==='pending'?`<p class="privacy">${t('translationQueued')}</p>`:e.translation_status?.state==='failed'?`<p class="error">${t('translationFailed')}</p>`:''}${cfg.integrations?.translation==='configured'&&Object.values(e.translations||{}).some(v=>v.manual)?button('replace-translations',t('replaceManual'),'text-button danger'):''}${smartDetail()}<div class="detail-actions">${button('set-status',t(e.status==='done'?'resumeEvent':'markDone'),'soft-button',`data-status="${e.status==='done'?'planned':'done'}"`)}${button('delete-event',t('delete'),'danger destructive')}</div></article>`;
 }
 function eventReminderDialog(){
  const event=currentEvent;if(!event||$('.reminder-backdrop'))return;
@@ -536,6 +536,33 @@ function eventReminderDialog(){
   }catch(err){error.textContent=err.message}finally{busy=false;form.classList.remove('busy')}
  });
  document.body.append(el);$('[data-close]',el).focus();
+}
+function eventCategoryDialog(){
+ const event=currentEvent;if(!event||$('.category-picker-backdrop'))return;
+ const el=document.createElement('div');el.className='modal-backdrop category-picker-backdrop';
+ const choices=[[null,t('noCategory')],...categories.map(c=>[c.id,catName(c.id)])];
+ el.innerHTML=`<div class="modal event-category-picker" role="dialog" aria-modal="true" aria-labelledby="category-picker-title"><h2 id="category-picker-title">${t('category')}</h2>${event.rrule?`<label>${t('occurrenceScope')}${select('category-scope',[['one',t('one')],['following',t('following')],['all',t('series')]],'one')}</label>`:''}<div class="category-choices">${choices.map(([id,name])=>button('choose-event-category',`<span class="dot" data-bg="${esc(color(id))}"></span><span class="grow">${esc(name)}</span>${(event.category_id||null)===id?icon('check'):''}`,'category-choice',`data-category="${esc(id||'')}" aria-pressed="${(event.category_id||null)===id}"`)).join('')}</div><p class="error" role="alert"></p><button type="button" data-close>${t('cancel')}</button></div>`;
+ const close=()=>{el.remove();$('[data-action=category-options]')?.focus()};
+ el.addEventListener('click',async e=>{
+  if(busy)return;
+  if(e.target===el||e.target.closest('[data-close]')){close();return}
+  const choice=e.target.closest('[data-action=choose-event-category]');if(!choice)return;
+  const category_id=choice.dataset.category||null,scope=$('[name=category-scope]',el)?.value||'all';
+  try{
+   busy=true;el.setAttribute('aria-busy','true');$$('button,select',el).forEach(x=>x.disabled=true);
+   const changes={category_id};
+   const result=event.rrule&&scope!=='all'
+    ?await api('events/'+event.id+'/occurrence','POST',{occurrence:event.occurrence,revision:event.revision,scope,changes})
+    :await api('events/'+event.id,'PATCH',{revision:event.revision,...changes});
+   await openEvent(result.id||event.id,result.occurrence||event.occurrence);close();toast(t('saved'));
+  }catch(error){$('.error',el).textContent=error.message}
+  finally{busy=false;el.removeAttribute('aria-busy');$$('button,select',el).forEach(x=>x.disabled=false)}
+ });
+ el.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&!busy){e.preventDefault();close()}
+  if(e.key==='Tab'){const controls=$$('button:not([disabled]),select:not([disabled])',el),first=controls[0],last=controls.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus()}}
+ });
+ document.body.append(el);paint(el);$('button[aria-pressed=true]',el)?.focus();
 }
 function eventStatusDialog(){
  const e=currentEvent;if(!e)return;
@@ -706,6 +733,7 @@ const actions={
  'reset-filters':async()=>{filter={owner:'',category:'',status:''};await loadData();render()},
  'close-app':()=>tg?.close(),
  'detail-language':el=>{detailLanguage=el.dataset.lang;render()},
+ 'category-options':()=>eventCategoryDialog(),
  'status-options':()=>eventStatusDialog(),
  'edit-reminders':()=>eventReminderDialog(),
  'set-status':async el=>{const e=currentEvent,value=el.dataset.status;if(e.rrule)await api('events/'+e.id+'/occurrence','POST',{occurrence:e.occurrence,revision:e.revision,scope:'one',changes:{status:value}});else await api('events/'+e.id,'PATCH',{revision:e.revision,status:value});await openEvent(e.id,e.occurrence)},
