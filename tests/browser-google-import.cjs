@@ -46,10 +46,11 @@ const assert=require('node:assert/strict'),{mkdtempSync,rmSync}=require('node:fs
     readableGoogleDescription('&lt;p&gt;Семинар &amp;amp; контакт&lt;/p&gt;'),
     readableGoogleDescription('<p>First</p><p>Second</p>'),
     readableGoogleDescription('<p>Safe<img src=x onerror=alert(1)></p>'),
-    readableGoogleDescription('1 < 2, ordinary note')
+    readableGoogleDescription('1 < 2, ordinary note'),
+    readableGoogleDescription('<p>Love &lt;3 today</p>')
   ]);
   assert.deepEqual(readable,[
-    'Flight & hotel\nNew line','Семинар & контакт','First\n\nSecond','Safe','1 < 2, ordinary note'
+    'Flight & hotel\nNew line','Семинар & контакт','First\n\nSecond','Safe','1 < 2, ordinary note','Love <3 today'
   ]);
   for(const [width,language,theme] of [[320,'ru','light'],[390,'en','dark'],[430,'ru','dark']]){
    await page.setViewportSize({width,height:844});await page.evaluate(async({language,theme})=>{state=await api('settings','PATCH',{language,theme});render()},{language,theme});
