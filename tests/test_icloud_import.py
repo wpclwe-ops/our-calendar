@@ -159,3 +159,21 @@ def test_leave_revokes_icloud_credentials_and_auto_consent(linked):
     assert len(g.s.events('2','2026-10-01','2026-11-01'))==1
     g.s.membership('1',True)
     assert g.status('1')['accounts'][0]['state']=='disconnected'
+
+
+def test_trash_restore_never_silently_relinks_to_icloud(linked):
+    g,f,account,source=linked
+    g.select('1',account,[source],[source])
+    g.sync_source('1',source,True)
+    with g.s.db.transaction() as c:
+        link=c.execute('SELECT * FROM icloud_links WHERE source_id=?',(source,)).fetchone()
+        event_id=link['event_id']
+    g.s.delete_event('2',event_id,1)
+    g.s.delete_event('2',event_id,2,restore=True)
+    f.remote['ics']=event_ics('External revision')
+    f.remote['etag']='v3'
+    g.sync_source('1',source,True)
+    assert g.s.get_event('2',event_id)['title']=='Dentist'
+    with g.s.db.transaction() as c:
+        link=c.execute('SELECT * FROM icloud_links WHERE source_id=?',(source,)).fetchone()
+        assert link['state']=='disconnected'
