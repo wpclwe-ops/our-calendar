@@ -150,6 +150,23 @@ class ICloudImports:
         secret=self.vault.decrypt(account['credentials'])
         return self.provider(secret['email'],secret['password'])
 
+    def previews(self,account,source):
+        client=self.client(account)
+        # Keep compatible with older injected providers and test adapters.
+        if callable(getattr(client,'previews',None)):
+            items=client.previews(source['remote_id'])
+        else:
+            items=client.events(source['remote_id'])
+        require(len(items)<=MAX_REMOTE,'icloud_calendar_too_large',413)
+        return client,items
+
+    @staticmethod
+    def full_item(client,item):
+        if callable(getattr(client,'resource',None)):
+            result=client.resource(item['url'])
+            return {**item,'ics':result['ics']}
+        return item
+
     def status(self,actor):
         with self.s.db.transaction() as c:
             cal=self.s.calendar(c,actor)
@@ -278,8 +295,7 @@ class ICloudImports:
 
     def browse(self,actor,source_id):
         with self.s.db.transaction() as c:source,account=self.source(c,actor,source_id)
-        items=self.client(account).events(source['remote_id'])
-        require(len(items)<=MAX_REMOTE,'icloud_calendar_too_large',413)
+        _,items=self.previews(account,source)
         result=[]
         for item in items:
             try:
@@ -289,6 +305,7 @@ class ICloudImports:
                 result.append({'id':item['url'],'title':fields['title'],'start':fields['start'],
                                'end':fields['end'],'supported':True,'series':bool(fields['rrule'])})
             except Problem:
+                # One malformed VEVENT must not hide the rest of the private picker.
                 result.append({'id':item['url'],'title':'(Unsupported iCloud event)',
                                'start':'','end':'','supported':False,'series':False})
         with self.s.db.transaction() as c:
@@ -302,13 +319,14 @@ class ICloudImports:
         require(isinstance(ids,list) and 0<len(ids)<=50 and len(ids)==len(set(ids))
                 and all(isinstance(i,str) and len(i)<2000 for i in ids),'invalid_request')
         with self.s.db.transaction() as c:source,account=self.source(c,actor,source_id)
-        items=self.client(account).events(source['remote_id'])
-        require(len(items)<=MAX_REMOTE,'icloud_calendar_too_large',413)
+        client,items=self.previews(account,source)
         by_id={i['url']:i for i in items}
         require(set(ids)<=set(by_id),'icloud_selection_expired',409)
         values=[]
         for rid in ids:
-            item=by_id[rid];value=parse_resource(item,source['timezone'])
+            # The selected URL is checked against this source before any GET.
+            item=self.full_item(client,by_id[rid])
+            value=parse_resource(item,source['timezone'])
             require(not value.get('deleted'),'icloud_unsupported_event',422)
             values.append((item,value))
         with self.s.db.transaction() as c:
@@ -319,7 +337,10 @@ class ICloudImports:
             for item,value in values:
                 old=c.execute('SELECT id FROM icloud_links WHERE source_id=? AND remote_id=?',
                               (source_id,item['url'])).fetchone()
-                if old:existing+=1;continue
+                if old and c.execute('SELECT event_id FROM icloud_links WHERE id=?',(old['id'],)).fetchone()['event_id']:
+                    existing+=1
+                    continue
+                if old:c.execute('DELETE FROM icloud_links WHERE id=?',(old['id'],))
                 data=self.helpers.new_data(c,actor,account['calendar_id'],value['fields'],provider='icloud')
                 self.s.validate_event(c,self.s.calendar(c,actor),data)
                 for patch in value['overrides'].values():
