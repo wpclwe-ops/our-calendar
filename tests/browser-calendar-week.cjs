@@ -113,7 +113,9 @@ const assert=require('node:assert/strict'),{mkdtempSync,rmSync}=require('node:fs
   await choose('agenda');assert.equal(await page.locator('.week-strip .week-date').count(),7);assert.equal(await page.locator('.timeline-day').count(),0);
   await choose('seven');await page.reload();await page.waitForSelector('.timeline');assert.equal(await page.evaluate(()=>view),'day');assert.equal(await page.evaluate(()=>state.me.week_layout),'seven');
   await page.locator('.bottom-nav [data-view="week"]').click();await wait();assert.equal(await page.locator('.timeline-day').count(),7);
-  await page.selectOption('#demo-user','2');await wait();assert.equal(await page.evaluate(()=>state.me.week_layout),'agenda');
+  await page.selectOption('#demo-user','2');
+  await page.waitForFunction(()=>state.me.id==='2');await wait();
+  assert.equal(await page.evaluate(()=>state.me.week_layout),'agenda');
   assert.deepEqual(errors,[]);console.log('week timeline integration: ok');
  }finally{await browser?.close();server.kill();rmSync(directory,{recursive:true,force:true})}
 })().catch(e=>{console.error(e);process.exitCode=1});

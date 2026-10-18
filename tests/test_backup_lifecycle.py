@@ -23,7 +23,7 @@ def test_signed_archive_tamper_and_wrong_pair(service,backup,event):
 def test_active_backup_selects_fields_and_missing(service,backup,event):
     blob=backup.export('1')
     service.save_event('1',{'title':'New','location':'Home'},event['id'],1)
-    p=backup.preview('2',blob);assert set(p['changes'][0]['fields'])=={'title','location'}
+    p=backup.preview('2',blob);assert set(p['changes'][0]['fields'])=={'title','location','smart'}
     apply_preview(backup,'2',blob,[{'id':event['id'],'revision':2,'fields':['title']}],[],[])
     restored=service.get_event('1',event['id']);assert restored['title']=='Together' and restored['location']=='Home'
     service.delete_event('1',event['id'],3);service.delete_event('1',event['id'],4,permanent=True)

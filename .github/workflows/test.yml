@@ -20,6 +20,7 @@ jobs:
       - run: python -m pytest -q
       - run: python -m compileall -q app scripts
       - run: node --check web/app.js
+      - run: node --check web/smart-events.js
       - run: node --check web/google-import.js
       - run: node --check web/recurrence.js
       - run: node --check web/calendar-navigation.js
@@ -30,6 +31,7 @@ jobs:
       - run: npm install --no-save playwright@1.56.0
       - run: npx playwright install --with-deps chromium
       - run: node tests/browser-google-import.cjs
+      - run: node tests/browser-smart-events.cjs
       - run: node tests/browser-calendar-week.cjs
       - run: node tests/browser-calendar-design.cjs
       - run: node tests/browser-calendar-tab-swipes.cjs
