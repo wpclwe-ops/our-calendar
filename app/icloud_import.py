@@ -10,7 +10,7 @@ from .providers.vault import CredentialVault
 from .google_import import GoogleImports, FIELDS, flattened, unflattened, validate_series
 from .sync_policy import merge_fields
 from .recurrence import UTC, stamp, utcnow, zone, validate_timing
-from .security import require, Problem
+from .security import require, Problem, digest
 from .service import uid, dump, load
 
 POLL = 300
@@ -140,7 +140,8 @@ class ICloudImports:
                 sources=[]
                 for src in c.execute('SELECT id,name,selected,auto_import,state,checked_at FROM icloud_sources WHERE account_id=?',(a['id'],)):
                     count=c.execute('SELECT COUNT(*) AS n FROM icloud_links WHERE source_id=? AND event_id IS NOT NULL',(src['id'],)).fetchone()['n']
-                    sources.append({**dict(src),'linked_count':count})
+                    issues=[dict(v) for v in c.execute("SELECT l.id,l.state,json_extract(e.data,'$.title') AS title FROM icloud_links l JOIN events e ON e.id=l.event_id WHERE l.source_id=? AND l.state IN ('conflict','remote_deleted')",(src['id'],))]
+                    sources.append({**dict(src),'linked_count':count,'issues':issues})
                 accounts.append({**dict(a),'mode':'import_only','sources':sources})
             return {'configured':self.configured,'accounts':accounts}
 
@@ -207,6 +208,53 @@ class ICloudImports:
                     if not selected:c.execute("UPDATE icloud_links SET state='disconnected' WHERE source_id=?",(row['id'],))
         return self.status(actor)
 
+
+
+    def conflict(self,actor,link_id):
+        with self.s.db.transaction() as c:
+            link=c.execute('SELECT * FROM icloud_links WHERE id=?',(link_id,)).fetchone()
+            require(link is not None,'icloud_link_not_found',404)
+            source,account=self.source(c,actor,link['source_id'])
+            row=self.s.event_row(c,actor,link['event_id'])
+            return {'id':link_id,'state':link['state'],'revision':row['revision'],
+                    'remote_version':digest(link['remote']),
+                    'local':self.helpers.local_snapshot(c,row),
+                    'remote':load(link['remote'])}
+
+    def resolve(self,actor,link_id,choice,revision,remote_version):
+        require(choice in ('local','icloud','trash'),'invalid_request')
+        with self.s.db.transaction() as c:
+            link=c.execute('SELECT * FROM icloud_links WHERE id=?',(link_id,)).fetchone()
+            require(link is not None,'icloud_link_not_found',404)
+            source,account=self.source(c,actor,link['source_id'])
+            require(link['state'] in ('conflict','remote_deleted'),'icloud_selection_expired',409)
+        items=self.client(account).events(source['remote_id'])
+        require(len(items)<=MAX_REMOTE,'icloud_calendar_too_large',413)
+        found=next((item for item in items if item['url']==link['remote_id']),None)
+        remote=parse_resource(found,source['timezone']) if found else {'deleted':True}
+        with self.s.db.transaction() as c:
+            current,active=self.source(c,actor,source['id'])
+            require(current['generation']==source['generation'] and active['generation']==account['generation'],
+                    'icloud_selection_expired',409)
+            linked=c.execute('SELECT * FROM icloud_links WHERE id=?',(link_id,)).fetchone()
+            row=self.s.event_row(c,actor,link['event_id'])
+            require(row['revision']==revision and digest(linked['remote'])==remote_version and
+                    load(linked['remote'])==remote,'icloud_selection_expired',409)
+            if remote.get('deleted'):
+                require(choice in ('local','trash'),'invalid_request')
+                if choice=='trash':
+                    c.execute('UPDATE events SET deleted_at=?,revision=revision+1,schedule_version=schedule_version+1 WHERE id=?',(stamp(),row['id']))
+                    c.execute("UPDATE outbox SET status='cancelled' WHERE event_id=? AND kind='reminder' AND status IN ('pending','sending')",(row['id'],))
+                    self.s.notify(c,account['calendar_id'],actor,'deleted',load(row['data']),row['id'])
+                c.execute("UPDATE icloud_links SET state='disconnected' WHERE id=?",(link_id,))
+            else:
+                require(choice in ('local','icloud'),'invalid_request')
+                if choice=='icloud':
+                    self.helpers.store_snapshot(c,account,row,remote,provider='icloud')
+                c.execute("UPDATE icloud_links SET state=?,base=?,remote=?,etag=?,checked_at=? WHERE id=?",
+                          ('ready' if choice=='icloud' else 'local_changes',
+                           dump(remote),dump(remote),found['etag'],stamp(),link_id))
+        return {'ok':True}
 
     def browse(self,actor,source_id):
         with self.s.db.transaction() as c:source,account=self.source(c,actor,source_id)
@@ -305,6 +353,7 @@ class ICloudImports:
                     rid=item['url'];etag=item['etag']
                     if old and old['event_id']:
                         if remote.get('deleted'):
+                            if old['state']!='remote_deleted':self.s.notify(c,account['calendar_id'],None,'icloud_deleted',load(row['data']) if (row:=c.execute('SELECT * FROM events WHERE id=?',(old['event_id'],)).fetchone()) else {},old['event_id'])
                             c.execute("UPDATE icloud_links SET state='remote_deleted',remote=?,etag=?,checked_at=? WHERE id=?",
                                       (dump(remote),etag,stamp(),old['id']))
                             continue
@@ -314,6 +363,7 @@ class ICloudImports:
                         base=load(old['base']);local=self.helpers.local_snapshot(c,row)
                         merge=merge_fields(flattened(base),flattened(local),flattened(remote))
                         if merge['conflicts']:
+                            if old['state']!='conflict':self.s.notify(c,account['calendar_id'],None,'icloud_conflict',load(row['data']),row['id'])
                             c.execute("UPDATE icloud_links SET state='conflict',remote=?,etag=?,checked_at=? WHERE id=?",
                                       (dump(remote),etag,stamp(),old['id']))
                         else:
@@ -343,6 +393,8 @@ class ICloudImports:
                     created+=1
                 for old in links:
                     if old['remote_id'] not in present and old['state'] not in ('remote_deleted','disconnected'):
+                        row=c.execute('SELECT * FROM events WHERE id=?',(old['event_id'],)).fetchone()
+                        if row:self.s.notify(c,account['calendar_id'],None,'icloud_deleted',load(row['data']),row['id'])
                         c.execute("UPDATE icloud_links SET state='remote_deleted',remote=?,checked_at=? WHERE id=?",
                                   (dump({'deleted':True}),stamp(),old['id']))
                 # A source with > AUTO_BATCH pending events is drained over later passes.
