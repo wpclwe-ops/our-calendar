@@ -39,6 +39,18 @@ const assert=require('node:assert/strict'),{mkdtempSync,rmSync}=require('node:fs
   await page.locator('[data-action="google-sync"]').click();await wait();
   const shared=await page.evaluate(async()=>{const a=await fetch('/api/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({demo_user:'2'})}).then(r=>r.json());const h={Authorization:'Bearer '+a.token};return {status:await fetch('/api/google',{headers:h}).then(r=>r.json()),events:await fetch('/api/events?start=2026-10-01&end=2026-11-01',{headers:h}).then(r=>r.json())}});
   assert.equal(shared.status.accounts.length,0);assert.equal(shared.events.filter(e=>e.title==='Dentist').length,1);assert.ok(!shared.events.some(e=>e.title==='Never share this'));
+  // Legacy Google imports have HTML in source/translated descriptions.
+  // They must be displayed as inert readable text, with paragraph spacing kept.
+  const readable=await page.evaluate(()=>[
+    readableGoogleDescription('<p>Flight &amp; hotel<br>New line</p>'),
+    readableGoogleDescription('&lt;p&gt;Семинар &amp;amp; контакт&lt;/p&gt;'),
+    readableGoogleDescription('<p>First</p><p>Second</p>'),
+    readableGoogleDescription('<p>Safe<img src=x onerror=alert(1)></p>'),
+    readableGoogleDescription('1 < 2, ordinary note')
+  ]);
+  assert.deepEqual(readable,[
+    'Flight & hotel\nNew line','Семинар & контакт','First\n\nSecond','Safe','1 < 2, ordinary note'
+  ]);
   for(const [width,language,theme] of [[320,'ru','light'],[390,'en','dark'],[430,'ru','dark']]){
    await page.setViewportSize({width,height:844});await page.evaluate(async({language,theme})=>{state=await api('settings','PATCH',{language,theme});render()},{language,theme});
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
