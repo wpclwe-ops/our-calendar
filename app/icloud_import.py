@@ -175,8 +175,9 @@ class ICloudImports:
                 sources=[]
                 for src in c.execute('SELECT id,name,selected,auto_import,state,checked_at FROM icloud_sources WHERE account_id=?',(a['id'],)):
                     count=c.execute('SELECT COUNT(*) AS n FROM icloud_links WHERE source_id=? AND event_id IS NOT NULL',(src['id'],)).fetchone()['n']
+                    unsupported=c.execute("SELECT COUNT(*) AS n FROM icloud_links WHERE source_id=? AND state='unsupported'",(src['id'],)).fetchone()['n']
                     issues=[dict(v) for v in c.execute("SELECT l.id,l.state,json_extract(e.data,'$.title') AS title FROM icloud_links l JOIN events e ON e.id=l.event_id WHERE l.source_id=? AND l.state IN ('conflict','remote_deleted')",(src['id'],))]
-                    sources.append({**dict(src),'linked_count':count,'issues':issues})
+                    sources.append({**dict(src),'linked_count':count,'unsupported_count':unsupported,'issues':issues})
                 accounts.append({**dict(a),'mode':'import_only','sources':sources})
             return {'configured':self.configured,'accounts':accounts}
 
