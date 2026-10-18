@@ -1,6 +1,6 @@
 # Smart Events — implementation and activation
 
-Version 0.9.0. Smart Events is optional. Without an API key or without consent,
+Version 0.9.1. Smart Events is optional. Without an API key or without consent,
 calendar CRUD, existing private LibreTranslate, imports and reminders continue to work.
 No outbound Google/CalDAV event writes are introduced.
 
@@ -17,7 +17,7 @@ Set these **server environment variables**, never client-side configuration:
 | OPENAI_MODEL | gpt-6-luna | Supported: gpt-6-luna or gpt-5.4-mini |
 | SMART_MONTHLY_BUDGET_USD | 5 | Hard conservative application reservation budget across this deployment |
 | OPENAI_MAX_OUTPUT_TOKENS | 16384 | Upper output bound; 1024–32768 allowed |
-| SMART_AUTO_CATEGORIES_ENABLED | false | Keep false until real model quality has been reviewed |
+| SMART_AUTO_CATEGORIES_ENABLED | true | Operator kill switch; false pauses automatic shared-category assignment |
 
 ChatGPT subscription billing does not configure this API project. The operator must
 separately enable API billing and verify access to the selected model. Adding a key
@@ -26,7 +26,7 @@ alone does not grant consent or automatically process old calendar data.
 In Settings → Smart Events, each participant controls consent and their imported
 source scope. Internal events require both participants to opt in to internal
 processing. Automatic common-category assignment additionally needs the server
-quality gate and both participants' automatic mode; the default is suggestions.
+switch and both participants' automatic mode; the default personal mode is suggestions.
 
 For old records, use **Process existing events**: a one-use, actor-bound, revision-
 checked preview. Select records explicitly. Unselected records are not queued by
@@ -129,9 +129,8 @@ Description, title-only RU/EN switching, manual short titles, remembered rules,
 settings and event exclusion at 320/390/430 px.
 
 Real OpenAI quality, latency, account/model availability, bills and real
-Telegram/iPhone WebKit acceptance are separate. Keep the automatic-category
-server gate false until a representative PL/UK/DE/FR/RU/EN/mixed-language set,
-including both salon examples and ambiguous categories, has been reviewed.
+Telegram/iPhone WebKit acceptance are separate. Review a representative PL/UK/DE/FR/RU/EN/mixed-language set,
+including both salon examples and ambiguous categories, before relying on unattended categorization.
 Suggested first quality set: 80–150 separately labelled synthetic examples, with
 an independent checking portion; expand if auto-assignment evidence is weak.
 No production AI-quality completion is claimed from fake transport tests.
@@ -141,3 +140,26 @@ https://developers.openai.com/api/docs/models/gpt-6-luna
 https://developers.openai.com/api/docs/models/gpt-5.4-mini
 https://developers.openai.com/api/docs/guides/structured-outputs
 https://developers.openai.com/api/docs/guides/your-data
+
+## 0.9.1 — unified titles and concurrent editing
+
+One title switch controls semantic title display in every calendar view and event
+details; categorization has its own switch. The legacy display_short preference
+is retained for archive compatibility but is no longer a separate display gate.
+Full localized titles and provider originals remain in the expandable detail block.
+Services precede organisation names; flight titles retain Flight/Рейс and the route.
+Prompt version 2 invalidates result cache on the next authorized processing request;
+existing records are not silently reprocessed or charged. Manual title rules win.
+
+Background Smart Events and LibreTranslate results do not advance the user edit
+revision. Manual changes and actual provider source changes still advance it.
+The full editor submits only changed fields; partial translation PATCH merges
+language fields into fresh data. This prevents an open form from erasing AI text
+or categories it never edited. Accepting a suggestion also checks the displayed
+category ID and current catalog, since background suggestions may change without
+a user revision.
+
+Provider status on Settings is fetched for the signed-in participant only. Ready
+connections display Working; missing configuration, missing account, reconnect
+requirements, selected-source failures and unavailable status are distinguished.
+No live provider probe or paid AI call runs merely to draw these labels.
