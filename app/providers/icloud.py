@@ -41,11 +41,55 @@ class ICloudCalDAV:
             href=item.find('{DAV:}href');name=item.find('.//{DAV:}displayname')
             if href is not None and href.text:calendars.append({'url':self.safe_url(home,href.text),'name':name.text if name is not None else ''})
         return calendars
-    def events(self,calendar_url):
-        response=self.xml('REPORT',calendar_url,'<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><d:getetag/><c:calendar-data/></d:prop><c:filter><c:comp-filter name="VCALENDAR"><c:comp-filter name="VEVENT"/></c:comp-filter></c:filter></c:calendar-query>',depth='1')
+    def _calendar_query(self,calendar_url,calendar_data):
+        body=('<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">'
+              '<d:prop><d:getetag/>'+calendar_data+'</d:prop>'
+              '<c:filter><c:comp-filter name="VCALENDAR">'
+              '<c:comp-filter name="VEVENT"/></c:comp-filter></c:filter></c:calendar-query>')
+        response=self.xml('REPORT',calendar_url,body,depth='1')
         result=[]
         for item in response.findall('{DAV:}response'):
-            href=item.find('{DAV:}href');data=item.find('.//{'+CALDAV+'}calendar-data');etag=item.find('.//{DAV:}getetag')
-            if href is not None and href.text and data is not None:
-                result.append({'url':self.safe_url(calendar_url,href.text),'etag':etag.text if etag is not None else '', 'ics':data.text or ''})
+            # An incomplete multi-status response must not be interpreted as a remote deletion.
+            for propstat in item.findall('{DAV:}propstat'):
+                status=propstat.find('{DAV:}status')
+                if status is not None and status.text and ' 200 ' not in status.text:
+                    raise ProviderFailure(502)
+            status=item.find('{DAV:}status')
+            if status is not None and status.text and ' 200 ' not in status.text:
+                raise ProviderFailure(502)
+            href=item.find('{DAV:}href')
+            data=item.find('.//{'+CALDAV+'}calendar-data')
+            etag=item.find('.//{DAV:}getetag')
+            if href is None or not href.text or data is None:
+                raise ProviderFailure(502)
+            result.append({'url':self.safe_url(calendar_url,href.text),
+                           'etag':etag.text if etag is not None else '', 'ics':data.text or ''})
         return result
+
+    def events(self,calendar_url):
+        """Read complete resources (legacy/testing API)."""
+        return self._calendar_query(calendar_url,'<c:calendar-data/>')
+
+    def previews(self,calendar_url):
+        """Request only fields needed by the private event picker and ETag index.
+
+        CalDAV property projection avoids downloading large descriptions, alarms,
+        attachments and attendee lists on every scan. Full ICS is read only for
+        an explicitly selected event or an actually changed link.
+        """
+        props=('UID','DTSTART','DTEND','DURATION','SUMMARY','RRULE','RDATE',
+               'EXDATE','RECURRENCE-ID','STATUS')
+        selected=''.join('<c:prop name="'+name+'"/>' for name in props)
+        projection=('<c:calendar-data><c:comp name="VCALENDAR">'
+                    '<c:prop name="VERSION"/><c:comp name="VEVENT">'+selected+
+                    '</c:comp></c:comp></c:calendar-data>')
+        return self._calendar_query(calendar_url,projection)
+
+    def resource(self,url):
+        """Retrieve a full event only after its URL has appeared in a selected calendar."""
+        url=self.safe_url(url,'')
+        code,_,raw=self.http.request('GET',url,{'Authorization':self.authorization})
+        if code!=200:raise ProviderFailure(code)
+        try:ics=raw.decode('utf-8')
+        except UnicodeDecodeError:raise ProviderFailure(502) from None
+        return {'url':url,'ics':ics}
