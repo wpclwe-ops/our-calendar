@@ -124,7 +124,7 @@ function readableGoogleDescription(value){
  source=source.replace(/<a\b([^>]*)>([\s\S]*?)<\/a\s*>/gi,(_,attrs,label)=>{
   const m=attrs.match(/\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
   const href=m?decode(m[1]||m[2]||m[3]||''):'';
-  const readable=label.replace(/<[^>]*>/g,'').trim();
+  const readable=label.replace(/<\/?[a-z][^>]*>/gi,'').trim();
   return /^https?:\/\/|^mailto:/i.test(href)&&!readable.includes(href)?readable+' ('+href+')':readable;
  });
  source=source.replace(/<br\b[^>]*\/?>/gi,'\n')
@@ -132,7 +132,7 @@ function readableGoogleDescription(value){
   .replace(/<\/p\s*>/gi,'\n\n')
   .replace(/<\/(?:div|blockquote|pre|h[1-6]|tr)\s*>/gi,'\n')
   .replace(/<p\b[^>]*>/gi,'\n\n')
-  .replace(/<[^>]*>/g,'');
+  .replace(/<\/?[a-z][^>]*>/gi,'');
  return decode(source).replace(/\u00a0/g,' ').replace(/[ \t]+/g,' ')
   .replace(/[ \t]*\n[ \t]*/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
 }
