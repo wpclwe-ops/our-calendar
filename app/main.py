@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse,Response,FileResponse,HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from .config import Config
 from .db import Database
-from .security import Problem,require,telegram_user,session_token,session_user
+from .security import Problem,require,telegram_user,session_token,session_user,is_allowed_user
 from .service import Service,load
 from .backup import Backups,MAX_ARCHIVE
 from .bot import Worker
@@ -74,7 +74,9 @@ def create_app(config=None,start_worker=True):
     def actor(request):
         header=request.headers.get('authorization','')
         require(header.startswith('Bearer '),'unauthorized',401)
-        return session_user(header[7:],config.session_secret or 'local-demo-secret')
+        user_id=session_user(header[7:],config.session_secret or 'local-demo-secret')
+        require(config.demo or is_allowed_user(user_id),'access_denied',403)
+        return user_id
     async def body(request):
         chunks=[];size=0
         async for chunk in request.stream():
@@ -234,6 +236,7 @@ def create_app(config=None,start_worker=True):
         else:
             try:telegram=telegram_user(data.get('init_data',''),config.bot_token,config.auth_max_age)
             except (ValueError,TypeError):raise Problem(401,'invalid_init_data')
+        require(config.demo or is_allowed_user(telegram['id']),'access_denied',403)
         with service.db.transaction() as c:user_id=service.ensure_user(c,telegram)
         return {'token':session_token(user_id,config.session_secret or 'local-demo-secret',config.session_ttl),'state':service.state(user_id)}
     @app.get('/api/state')
