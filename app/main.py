@@ -39,7 +39,8 @@ def create_app(config=None,start_worker=True):
     from .providers.http import ProviderFailure
     @app.exception_handler(ProviderFailure)
     async def provider_problem(request,exc):
-        code='google_reconnect' if exc.code in (400,401) else 'google_unavailable' if exc.code in (403,404) else 'google_delayed'
+        prefix='icloud' if request.url.path.startswith('/api/icloud/') else 'google'
+        code=prefix+('_reconnect' if exc.code in (400,401) else '_unavailable' if exc.code in (403,404) else '_delayed')
         return JSONResponse({'error':code},status_code=503)
     @app.exception_handler(KeyError)
     @app.exception_handler(TypeError)
