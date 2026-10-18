@@ -275,6 +275,8 @@ def test_icloud_incomplete_scan_never_marks_link_as_deleted(linked):
         def previews(self,url):
             raise ProviderFailure(503)
     g.provider=FailedPreview()
+    with g.s.db.transaction() as c:
+        c.execute("UPDATE icloud_sources SET next_at='' WHERE id=?",(source,))
     assert g.sync_source('1',source)['state']=='delayed'
     with g.s.db.transaction() as c:
         link=c.execute('SELECT state FROM icloud_links WHERE source_id=?',(source,)).fetchone()
