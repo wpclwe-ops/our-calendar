@@ -114,6 +114,23 @@ def test_stale_preview_and_invalid_text_are_not_silent(google):
     assert g.s.events('1','2026-10-01','2026-11-01')==[]
 
 
+def test_google_html_descriptions_are_cleaned_before_preview_import_and_sync(google):
+    g,f,source=google
+    f.items['visit']['description']='<p>Участие подтверждено. <b>Бесплатно</b></p><p>Контакт: biuro@example.com</p>'
+    preview=g.preview('1',source,[{'id':'visit','scope':'one'}])
+    assert preview['items'][0]['description']=='Участие подтверждено. Бесплатно\\n\\nКонтакт: biuro@example.com'
+    g.apply('1',preview['preview_id'],True)
+    with g.s.db.transaction() as c:
+        row=c.execute("SELECT event_id FROM google_links WHERE source_id=? AND remote_id='visit'",(source,)).fetchone()
+        jobs=c.execute("SELECT payload FROM translation_jobs WHERE kind='event' AND resource_id=?",(row['event_id'],)).fetchall()
+    assert g.s.get_event('1',row['event_id'])['description']==preview['items'][0]['description']
+    if jobs:
+        assert '<p>' not in dump([load(job['payload']) for job in jobs])
+    f.items['visit']['description']='<p>Flight &amp; hotel<br>New line</p>'
+    f.items['visit']['etag']='v2'
+    assert g.sync_source('1',source,True)['state']=='ready'
+    assert g.s.get_event('1',row['event_id'])['description']=='Flight & hotel\\nNew line'
+
 def test_automatic_updates_merge_local_changes_and_preserve_reminders(google):
     g,f,source=google;link=imported(google);eid=link['event_id']
     ev=g.s.get_event('1',eid)
