@@ -151,6 +151,8 @@ class ICloudImports:
         self.ready()
         require(isinstance(email,str) and 3<=len(email)<=255 and '@' in email,'invalid_request')
         require(isinstance(password,str) and 8<=len(password)<=128,'invalid_request')
+        # Reject inactive/nonmember users before attempting a remote login.
+        with self.s.db.transaction() as c:self.s.calendar(c,actor)
         # Network validation happens before saving any credentials.
         calendars=self.provider(email.strip(),password.strip()).discover()
         require(isinstance(calendars,list),'icloud_unavailable',503)
@@ -341,7 +343,7 @@ class ICloudImports:
                 old=next((l for l in links if l['remote_id']==remote_id),None)
                 if old and old['state']=='disconnected':continue
                 if not old and not source['auto_import']:continue
-                if old and old['etag']==item['etag'] and old['state'] not in ('unsupported','delayed'):continue
+                if old and old['etag']==item['etag'] and old['state'] in ('ready','local_changes','conflict'):continue
                 try:remote=parse_resource(item,source['timezone'] or 'UTC')
                 except Problem:
                     failed.add(remote_id);continue
