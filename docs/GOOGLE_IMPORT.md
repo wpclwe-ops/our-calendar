@@ -34,6 +34,15 @@ Telegram participant must confirm the displayed Google email inside the Mini
 App before an account is connected. Start/callback/confirmation are one-use and
 expire after ten minutes. Denied consent can be restarted from the app.
 
+Callback failures display a fixed diagnostic code and a relevant next step,
+distinguishing token-exchange client credentials, rejected one-time codes,
+missing permissions, offline access, identity lookup and expired attempts.
+Only allowlisted OAuth error identifiers are retained from Google's token error
+response. Logs contain a fixed failure code, never provider descriptions,
+authorization codes, state, tokens, client secrets or account identity.
+`google_oauth_token_invalid_client` after consent means the server's OAuth
+client credentials must be checked; repeated consent alone cannot fix it.
+
 An External OAuth app in Testing has seven-day refresh-token expiry with these
 scopes. Establish the appropriate publishing/verification state before treating
 the connection as permanent. Real-device OAuth, actual Google API permissions,

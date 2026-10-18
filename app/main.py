@@ -26,7 +26,7 @@ def create_app(config=None,start_worker=True):
         if start_worker:worker.start()
         yield
         worker.stop()
-    app=FastAPI(title='Our Calendar',version='0.8.0',lifespan=lifespan,docs_url=None,redoc_url=None,openapi_url=None)
+    app=FastAPI(title='Our Calendar',version='0.8.1',lifespan=lifespan,docs_url=None,redoc_url=None,openapi_url=None)
     app.state.service=service;app.state.backups=backups;app.state.worker=worker
     google=worker.google
     app.state.google=google
@@ -96,7 +96,7 @@ def create_app(config=None,start_worker=True):
         result=health_status(service)
         return {k:result[k] for k in ('ready','degraded','translation','backup')}
     @app.get('/api/config')
-    def public_config():return {'demo':config.demo,'bot_username':config.bot_username,'version':'0.8.0',
+    def public_config():return {'demo':config.demo,'bot_username':config.bot_username,'version':'0.8.1',
                               'integrations':{'google':'import_only' if google.configured else 'not_configured','icloud':'pilot_required','translation':'configured' if config.translation_url else 'not_configured'}}
     @app.get('/api/google')
     def google_status(request:Request):return google.status(actor(request))
@@ -110,8 +110,25 @@ def create_app(config=None,start_worker=True):
         try:
             google.callback(state,code,error)
             message='Вернитесь в Our Calendar в Telegram и подтвердите выбранный аккаунт. / Return to Our Calendar in Telegram and confirm the selected account.'
-        except (Problem,ProviderFailure):
-            message='Подключение не завершено. Вернитесь в Telegram и повторите вход. / Connection was not completed. Return to Telegram and try again.'
+        except (Problem,ProviderFailure) as exc:
+            messages={
+                'google_oauth_token_invalid_client':'Google отклонил данные приложения при обмене кода на токен. Проверьте Client Secret от того же OAuth-клиента в настройках сервера. / Google rejected the app credentials. Check the server Client Secret for the same OAuth client.',
+                'google_oauth_token_invalid_grant':'Google отклонил одноразовый код входа. Начните новое подключение из Telegram. / Google rejected the one-time code. Start a new connection from Telegram.',
+                'google_oauth_token_missing_scopes':'Google предоставил не все запрошенные разрешения. При новом входе разрешите чтение списка календарей и событий. / Google did not grant all requested permissions. Allow calendar list and event reading when connecting again.',
+                'google_reconnect':'Google не выдал разрешение для фонового доступа. Начните новое подключение из Telegram. / Google did not issue offline access. Start a new connection from Telegram.',
+                'google_selection_expired':'Эта попытка входа истекла или уже обработана. Вернитесь в приложение и нажмите «Проверить подключение»; если аккаунт не появился, начните новое подключение. / This attempt expired or was already processed. Return to the app and check the connection before starting again.',
+                'google_authorization_cancelled':'Вход отменён или Google не вернул код авторизации. / Sign-in was cancelled or Google did not return an authorization code.',
+                'google_identity_invalid':'Google не подтвердил адрес аккаунта. / Google did not verify the account email.',
+                'google_oauth_identity_unavailable':'Не удалось получить сведения об аккаунте Google. / Could not retrieve the Google account identity.',
+                'google_oauth_token_unavailable':'Не удалось обменять код Google на токен доступа. / Could not exchange the Google code for an access token.',
+                'google_oauth_token_invalid_scope':'Google отклонил запрошенные разрешения приложения. / Google rejected the requested app permissions.',
+                'google_oauth_token_unauthorized_client':'Google не разрешает этому OAuth-клиенту данный способ входа. / Google does not allow this sign-in method for the OAuth client.',
+                'google_oauth_token_invalid_request':'Google отклонил запрос обмена кода на токен. / Google rejected the token exchange request.',
+            }
+            diagnostic=exc.code if isinstance(exc,Problem) and exc.code in messages else 'google_callback_failed'
+            import logging
+            logging.getLogger(__name__).warning('Google OAuth callback failed: %s',diagnostic)
+            message=messages.get(diagnostic,'Подключение не завершено. / Connection was not completed.')+' Код / Code: '+diagnostic
         link='https://t.me/'+config.bot_username+'?startapp=google'
         return HTMLResponse('<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Our Calendar · Google</title><link rel="stylesheet" href="/assets/style.css"><main class="shell"><section class="card"><h1>Our Calendar · Google</h1><p>'+message+'</p><a href="'+escape(link,quote=True)+'">Открыть Telegram / Open Telegram</a></section></main></html>')
     @app.post('/api/google/confirm')
