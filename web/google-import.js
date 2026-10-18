@@ -68,7 +68,7 @@ Object.assign(actions,{
  'google-disconnect':async el=>{if(await confirmDialog(t('gDisconnect'),t('gDisconnectHelp'))){googleUI.status=await api('google/accounts/'+el.dataset.id,'DELETE');render()}},
  'google-calendars':async el=>{googleUI.account=el.dataset.id;googleUI.calendars=await api('google/accounts/'+el.dataset.id+'/calendars');googleUI.step='calendars';render()},
  'google-save-sources':async()=>{
-   const ids=$('.g-source:checked').map(e=>e.value),auto=$('#g-auto').checked;
+   const ids=$$('.g-source:checked').map(e=>e.value),auto=$('#g-auto').checked;
    if(auto&&ids.length&&ids.some(id=>!googleUI.calendars.find(c=>c.id===id)?.auto_import)){
      if(!await confirmDialog(t('gAutoConfirmTitle'),t('gAutoConfirmText')))return;
    }
