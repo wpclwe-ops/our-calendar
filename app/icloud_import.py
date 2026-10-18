@@ -33,6 +33,9 @@ def _fields(component, timezone, recurring=True):
     end = component.decoded('DTEND')
     all_day = not isinstance(start, datetime)
     require(all_day == (not isinstance(end, datetime)), 'icloud_unsupported_event', 422)
+    tzid = component.get('DTSTART').params.get('TZID') if isinstance(start,datetime) else None
+    timezone = str(tzid or getattr(getattr(start,'tzinfo',None),'key',None) or timezone)
+    zone(timezone)
     rule = ''
     if recurring and component.get('RRULE'):
         rule = component['RRULE'].to_ical().decode('utf-8').upper()
@@ -73,15 +76,15 @@ def parse_resource(item, timezone):
         overrides = {}
         for ex in master.get('EXDATE', []) if isinstance(master.get('EXDATE'),list) else ([master.get('EXDATE')] if master.get('EXDATE') else []):
             for dt in ex.dts:
-                overrides[_occurrence(dt.dt,timezone)] = {'deleted': True}
+                overrides[_occurrence(dt.dt,fields['timezone'])] = {'deleted': True}
         for child in components:
             if child is master: continue
-            key = _occurrence(child.decoded('RECURRENCE-ID'),timezone)
+            key = _occurrence(child.decoded('RECURRENCE-ID'),fields['timezone'])
             require(fields['rrule'], 'icloud_unsupported_recurrence',422)
             if str(child.get('STATUS','')).upper() == 'CANCELLED':
                 overrides[key] = {'deleted': True}
             else:
-                overrides[key] = _fields(child,timezone,False)
+                overrides[key] = _fields(child,fields['timezone'],False)
         result = {'fields':fields,'overrides':overrides}
         validate_series(result)
         return result
@@ -181,9 +184,9 @@ class ICloudImports:
             result=[]
             for item in calendars[:100]:
                 remote=item['url'];name=item['name'] or 'iCloud Calendar'
-                c.execute("""INSERT INTO icloud_sources(id,account_id,remote_id,name)
-                             VALUES(?,?,?,?) ON CONFLICT(account_id,remote_id)
-                             DO UPDATE SET name=excluded.name""",(uid(),account_id,remote,name))
+                c.execute("""INSERT INTO icloud_sources(id,account_id,remote_id,name,timezone)
+                             VALUES(?,?,?,?,?) ON CONFLICT(account_id,remote_id)
+                             DO UPDATE SET name=excluded.name""",(uid(),account_id,remote,name,self.s.user(c,actor)['timezone']))
                 src=c.execute('SELECT id,name,selected,auto_import FROM icloud_sources WHERE account_id=? AND remote_id=?',(account_id,remote)).fetchone()
                 result.append(dict(src))
             return result
@@ -212,7 +215,7 @@ class ICloudImports:
             if not force and source['next_at']>stamp(now):return {'state':'waiting'}
             lease=stamp(now+timedelta(minutes=10))
             c.execute('UPDATE icloud_sources SET lease_until=? WHERE id=?',(lease,source_id))
-            links=[dict(v) for v in c.execute('SELECT * FROM icloud_links WHERE source_id=? AND state!=?',(source_id,'disconnected'))]
+            links=[dict(v) for v in c.execute('SELECT * FROM icloud_links WHERE source_id=?',(source_id,))]
         try:
             items=self.client(account).events(source['remote_id'])
             require(len(items)<=MAX_REMOTE,'icloud_calendar_too_large',413)
@@ -222,6 +225,7 @@ class ICloudImports:
             for item in items:
                 remote_id=item['url'];present.add(remote_id)
                 old=next((l for l in links if l['remote_id']==remote_id),None)
+                if old and old['state']=='disconnected':continue
                 if not old and not source['auto_import']:continue
                 if old and old['etag']==item['etag'] and old['state'] not in ('unsupported','delayed'):continue
                 try:remote=parse_resource(item,source['timezone'] or 'UTC')
@@ -274,7 +278,7 @@ class ICloudImports:
                     enqueue_translation(c,self.s.config,'event',event_id,account['calendar_id'],data,1)
                     created+=1
                 for old in links:
-                    if old['remote_id'] not in present and old['state']!='remote_deleted':
+                    if old['remote_id'] not in present and old['state'] not in ('remote_deleted','disconnected'):
                         c.execute("UPDATE icloud_links SET state='remote_deleted',remote=?,checked_at=? WHERE id=?",
                                   (dump({'deleted':True}),stamp(),old['id']))
                 # A source with > AUTO_BATCH pending events is drained over later passes.
