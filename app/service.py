@@ -494,6 +494,7 @@ class Service:
                 c.execute('UPDATE events SET deleted_at=?,revision=revision+1,schedule_version=schedule_version+1 WHERE id=?',(None if restore else stamp(),event_id))
                 if not restore:
                     c.execute("UPDATE google_links SET state='disconnected' WHERE event_id=?",(event_id,))
+                    c.execute("UPDATE icloud_links SET state='disconnected' WHERE event_id=?",(event_id,))
             c.execute("UPDATE outbox SET status='cancelled' WHERE event_id=? AND kind='reminder' AND status IN ('pending','sending')",(event_id,))
             if not permanent: self.notify(c,cal['id'],user_id,'restored' if restore else 'deleted',load(row['data']),event_id)
             return {'ok':True}
