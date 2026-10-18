@@ -23,6 +23,24 @@ TEMPORAL = {'start','end','all_day','timezone','fold','end_fold','rrule'}
 TTL = 600
 POLL = 300
 MAX_BATCH = 50
+AUTO_BATCH = 20
+
+
+def eligible_auto(item, source_timezone, now):
+    """Backfill current/upcoming appointments, not an account's past history."""
+    if item.get('status') == 'cancelled' or item.get('recurringEventId'):
+        return False
+    if item.get('recurrence'):
+        return True
+    end = item.get('end') or {}
+    try:
+        if end.get('date'):
+            return date.fromisoformat(end['date']) > now.astimezone(zone(source_timezone)).date()
+        value = datetime.fromisoformat(end['dateTime'].replace('Z', '+00:00'))
+        return value.tzinfo is not None and value.astimezone(UTC) > now
+    except (KeyError, TypeError, ValueError):
+        return False
+
 
 
 def normalize(item, timezone, single=False):
@@ -205,7 +223,7 @@ class GoogleImports:
             accounts=[]
             for a in c.execute('SELECT id,email,state FROM google_accounts WHERE user_id=? AND calendar_id=?',(actor,cal['id'])):
                 sources=[]
-                for source in c.execute('SELECT id,name,selected,state FROM google_sources WHERE account_id=?',(a['id'],)):
+                for source in c.execute('SELECT id,name,selected,auto_import,state FROM google_sources WHERE account_id=?',(a['id'],)):
                     links=[dict(v) for v in c.execute('SELECT l.id,l.event_id,l.state,l.checked_at,json_extract(e.data,\'$.title\') AS title FROM google_links l LEFT JOIN events e ON e.id=l.event_id WHERE l.source_id=? AND l.event_id IS NOT NULL',(source['id'],))]
                     sources.append({**dict(source),'links':links})
                 accounts.append({**dict(a),'mode':'import_only','sources':sources})
@@ -227,7 +245,7 @@ class GoogleImports:
                 c.execute("INSERT INTO google_accounts(id,user_id,calendar_id,subject,email,credentials) VALUES(?,?,?,?,?,?) ON CONFLICT(user_id,calendar_id,subject) DO UPDATE SET email=excluded.email,credentials=excluded.credentials,state='connected',generation=google_accounts.generation+1",
                           (account_id,actor,cal['id'],data['subject'],data['email'],self.vault.encrypt(data['credentials'])))
                 # Reconnection never silently re-enables old sources or links.
-                c.execute("UPDATE google_sources SET selected=0,sync_token=NULL,generation=generation+1,lease_until=NULL,state='ready' WHERE account_id=?",(account_id,))
+                c.execute("UPDATE google_sources SET selected=0,auto_import=0,sync_token=NULL,generation=generation+1,lease_until=NULL,state='ready' WHERE account_id=?",(account_id,))
                 c.execute("UPDATE google_links SET state='disconnected' WHERE source_id IN (SELECT id FROM google_sources WHERE account_id=?)",(account_id,))
             c.execute('DELETE FROM google_oauth_requests WHERE state_hash=?',(r['state_hash'],))
         return self.status(actor)
@@ -236,7 +254,7 @@ class GoogleImports:
         with self.s.db.transaction() as c:
             self.account(c,actor,account_id,False)
             c.execute("UPDATE google_accounts SET credentials=NULL,state='disconnected',generation=generation+1 WHERE id=?",(account_id,))
-            c.execute("UPDATE google_sources SET selected=0,sync_token=NULL,generation=generation+1,lease_until=NULL WHERE account_id=?",(account_id,))
+            c.execute("UPDATE google_sources SET selected=0,auto_import=0,sync_token=NULL,generation=generation+1,lease_until=NULL WHERE account_id=?",(account_id,))
             c.execute("UPDATE google_links SET state='disconnected' WHERE source_id IN (SELECT id FROM google_sources WHERE account_id=?)",(account_id,))
             c.execute('DELETE FROM google_previews WHERE source_id IN (SELECT id FROM google_sources WHERE account_id=?)',(account_id,))
         return self.status(actor)
@@ -253,22 +271,32 @@ class GoogleImports:
                 sid=uid()
                 c.execute('INSERT INTO google_sources(id,account_id,remote_id,name,timezone) VALUES(?,?,?,?,?) ON CONFLICT(account_id,remote_id) DO UPDATE SET name=excluded.name,timezone=excluded.timezone',
                           (sid,account_id,item['id'],item.get('summary') or item['id'],item.get('timeZone') or 'UTC'))
-                row=c.execute('SELECT id,name,timezone,selected FROM google_sources WHERE account_id=? AND remote_id=?',(account_id,item['id'])).fetchone()
+                row=c.execute('SELECT id,name,timezone,selected,auto_import FROM google_sources WHERE account_id=? AND remote_id=?',(account_id,item['id'])).fetchone()
                 result.append(dict(row))
         return result
 
-    def select(self,actor,account_id,ids):
+    def select(self,actor,account_id,ids,auto_ids=None):
         require(isinstance(ids,list) and len(ids)<=100 and all(isinstance(v,str) for v in ids),'invalid_request')
+        require(len(set(ids))==len(ids),'invalid_request')
+        if auto_ids is not None:
+            require(isinstance(auto_ids,list) and len(auto_ids)<=100 and
+                    all(isinstance(v,str) for v in auto_ids) and
+                    len(set(auto_ids))==len(auto_ids) and set(auto_ids)<=set(ids),
+                    'invalid_request')
         with self.s.db.transaction() as c:
             self.account(c,actor,account_id)
             rows=c.execute('SELECT * FROM google_sources WHERE account_id=?',(account_id,)).fetchall()
             require(set(ids)<={r['id'] for r in rows},'google_source_not_found',404)
             for row in rows:
                 chosen=int(row['id'] in ids)
-                if chosen!=row['selected']:
-                    c.execute('UPDATE google_sources SET selected=?,generation=generation+1,sync_token=NULL,next_at=\'\',lease_until=NULL WHERE id=?',(chosen,row['id']))
+                auto=int(chosen and (row['id'] in auto_ids if auto_ids is not None else row['auto_import']))
+                if chosen!=row['selected'] or auto!=row['auto_import']:
+                    c.execute("UPDATE google_sources SET selected=?,auto_import=?,generation=generation+1,sync_token=NULL,next_at='',lease_until=NULL WHERE id=?",
+                              (chosen,auto,row['id']))
                     c.execute('DELETE FROM google_previews WHERE source_id=?',(row['id'],))
-                    if not chosen:c.execute("UPDATE google_links SET state='disconnected' WHERE source_id=?",(row['id'],))
+                    if not chosen:
+                        c.execute("UPDATE google_links SET state='disconnected' WHERE source_id=?",(row['id'],))
+                        c.execute('DELETE FROM google_auto_skips WHERE source_id=?',(row['id'],))
         return self.status(actor)
 
     def browse(self,actor,source_id,page=None,parent=None,start=None,end=None):
