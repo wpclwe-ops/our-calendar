@@ -140,7 +140,8 @@ def create_app(config=None,start_worker=True):
     def google_calendars(request:Request,account_id:str):return google.calendars(actor(request),account_id)
     @app.post('/api/google/accounts/{account_id}/calendars')
     async def google_select_calendars(request:Request,account_id:str):
-        return google.select(actor(request),account_id,(await body(request)).get('ids'))
+        data=await body(request)
+        return google.select(actor(request),account_id,data.get('ids'),data.get('auto_ids'))
     @app.get('/api/google/sources/{source_id}/events')
     def google_browse(request:Request,source_id:str,page:str|None=None,parent:str|None=None,start:str|None=None,end:str|None=None):
         return google.browse(actor(request),source_id,page,parent,start,end)
