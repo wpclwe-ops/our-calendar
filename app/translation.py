@@ -141,7 +141,7 @@ class Translations:
                     data=load(fresh['data']);data['translations']=translations
                     if job['kind']=='event':
                         self.service.validate_event(c,dict(c.execute('SELECT * FROM calendars WHERE id=?',(job['calendar_id'],)).fetchone()),data)
-                        c.execute('UPDATE events SET data=?,revision=revision+1 WHERE id=?',(dump(data),job['resource_id']))
+                        c.execute('UPDATE events SET data=? WHERE id=?',(dump(data),job['resource_id']))
                         for notice in c.execute("SELECT * FROM outbox WHERE event_id=? AND status='pending'",(job['resource_id'],)).fetchall():
                             payload=load(notice['payload']);payload.setdefault('data',{})['translations']=translated_overrides.get(payload.get('data',{}).get('occurrence'),translations)
                             c.execute('UPDATE outbox SET payload=? WHERE id=?',(dump(payload),notice['id']))

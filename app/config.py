@@ -41,7 +41,7 @@ class Config:
     openai_model: str = 'gpt-6-luna'
     openai_max_output_tokens: int = 16384
     smart_monthly_budget: float = 5.0
-    smart_auto_categories: bool = False
+    smart_auto_categories: bool = True
 
     @classmethod
     def env(cls):
@@ -62,7 +62,7 @@ class Config:
                 openai_model=os.getenv('OPENAI_MODEL','gpt-6-luna'),
                 openai_max_output_tokens=int(os.getenv('OPENAI_MAX_OUTPUT_TOKENS','16384')),
                 smart_monthly_budget=float(os.getenv('SMART_MONTHLY_BUDGET_USD','5')),
-                smart_auto_categories=os.getenv('SMART_AUTO_CATEGORIES_ENABLED','false').lower()=='true',
+                smart_auto_categories=os.getenv('SMART_AUTO_CATEGORIES_ENABLED','true').lower()=='true',
                 backup_endpoint=os.getenv('OPERATOR_BACKUP_ENDPOINT',''),backup_bucket=os.getenv('OPERATOR_BACKUP_BUCKET',''),
                 backup_region=os.getenv('OPERATOR_BACKUP_REGION','auto'),backup_access_key=os.getenv('OPERATOR_BACKUP_ACCESS_KEY',''),
                 backup_secret_key=os.getenv('OPERATOR_BACKUP_SECRET_KEY',''),backup_encryption_key=os.getenv('OPERATOR_BACKUP_KEY',''))
