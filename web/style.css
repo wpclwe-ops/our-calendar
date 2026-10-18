@@ -154,7 +154,7 @@ body.dark .week-date.selected{background:#3b3048}
 @media(max-width:370px){:root{--calendar-gutter:20px}.calendar-controls{padding-left:20px;padding-right:20px}.calendar-heading{gap:6px}.calendar-heading .month-title{font-size:30px}.calendar-heading .week-title{font-size:25px}.bottom-nav{width:calc(100% - 40px)}.calendar-actions{left:20px;right:20px}.day-task{gap:12px;padding:12px}.day-task-card{padding:0}.day-task-title{font-size:17px}.day-task-time{font-size:12px}.day-task-meta{font-size:11px}.calendar-heading .calendar-tools .icon{width:44px;min-width:44px;padding:4px}}
 /* Size containment allows compact entries in a short Telegram WebView. */
 .month-scroll{container-type:size}
-@container(max-height:500px){.scroll-week .month-event-title{-webkit-line-clamp:1}}
+@container(max-height:500px){.scroll-week .month-event-title{-webkit-line-clamp:2}}
 .time-event{font-weight:500}
 
 /* Annotated iOS review, 17 October 2026. Keep the two distinct month modes intact. */
@@ -208,7 +208,7 @@ body.dark .week-date.selected{background:#3b3048}
 /* Title and owner on the same line, time directly beneath — no place field. */
 .time-event{display:flex;flex-direction:column;justify-content:center;align-items:stretch;gap:1px;min-height:30px;padding:2px 8px;border:0;border-radius:7px;font-size:14px;line-height:15px;overflow:hidden}
 .time-event .time-event-heading{display:flex;align-items:baseline;justify-content:space-between;gap:6px;width:100%;min-width:0}
-.time-event .time-event-heading>.time-event-title{display:block;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;-webkit-line-clamp:unset;font-size:14px;line-height:15px}
+.time-event .time-event-heading>.time-event-title{display:-webkit-box;-webkit-box-orient:vertical;flex:1;min-width:0;overflow:hidden;white-space:normal;overflow-wrap:anywhere;-webkit-line-clamp:2;font-size:14px;line-height:15px}
 .time-event .time-event-heading .time-owner{display:block;flex:0 1 auto;min-width:0;max-width:42%;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;font-size:10px;line-height:12px}
 .time-event .time-range{display:block;flex:none;min-width:0;margin:0;font-size:11px;line-height:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .time-event.short-event{display:flex;flex-direction:column;align-items:stretch;justify-content:center;min-height:30px;padding:2px 6px;gap:0;border-radius:6px}
@@ -223,17 +223,17 @@ body.dark .week-date.selected{background:#3b3048}
 /* The two-week viewport also works when Telegram leaves little vertical space. */
 @container(max-height:460px){
  .scroll-week .month-event-time{display:none}
- .scroll-week .month-event-title{-webkit-line-clamp:1}
+ .scroll-week .month-event-title{-webkit-line-clamp:2}
 }
 @container(max-height:340px){
  .scroll-week .date-caption{padding-top:0;margin-bottom:2px}
  .scroll-week .month-caption{position:static;font-size:8px;height:10px;line-height:10px}
  .scroll-week .day-number{height:22px;width:22px;font-size:12px}
  .scroll-week .event-bar{padding:0 2px;margin-bottom:2px}
- .scroll-week .month-event-title{font-size:10px;line-height:11px}
+ .scroll-week .month-event-title{font-size:10px;line-height:11px;-webkit-line-clamp:1}
  .scroll-week .more{font-size:10px;line-height:12px;padding:0}
 }
-@media(max-width:430px){.month-scroll .scroll-week .month-event-title{-webkit-line-clamp:1}}
+
 
 /* Native, compact reminders and the event form, 0.6.2. */
 .category-navigation{margin:0 0 14px}

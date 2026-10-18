@@ -23,6 +23,17 @@ def dump(value):
 def load(value):
     return json.loads(value)
 
+def merge_translation_changes(previous, changes):
+    """PATCH only supplied language fields, retaining fresh background results."""
+    if 'translations' not in changes:return changes
+    patch=changes['translations']
+    require(isinstance(patch,dict) and set(patch)<={'ru','en'},'invalid_translation')
+    merged={lang:dict(value) for lang,value in previous.get('translations',{}).items()}
+    for lang,value in patch.items():
+        require(isinstance(value,dict) and set(value)<={'title','description','manual','stale'},'invalid_translation')
+        merged[lang]={**merged.get(lang,{}),**value}
+    return {**changes,'translations':merged}
+
 def offsets(values):
     require(isinstance(values, list) and len(values) <= 3 and all(type(v) is int and 1 <= v <= MAX_REMINDER_MINUTES for v in values), 'invalid_reminders')
     require(len(set(values)) == len(values), 'invalid_reminders')
@@ -304,7 +315,7 @@ class Service:
                       'category_id':None,'status':'planned','location':'','links':[],'rrule':'','reminders':{}}
                 for person in (cal['first_id'],cal['second_id']):
                     if person: data['reminders'][person]=self.user(c,person)['default_reminders']
-            changes=dict(changes)
+            changes=merge_translation_changes(data,dict(changes))
             if 'reminders' in changes:
                 require(isinstance(changes['reminders'],list),'own_reminders_only')
                 data['reminders']=dict(data['reminders']); data['reminders'][user_id]=offsets(changes.pop('reminders'))
@@ -471,6 +482,7 @@ class Service:
             require(set(changes)<=EVENT_FIELDS-{'smart'},'invalid_occurrence_fields')
             prior=c.execute('SELECT data FROM overrides WHERE event_id=? AND occurrence=?',(event_id,key)).fetchone()
             prior=load(prior['data']) if prior else {}
+            changes=merge_translation_changes({**data,**prior},changes)
             if 'reminders' in changes:
                 require(isinstance(changes['reminders'],list),'own_reminders_only')
                 changes={**changes,'reminders':{**prior.get('reminders',data['reminders']),user_id:offsets(changes['reminders'])}}

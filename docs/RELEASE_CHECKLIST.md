@@ -68,13 +68,13 @@ PR #5 слит с явного разрешения пользователя. Re
 - Rolling back application code is additive-schema compatible; restore data only
   through the existing verified operator recovery procedures if required.
 
-## Smart Events 0.9.0 activation
+## Smart Events 0.9.1 activation
 
 - [ ] Established encrypted operator recovery checkpoint before a production upgrade.
 - [ ] Verify separate OpenAI API billing/model access; set the key only on the backend.
 - [ ] Check the conservative monthly reservation budget and current model tariffs.
 - [ ] Participant consent/source scope tested; old records require explicit selection.
-- [ ] Review real model quality; keep SMART_AUTO_CATEGORIES_ENABLED=false until accepted.
+- [ ] Review real model quality. Personal mode defaults to suggestions; automatic assignment needs both participants' explicit choice. The operator can pause it with SMART_AUTO_CATEGORIES_ENABLED=false.
 - [ ] Verify actual Telegram/iPhone WebKit, live provider updates and reminders.
 - [ ] Restore ZIP v1/v2; full restore leaves API consent and reminders disabled.
 

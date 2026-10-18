@@ -162,3 +162,13 @@ def test_manual_exception_translation_is_preserved_and_marked_stale(service):
     service.save_event('1',{'title':'New original'},event['id'],e['revision'])
     translator.process();selected=service.get_event('2',event['id'],occurrence=key)['selected_instance']
     assert selected['translations']['en']['title']=='Handmade' and selected['translations']['en']['stale']
+
+def test_background_translation_does_not_invalidate_open_form(service):
+    translator,fake=configured(service)
+    e=service.save_event('1',{'title':'Flight · Wrocław → Amsterdam','start':'2026-10-24T12:00','end':'2026-10-24T14:00'})
+    translator.process()
+    updated=service.save_event('1',{'location':'Airport'},e['id'],e['revision'])
+    assert updated['translations']['en']['title']=='en: Flight · Wrocław → Amsterdam'
+    with pytest.raises(Problem) as exc:
+        service.save_event('2',{'location':'Stale location'},e['id'],e['revision'])
+    assert exc.value.code=='revision_conflict'
