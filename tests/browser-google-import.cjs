@@ -18,7 +18,7 @@ const assert=require('node:assert/strict'),{mkdtempSync,rmSync}=require('node:fs
   await page.locator('.g-source').check();await page.locator('[data-action="google-save-sources"]').click();await wait();
   if(!await page.locator('[data-action="google-events"]').count()) {
    const diagnostic=await page.evaluate(()=>({step:googleUI.step,sources:googleUI.status?.accounts?.[0]?.sources,busy}));
-   throw new Error('Google source selection not visible: '+JSON.stringify({diagnostic,errors,view:(await page.locator('#app').textContent()).slice(-800)}));
+   throw new Error('Google source selection not visible: '+JSON.stringify({diagnostic,errors,toast:await page.locator('#toast').textContent(),view:(await page.locator('#app').textContent()).slice(-800)}));
   }
   await page.locator('[data-action="google-events"]').click();await wait();
   assert.equal(await page.locator('.g-event').count(),4);assert.equal(await page.locator('.g-event:disabled').count(),1);
