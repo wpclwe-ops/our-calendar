@@ -122,6 +122,9 @@ class Service:
                 c.execute("UPDATE google_links SET state='disconnected' WHERE source_id IN (SELECT s.id FROM google_sources s JOIN google_accounts a ON a.id=s.account_id WHERE a.user_id=? AND a.calendar_id=?)",(user_id,cal['id']))
                 c.execute('DELETE FROM google_oauth_requests WHERE user_id=?',(user_id,))
                 c.execute('DELETE FROM google_previews WHERE user_id=?',(user_id,))
+                c.execute("UPDATE icloud_accounts SET state='disconnected',credentials=NULL,generation=generation+1 WHERE user_id=? AND calendar_id=?",(user_id,cal['id']))
+                c.execute("UPDATE icloud_sources SET selected=0,auto_import=0,generation=generation+1,lease_until=NULL WHERE account_id IN (SELECT id FROM icloud_accounts WHERE user_id=? AND calendar_id=?)",(user_id,cal['id']))
+                c.execute("UPDATE icloud_links SET state='disconnected' WHERE source_id IN (SELECT s.id FROM icloud_sources s JOIN icloud_accounts a ON a.id=s.account_id WHERE a.user_id=? AND a.calendar_id=?)",(user_id,cal['id']))
         return self.state(user_id)
 
     def settings(self,user_id,changes):
