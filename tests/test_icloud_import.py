@@ -177,3 +177,21 @@ def test_trash_restore_never_silently_relinks_to_icloud(linked):
     with g.s.db.transaction() as c:
         link=c.execute('SELECT * FROM icloud_links WHERE source_id=?',(source,)).fetchone()
         assert link['state']=='disconnected'
+
+
+def test_icloud_event_reappearing_after_remote_delete_is_reconciled(linked):
+    g,f,account,source=linked
+    g.select('1',account,[source],[source])
+    assert g.sync_source('1',source,True)['created']==1
+    f.remote=None
+    g.sync_source('1',source,True)
+    with g.s.db.transaction() as c:
+        link=c.execute('SELECT state FROM icloud_links WHERE source_id=?',(source,)).fetchone()
+        assert link['state']=='remote_deleted'
+    f.remote={'url':'https://p42-caldav.icloud.com/123/events/visit.ics',
+              'ics':event_ics('Reappeared'),'etag':'v1'}
+    assert g.sync_source('1',source,True)['created']==0
+    assert g.s.events('2','2026-10-01','2026-11-01')[0]['title']=='Reappeared'
+    with g.s.db.transaction() as c:
+        link=c.execute('SELECT state FROM icloud_links WHERE source_id=?',(source,)).fetchone()
+        assert link['state']=='ready'
