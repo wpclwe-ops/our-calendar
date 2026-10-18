@@ -207,6 +207,70 @@ class ICloudImports:
                     if not selected:c.execute("UPDATE icloud_links SET state='disconnected' WHERE source_id=?",(row['id'],))
         return self.status(actor)
 
+
+    def browse(self,actor,source_id):
+        with self.s.db.transaction() as c:source,account=self.source(c,actor,source_id)
+        items=self.client(account).events(source['remote_id'])
+        require(len(items)<=MAX_REMOTE,'icloud_calendar_too_large',413)
+        result=[]
+        for item in items:
+            try:
+                value=parse_resource(item,source['timezone'])
+                if value.get('deleted'):continue
+                fields=value['fields']
+                result.append({'id':item['url'],'title':fields['title'],'start':fields['start'],
+                               'end':fields['end'],'supported':True,'series':bool(fields['rrule'])})
+            except Problem:
+                result.append({'id':item['url'],'title':'(Unsupported iCloud event)',
+                               'start':'','end':'','supported':False,'series':False})
+        with self.s.db.transaction() as c:
+            current,active=self.source(c,actor,source_id)
+            require(current['generation']==source['generation'] and active['generation']==account['generation'],
+                    'icloud_selection_expired',409)
+        return {'items':result}
+
+    def import_selected(self,actor,source_id,ids,confirmed=False):
+        require(confirmed is True,'confirmation_required')
+        require(isinstance(ids,list) and 0<len(ids)<=50 and len(ids)==len(set(ids))
+                and all(isinstance(i,str) and len(i)<2000 for i in ids),'invalid_request')
+        with self.s.db.transaction() as c:source,account=self.source(c,actor,source_id)
+        items=self.client(account).events(source['remote_id'])
+        require(len(items)<=MAX_REMOTE,'icloud_calendar_too_large',413)
+        by_id={i['url']:i for i in items}
+        require(set(ids)<=set(by_id),'icloud_selection_expired',409)
+        values=[]
+        for rid in ids:
+            item=by_id[rid];value=parse_resource(item,source['timezone'])
+            require(not value.get('deleted'),'icloud_unsupported_event',422)
+            values.append((item,value))
+        with self.s.db.transaction() as c:
+            current,active=self.source(c,actor,source_id)
+            require(current['generation']==source['generation'] and active['generation']==account['generation'],
+                    'icloud_selection_expired',409)
+            created=existing=0
+            for item,value in values:
+                old=c.execute('SELECT id FROM icloud_links WHERE source_id=? AND remote_id=?',
+                              (source_id,item['url'])).fetchone()
+                if old:existing+=1;continue
+                data=self.helpers.new_data(c,actor,account['calendar_id'],value['fields'])
+                self.s.validate_event(c,self.s.calendar(c,actor),data)
+                for patch in value['overrides'].values():
+                    if not patch.get('deleted'):self.s.validate_event(c,self.s.calendar(c,actor),{**data,**patch})
+                event_id=uid()
+                c.execute('INSERT INTO events(id,calendar_id,data) VALUES(?,?,?)',
+                          (event_id,account['calendar_id'],dump(data)))
+                for key,patch in value['overrides'].items():
+                    c.execute('INSERT INTO overrides VALUES(?,?,?)',(event_id,key,dump(patch)))
+                c.execute("""INSERT INTO icloud_links(id,source_id,remote_id,event_id,base,remote,state,etag,checked_at)
+                             VALUES(?,?,?,?,?,?,?,?,?)""",
+                          (uid(),source_id,item['url'],event_id,dump(value),dump(value),'ready',item['etag'],stamp()))
+                from .translation import enqueue_translation
+                enqueue_translation(c,self.s.config,'event',event_id,account['calendar_id'],data,1)
+                created+=1
+            if created:self.s.notify(c,account['calendar_id'],actor,'icloud_imported',{'title':str(created)})
+            c.execute("UPDATE icloud_sources SET next_at='' WHERE id=?",(source_id,))
+        return {'created':created,'existing':existing}
+
     def sync_source(self,actor,source_id,force=False):
         now=utcnow()
         with self.s.db.transaction() as c:
