@@ -15,7 +15,7 @@ from .recurrence import stamp,utcnow
 
 MAX_ARCHIVE = 10 * 1024 * 1024
 MAX_EXPANDED = 40 * 1024 * 1024
-PROFILE_FIELDS = {'language','timezone','theme','view','day_layout','month_layout','week_layout','touch_bar','default_duration','default_reminders','reminders_enabled','notify_at_start','name'}
+PROFILE_FIELDS = {'language','timezone','theme','view','day_layout','month_layout','week_layout','touch_bar','default_duration','default_reminders','reminders_enabled','notify_at_start','name','smart_events'}
 
 class Backups:
     def __init__(self, service):
@@ -42,9 +42,14 @@ class Backups:
 
     def snapshot(self,c,user_id):
         cal=self.service.calendar(c,user_id)
-        return {'schema':1,'calendar':{'id':cal['id'],'first_id':cal['first_id'],'second_id':cal['second_id']},
+        def archive_profile(person):
+            prefs={k:v for k,v in self.service.user(c,person).items() if k in PROFILE_FIELDS}
+            if 'smart_events' in prefs:prefs['smart_events']={**prefs['smart_events'],'consent':False}
+            return prefs
+        return {'schema':2,'calendar':{'id':cal['id'],'first_id':cal['first_id'],'second_id':cal['second_id']},
                 'created_at':stamp(),
-                'members':{r['user_id']:{k:v for k,v in self.service.user(c,r['user_id']).items() if k in PROFILE_FIELDS} for r in c.execute('SELECT * FROM members WHERE calendar_id=?',(cal['id'],))},
+                'smart_rules':[{'id':r['id'],'data':load(r['data'])} for r in c.execute('SELECT * FROM smart_rules WHERE calendar_id=?',(cal['id'],))],
+                'members':{r['user_id']:archive_profile(r['user_id']) for r in c.execute('SELECT * FROM members WHERE calendar_id=?',(cal['id'],))},
                 'categories':[{'id':r['id'],'data':load(r['data'])} for r in c.execute('SELECT * FROM categories WHERE calendar_id=?',(cal['id'],))],
                 'events':[{'id':r['id'],'data':load(r['data']),'deleted_at':r['deleted_at'],
                            'overrides':{v['occurrence']:load(v['data']) for v in c.execute('SELECT * FROM overrides WHERE event_id=?',(r['id'],))}}
@@ -52,7 +57,8 @@ class Backups:
 
     def export(self,user_id):
         with self.service.db.transaction() as c: payload=dump(self.snapshot(c,user_id)).encode()
-        manifest={'schema':1,'key_id':self.key_id,'payload_sha256':hashlib.sha256(payload).hexdigest()}
+        require(len(payload)+4096<=MAX_EXPANDED,'archive_too_large',413)
+        manifest={'schema':2,'key_id':self.key_id,'payload_sha256':hashlib.sha256(payload).hexdigest()}
         signature=self.key.sign(dump(manifest).encode())
         buf=BytesIO()
         with ZipFile(buf,'w',ZIP_DEFLATED) as z:
@@ -70,13 +76,13 @@ class Backups:
                 require(z.getinfo('manifest.json').file_size<4096,'invalid_manifest')
                 manifest=load(z.read('manifest.json')); payload=z.read('calendar.json')
             signature=base64.b64decode(manifest.pop('signature'),validate=True)
-            require(manifest['schema']==1,'unsupported_archive_version')
+            require(manifest['schema'] in (1,2),'unsupported_archive_version')
             require(hashlib.sha256(payload).hexdigest()==manifest['payload_sha256'],'archive_integrity_failed')
             require(manifest['key_id'] in self.public_keys,'unknown_archive_signing_key')
             public=Ed25519PublicKey.from_public_bytes(base64.b64decode(self.public_keys[manifest['key_id']]))
             public.verify(signature,dump(manifest).encode())
             data=load(payload)
-            require(data['schema']==1,'unsupported_archive_version')
+            require(data['schema'] in (1,2),'unsupported_archive_version')
             cal=data['calendar']; require(cal['first_id'] in data['members'],'invalid_archive')
             require(cal['second_id'] is None or cal['second_id'] in data['members'],'invalid_archive')
             require(len({v['id'] for v in data['events']})==len(data['events']),'invalid_archive')
@@ -117,21 +123,23 @@ class Backups:
                         if lv!=rv:fields[k]={'current':lv,'archive':rv,'archive_present':k in right}
                     if fields:override_changes.append({'id':e['id'],'occurrence':key,'revision':current['revision'],'fields':fields})
             own=self.service.user(c,user_id);old=archive['members'][user_id]
-            profile={k:{'current':own.get(k),'archive':old[k]} for k in ('language','timezone','theme','view','day_layout','month_layout','week_layout','touch_bar','default_duration','default_reminders','reminders_enabled','notify_at_start') if k in old and own.get(k)!=old[k]}
+            profile={k:{'current':own.get(k),'archive':old[k]} for k in ('language','timezone','theme','view','day_layout','month_layout','week_layout','touch_bar','default_duration','default_reminders','reminders_enabled','notify_at_start','smart_events') if k in old and own.get(k)!=old[k]}
             categories=[]
             for category in archive['categories']:
                 current=c.execute('SELECT data FROM categories WHERE id=? AND calendar_id=?',(category['id'],cal['id'])).fetchone()
                 categories.append({**category,'current':load(current['data']) if current else None})
-            result={'changes':changes,'missing':missing,'override_changes':override_changes,'profile':profile,
+            current_rules={r['id']:load(r['data']) for r in c.execute('SELECT * FROM smart_rules WHERE calendar_id=?',(cal['id'],))}
+            rule_changes=[{**r,'current':current_rules.get(r['id'])} for r in archive.get('smart_rules',[]) if current_rules.get(r['id'])!=r['data']]
+            result={'smart_rules':rule_changes,'changes':changes,'missing':missing,'override_changes':override_changes,'profile':profile,
                     'archive_sha256':hashlib.sha256(blob).hexdigest(),'categories':categories}
             preview_id=uid()
             c.execute('DELETE FROM backup_previews WHERE expires_at<=?',(stamp(),))
             c.execute('INSERT INTO backup_previews VALUES(?,?,?,?,?,?)',(preview_id,user_id,cal['id'],result['archive_sha256'],dump(result),stamp(utcnow()+timedelta(minutes=15))))
             return {**result,'preview_id':preview_id}
 
-    def apply(self,user_id,blob,selections,missing_ids,category_ids,preview_id=None,override_selections=None,profile_fields=None):
-        archive=self.verify(blob);override_selections=override_selections or [];profile_fields=profile_fields or []
-        require(all(isinstance(v,list) for v in (selections,missing_ids,category_ids,override_selections,profile_fields)),'invalid_selection')
+    def apply(self,user_id,blob,selections,missing_ids,category_ids,preview_id=None,override_selections=None,profile_fields=None,smart_rule_ids=None):
+        archive=self.verify(blob);override_selections=override_selections or [];profile_fields=profile_fields or [];smart_rule_ids=smart_rule_ids or []
+        require(all(isinstance(v,list) for v in (selections,missing_ids,category_ids,override_selections,profile_fields,smart_rule_ids)),'invalid_selection')
         with self.service.db.transaction() as c:
             cal=self.service.calendar(c,user_id)
             require(archive['calendar']=={'id':cal['id'],'first_id':cal['first_id'],'second_id':cal['second_id']},'archive_wrong_calendar',403)
@@ -158,6 +166,17 @@ class Backups:
                 require(not current or current['calendar_id']==cal['id'],'invalid_selection')
                 require((load(current['data']) if current else None)==shown['current'],'revision_conflict',409)
                 c.execute('INSERT INTO categories VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data',(cid,cal['id'],dump(cats[cid]['data'])))
+            allowed_rules={r['id']:r for r in preview.get('smart_rules',[])}
+            for rid in set(smart_rule_ids):
+                require(rid in allowed_rules,'invalid_selection')
+                choice=allowed_rules[rid]
+                existing=c.execute('SELECT * FROM smart_rules WHERE id=?',(rid,)).fetchone()
+                require(not existing or existing['calendar_id']==cal['id'],'invalid_selection')
+                require((load(existing['data']) if existing else None)==choice['current'],'revision_conflict',409)
+                rule=choice['data']
+                if rule.get('category_id'):
+                    require(c.execute('SELECT 1 FROM categories WHERE id=? AND calendar_id=?',(rule['category_id'],cal['id'])).fetchone(),'invalid_category')
+                c.execute('INSERT INTO smart_rules VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data',(rid,cal['id'],dump(rule)))
             def sanitize_category(data):
                 if data.get('category_id') and not c.execute('SELECT 1 FROM categories WHERE id=? AND calendar_id=?',(data['category_id'],cal['id'])).fetchone():data['category_id']=None
             for choice in selections:
@@ -166,6 +185,18 @@ class Backups:
                     if field=='deleted_at':row['deleted_at']=archived[choice['id']]['deleted_at']
                     elif field=='reminders':data['reminders'][user_id]=old['reminders'].get(user_id,[])
                     else:data[field]=old[field]
+                from .smart_events import metadata,source_changed
+                if 'translations' in choice['fields']:
+                    meta=metadata(data);archived_meta=metadata(old)
+                    for lang in ('ru','en'):
+                        for field in ('title','description'):meta['fields'][lang+'.'+field]=archived_meta['fields'][lang+'.'+field]
+                    data['smart']=meta
+                if any(data.get(k)!=old.get(k) for k in ('title','description')) and 'smart' in choice['fields']:
+                    source_changed(data)
+                elif any(k in choice['fields'] for k in ('title','description')) and 'smart' not in choice['fields']:
+                    source_changed(data)
+                if 'category_id' in choice['fields']:
+                    meta=metadata(data);meta['category']={'manual':True,'origin':'manual'};data['smart']=meta
                 sanitize_category(data);self.service.validate_event(c,cal,data);row['data']=dump(data)
             for choice in override_selections:
                 eid,key=choice['id'],choice['occurrence'];row=touched[eid];master=load(row['data'])
@@ -182,6 +213,8 @@ class Backups:
                     for field in ('deleted','deleted_at','purged'):
                         if field in old:patch[field]=old[field]
                         else:patch.pop(field,None)
+                if 'smart' in patch and not any(k in patch for k in ('title','description','translations','category_id')):
+                    patch.pop('smart',None)
                 sanitize_category(patch)
                 from .recurrence import zone,instance
                 from datetime import date
@@ -199,19 +232,22 @@ class Backups:
                 require(eid in archived and eid in allowed_missing,'invalid_selection')
                 require(not c.execute('SELECT 1 FROM events WHERE id=?',(eid,)).fetchone(),'revision_conflict',409)
                 e=archived[eid];data=e['data'];sanitize_category(data);self.service.validate_event(c,cal,data)
-                c.execute('INSERT INTO events(id,calendar_id,data) VALUES(?,?,?)',(eid,cal['id'],dump(data)))
+                c.execute('INSERT INTO events(id,calendar_id,data,deleted_at) VALUES(?,?,?,?)',(eid,cal['id'],dump(data),e['deleted_at']))
                 for k,v in e['overrides'].items():c.execute('INSERT INTO overrides VALUES(?,?,?)',(eid,k,dump(v)))
             require(set(profile_fields)<=set(preview['profile']),'invalid_selection')
             prefs=self.service.user(c,user_id)
             for field in profile_fields:
                 require(prefs.get(field)==preview['profile'][field]['current'],'revision_conflict',409)
                 prefs[field]=archive['members'][user_id][field]
+                if field=='smart_events':
+                    prefs[field]={**prefs[field],'consent':False}
+                    c.execute("UPDATE smart_jobs SET state='cancelled',generation=? WHERE calendar_id=?",(uid(),cal['id']))
             if profile_fields:
                 if 'timezone' in profile_fields:prefs['timezone_initialized']=True
                 prefs.pop('id');c.execute('UPDATE users SET data=? WHERE id=?',(dump(prefs),user_id))
                 c.execute("UPDATE outbox SET status='cancelled' WHERE user_id=? AND kind='reminder' AND status IN ('pending','sending')",(user_id,))
             c.execute('DELETE FROM backup_previews WHERE id=?',(preview_id,))
-            if selections or missing_ids or category_ids or override_selections or profile_fields:self.service.notify(c,cal['id'],user_id,'backup_restored')
+            if selections or missing_ids or category_ids or override_selections or profile_fields or smart_rule_ids:self.service.notify(c,cal['id'],user_id,'backup_restored')
         return {'ok':True}
 
     def request_deleted(self,user_id,blob):
@@ -244,7 +280,7 @@ class Backups:
             for person,prefs in a['members'].items():
                 current=c.execute('SELECT data FROM users WHERE id=?',(person,)).fetchone()
                 old=load(current['data']) if current else {'bot_can_message':False,'delivery_error':None}
-                old.update({k:v for k,v in prefs.items() if k in PROFILE_FIELDS}); old['reminders_enabled']=False
+                old.update({k:v for k,v in prefs.items() if k in PROFILE_FIELDS}); old['reminders_enabled']=False; old['smart_events']={**old.get('smart_events',{}),'consent':False}
                 c.execute('INSERT INTO users VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data',(person,dump(old)))
                 c.execute('INSERT INTO members VALUES(?,?,1)',(person,cal['id']))
             for cat in a['categories']:
@@ -253,6 +289,8 @@ class Backups:
                 self.service.validate_event(c,cal,e['data'])
                 c.execute('INSERT INTO events(id,calendar_id,data,deleted_at) VALUES(?,?,?,?)',(e['id'],cal['id'],dump(e['data']),e['deleted_at']))
                 for key,value in e['overrides'].items(): c.execute('INSERT INTO overrides VALUES(?,?,?)',(e['id'],key,dump(value)))
+            for rule in a.get('smart_rules',[]):
+                c.execute('INSERT INTO smart_rules VALUES(?,?,?)',(rule['id'],cal['id'],dump(rule['data'])))
             c.execute('DELETE FROM restore_requests WHERE id=?',(request_id,))
             for person in a['members']:
                 self.service.enqueue(c,cal['id'],person,'admin',{'action':'calendar_restored','title':'','data':{}})

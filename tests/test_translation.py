@@ -100,7 +100,7 @@ def test_existing_events_and_categories_are_backfilled_when_enabled(service):
     calls=len(fake.calls);translator.process(limit=5)
     assert len(fake.calls)==calls
 
-def test_provider_recovers_after_four_failures_without_manual_retry(service):
+def test_terminal_failure_requires_explicit_retry(service):
     translator,fake=configured(service)
     event=service.save_event('1',{'title':'Recover','start':'2026-10-24T12:00','end':'2026-10-24T13:00'})
     translate=fake.translate
@@ -113,6 +113,9 @@ def test_provider_recovers_after_four_failures_without_manual_retry(service):
     fake.translate=translate
     with service.db.transaction() as c:c.execute("UPDATE translation_jobs SET next_at='2000-01-01T00:00:00Z'")
     translator.process()
+    assert service.get_event('2',event['id'])['translation_status']['state']=='failed'
+    assert not service.get_event('2',event['id'])['translations']
+    translator.request('1',event['id']);translator.process()
     assert service.get_event('2',event['id'])['translations']['en']['title']=='en: Recover'
 
 @pytest.mark.parametrize('url,valid',[

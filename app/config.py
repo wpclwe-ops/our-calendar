@@ -37,6 +37,11 @@ class Config:
     google_client_secret: str = ''
     google_credential_key: str = ''
     icloud_credential_key: str = ''
+    openai_api_key: str = ''
+    openai_model: str = 'gpt-6-luna'
+    openai_max_output_tokens: int = 16384
+    smart_monthly_budget: float = 5.0
+    smart_auto_categories: bool = False
 
     @classmethod
     def env(cls):
@@ -53,9 +58,19 @@ class Config:
                 google_client_secret=os.getenv('GOOGLE_CLIENT_SECRET',''),
                 google_credential_key=os.getenv('GOOGLE_CREDENTIAL_KEY',''),
                 icloud_credential_key=os.getenv('ICLOUD_CREDENTIAL_KEY',''),
+                openai_api_key=os.getenv('OPENAI_API_KEY',''),
+                openai_model=os.getenv('OPENAI_MODEL','gpt-6-luna'),
+                openai_max_output_tokens=int(os.getenv('OPENAI_MAX_OUTPUT_TOKENS','16384')),
+                smart_monthly_budget=float(os.getenv('SMART_MONTHLY_BUDGET_USD','5')),
+                smart_auto_categories=os.getenv('SMART_AUTO_CATEGORIES_ENABLED','false').lower()=='true',
                 backup_endpoint=os.getenv('OPERATOR_BACKUP_ENDPOINT',''),backup_bucket=os.getenv('OPERATOR_BACKUP_BUCKET',''),
                 backup_region=os.getenv('OPERATOR_BACKUP_REGION','auto'),backup_access_key=os.getenv('OPERATOR_BACKUP_ACCESS_KEY',''),
                 backup_secret_key=os.getenv('OPERATOR_BACKUP_SECRET_KEY',''),backup_encryption_key=os.getenv('OPERATOR_BACKUP_KEY',''))
+        import math
+        if c.openai_model not in ('gpt-6-luna','gpt-5.4-mini') or not 1024 <= c.openai_max_output_tokens <= 32768:
+            raise ValueError('Unsupported OPENAI_MODEL or output token limit')
+        if not math.isfinite(c.smart_monthly_budget) or not 0 <= c.smart_monthly_budget <= 1000:
+            raise ValueError('Invalid SMART_MONTHLY_BUDGET_USD')
         if not valid_translation_url(c.translation_url):
             raise ValueError('TRANSLATION_URL must use HTTPS or Railway private networking')
         for key in (c.google_credential_key,c.icloud_credential_key):

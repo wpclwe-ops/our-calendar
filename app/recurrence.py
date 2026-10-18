@@ -107,9 +107,39 @@ def instance(data, key, begin, end, override=None):
     override=override or {}
     if any(k in override and override[k]!=data.get(k) for k in ('title','description')):
         result['translations']={}
+        result.pop('smart',None)
     result.update(override)
     result['occurrence'] = key
     if not result['all_day']:
         result['start_utc'] = local_datetime(result['start'], result['timezone'], result.get('fold', 0)).astimezone(UTC).isoformat()
         result['end_utc'] = local_datetime(result['end'], result['timezone'], result.get('end_fold', 0)).astimezone(UTC).isoformat()
+    return result
+
+
+def remap_override_keys(before, after, overrides, anchor=None):
+    """Retain exception identity by ordinal when a series anchor/rule changes.
+
+    Refuse an unmappable edit rather than silently losing text, reminders or AI
+    corrections. Explicitly moved occurrence start/end values remain explicit.
+    """
+    if not overrides:
+        return {}
+    needed=set(overrides)
+    old_indices={}
+    for index,begin in enumerate(recurrence_starts(before,anchor,10001)):
+        require(index<10000,'recurrence_exceptions_need_review',409)
+        key=begin.date().isoformat() if before['all_day'] else begin.replace(tzinfo=None).isoformat(timespec='minutes')
+        if key in needed:old_indices[key]=index
+        if len(old_indices)==len(needed):break
+        if key>max(needed):break
+    require(len(old_indices)==len(needed),'recurrence_exceptions_need_review',409)
+    max_index=max(old_indices.values())
+    new_starts=list(recurrence_starts(after,limit=max_index+1))
+    require(len(new_starts)>max_index,'recurrence_exceptions_need_review',409)
+    result={}
+    for old,patch in overrides.items():
+        begin=new_starts[old_indices[old]]
+        key=begin.date().isoformat() if after['all_day'] else begin.replace(tzinfo=None).isoformat(timespec='minutes')
+        require(key not in result,'recurrence_exceptions_need_review',409)
+        result[key]=patch
     return result

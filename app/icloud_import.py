@@ -304,14 +304,14 @@ class ICloudImports:
                 old=c.execute('SELECT id FROM icloud_links WHERE source_id=? AND remote_id=?',
                               (source_id,item['url'])).fetchone()
                 if old:existing+=1;continue
-                data=self.helpers.new_data(c,actor,account['calendar_id'],value['fields'])
+                data=self.helpers.new_data(c,actor,account['calendar_id'],value['fields'],provider='icloud')
                 self.s.validate_event(c,self.s.calendar(c,actor),data)
                 for patch in value['overrides'].values():
                     if not patch.get('deleted'):self.s.validate_event(c,self.s.calendar(c,actor),{**data,**patch})
                 event_id=uid()
                 c.execute('INSERT INTO events(id,calendar_id,data) VALUES(?,?,?)',
                           (event_id,account['calendar_id'],dump(data)))
-                for key,patch in value['overrides'].items():
+                for key,patch in self.helpers.import_overrides(value,provider='icloud'):
                     c.execute('INSERT INTO overrides VALUES(?,?,?)',(event_id,key,dump(patch)))
                 c.execute("""INSERT INTO icloud_links(id,source_id,remote_id,event_id,base,remote,state,etag,checked_at)
                              VALUES(?,?,?,?,?,?,?,?,?)""",
@@ -378,7 +378,7 @@ class ICloudImports:
                         continue
                     if old or not source['auto_import'] or not eligible(remote,now,source['timezone'] or 'UTC') or created>=AUTO_BATCH:
                         continue
-                    data=self.helpers.new_data(c,actor,account['calendar_id'],remote['fields'])
+                    data=self.helpers.new_data(c,actor,account['calendar_id'],remote['fields'],provider='icloud')
                     try:
                         self.s.validate_event(c,self.s.calendar(c,actor),data)
                         for patch in remote['overrides'].values():
@@ -387,7 +387,7 @@ class ICloudImports:
                         failed.add(rid);continue
                     event_id=uid()
                     c.execute('INSERT INTO events(id,calendar_id,data) VALUES(?,?,?)',(event_id,account['calendar_id'],dump(data)))
-                    for key,patch in remote['overrides'].items():
+                    for key,patch in self.helpers.import_overrides(remote,provider='icloud'):
                         c.execute('INSERT INTO overrides VALUES(?,?,?)',(event_id,key,dump(patch)))
                     c.execute("""INSERT INTO icloud_links(id,source_id,remote_id,event_id,base,remote,state,etag,checked_at)
                                  VALUES(?,?,?,?,?,?,?,?,?)""",
