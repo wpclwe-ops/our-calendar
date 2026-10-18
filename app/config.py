@@ -36,6 +36,7 @@ class Config:
     google_client_id: str = ''
     google_client_secret: str = ''
     google_credential_key: str = ''
+    icloud_credential_key: str = ''
 
     @classmethod
     def env(cls):
@@ -51,14 +52,16 @@ class Config:
                 google_client_id=os.getenv('GOOGLE_CLIENT_ID',''),
                 google_client_secret=os.getenv('GOOGLE_CLIENT_SECRET',''),
                 google_credential_key=os.getenv('GOOGLE_CREDENTIAL_KEY',''),
+                icloud_credential_key=os.getenv('ICLOUD_CREDENTIAL_KEY',''),
                 backup_endpoint=os.getenv('OPERATOR_BACKUP_ENDPOINT',''),backup_bucket=os.getenv('OPERATOR_BACKUP_BUCKET',''),
                 backup_region=os.getenv('OPERATOR_BACKUP_REGION','auto'),backup_access_key=os.getenv('OPERATOR_BACKUP_ACCESS_KEY',''),
                 backup_secret_key=os.getenv('OPERATOR_BACKUP_SECRET_KEY',''),backup_encryption_key=os.getenv('OPERATOR_BACKUP_KEY',''))
         if not valid_translation_url(c.translation_url):
             raise ValueError('TRANSLATION_URL must use HTTPS or Railway private networking')
-        if c.google_credential_key:
-            from cryptography.fernet import Fernet
-            Fernet(c.google_credential_key.encode())
+        for key in (c.google_credential_key,c.icloud_credential_key):
+            if key:
+                from cryptography.fernet import Fernet
+                Fernet(key.encode())
         if any((c.backup_endpoint,c.backup_bucket,c.backup_access_key,c.backup_secret_key,c.backup_encryption_key)):
             if not all((c.backup_endpoint,c.backup_bucket,c.backup_access_key,c.backup_secret_key,c.backup_encryption_key)):
                 raise ValueError('Complete all OPERATOR_BACKUP variables')
