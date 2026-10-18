@@ -179,6 +179,14 @@ def create_app(config=None,start_worker=True):
     async def icloud_select(request:Request,account_id:str):
         data=await body(request)
         return icloud.select(actor(request),account_id,data.get('ids'),data.get('auto_ids'))
+    @app.get('/api/icloud/sources/{source_id}/events')
+    async def icloud_browse(request:Request,source_id:str):
+        return await asyncio.to_thread(icloud.browse,actor(request),source_id)
+    @app.post('/api/icloud/sources/{source_id}/import')
+    async def icloud_import(request:Request,source_id:str):
+        data=await body(request)
+        return await asyncio.to_thread(icloud.import_selected,actor(request),source_id,
+                                       data.get('ids'),data.get('confirmed'))
     @app.post('/api/icloud/sources/{source_id}/sync')
     async def icloud_sync(request:Request,source_id:str):
         return await asyncio.to_thread(icloud.sync_source,actor(request),source_id,True)
