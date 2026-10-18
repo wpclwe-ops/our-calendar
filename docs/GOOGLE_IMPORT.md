@@ -1,4 +1,4 @@
-# Google Calendar: inbound import (0.8.0)
+# Google Calendar: inbound import and optional automatic sharing
 
 This release implements the first integration stage only. Google event creation,
 updates, deletion, automatic export, and two-way mode are absent. OAuth requests
@@ -46,8 +46,8 @@ client credentials must be checked; repeated consent alone cannot fix it.
 An External OAuth app in Testing has seven-day refresh-token expiry with these
 scopes. Establish the appropriate publishing/verification state before treating
 the connection as permanent. Real-device OAuth, actual Google API permissions,
-Google quotas/watch delivery, and long-running account acceptance still need
-validation with the registered client. Automated synthetic tests do not replace
+Google quotas/watch delivery, automatic event backfill, and long-running account
+acceptance still need validation with the registered client. Automated synthetic tests do not replace
 that acceptance.
 
 If all three variables are absent or incomplete, the integration is visibly
@@ -62,9 +62,27 @@ not a limit on the lifetime of imported events or background synchronization.
 A series selection explicitly includes future occurrences. An individual
 occurrence is imported as a single event. Source/instance overlap is rejected
 rather than producing duplicates. Technical batch size is 50 selected items;
-provider pagination supports additional pages. New external events are never
-automatically shared. Selection uses escaped text, including Google HTML
-Descriptions; no imported HTML is executed.
+provider pagination supports additional pages. Manual selection stays the default
+for all existing and newly connected accounts.
+
+The owner may explicitly enable **Automatically add events** for selected source
+calendars. A separate confirmation states that already-existing upcoming events
+and future new events from those whole source calendars become visible to both
+participants without choosing each event. Switching it on schedules an immediate
+full read even for calendars already connected before this release. Normal
+non-recurring entries that ended in the distant past are not backfilled. Recurring
+series are imported as series, including future instances (some old completed
+series can also be included). Eligible candidates are processed in batches of 50;
+the provider cursor is not advanced until later batches are processed. Unsupported
+events are skipped and considered again when their external version changes.
+Importantly, this explicit whole-calendar opt-in changes the earlier requirement
+for one-by-one sharing; selecting a calendar without opt-in retains that privacy
+behavior. Disabling it stops new auto-imports but preserves already shared events
+and background updates to their links.
+
+Unselected calendars are never automatically shared. Neither manual nor
+automatic imports write, update or delete events at Google. Selection uses
+escaped text, including Google HTML Descriptions; no imported HTML is executed.
 
 Only source owners can read their accounts, source lists, unselected events,
 previews and conflict controls. Shared event details contain only the link ID,
@@ -74,7 +92,8 @@ applied on import; existing Google reminders remain independent. A batch sends
 one partner notification. Important external changes notify both.
 
 Unselected event bodies are read transiently for private selection/delta
-processing and are not persisted. Selected preview snapshots and pending OAuth
+processing and are not persisted. Opted-in calendars record only event IDs and
+versions of unsupported automatic candidates to avoid blocking subsequent events. Selected preview snapshots and pending OAuth
 credentials are encrypted and expire after ten minutes. Permanent credentials
 are server-encrypted with the independent key. ZIP/ICS omit accounts, links,
 credentials, cursors and previews; encrypted operator snapshots contain the DB
@@ -116,8 +135,10 @@ resolutions modify only Our Calendar.
 Disconnect/deselect leaves imported events intact and ends only affected links.
 Leaving the pair erases that participant's local credentials and pending
 requests; return does not reactivate them. Google authorization can also be
-revoked from the Google Account settings. Reconnection requires manual source
-and event selection and reconciles retained link IDs without duplicate imports.
+revoked from the Google Account settings. Reconnection requires manual source selection. Automatic import is off by
+default following reconnection and must be expressly confirmed again; in manual
+mode, event selection is still required. Reconnecting links to existing records
+never silently duplicates already linked IDs.
 Local event deletion disconnects its link; Trash/ZIP restoration never silently
 reactivates it. Locked calendars are excluded from background jobs and reject
 in-flight applies; after cancellation the next check reconciles versions.
