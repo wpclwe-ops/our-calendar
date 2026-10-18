@@ -66,6 +66,32 @@ const {mkdtempSync,rmSync,mkdirSync}=require('node:fs');const {tmpdir}=require('
   await screenshot('month-scroll-short-'+height);
  }
  for(const width of [320,390,430]){await page.setViewportSize({width,height:844});await page.waitForTimeout(80);assert.ok(await page.locator('.month-scroll').evaluate(el=>Math.abs(el.clientHeight/2-el.querySelector('.scroll-week').offsetHeight)<2));assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));const fit=await page.locator('.month-scroll .day[data-date="2026-10-17"]').evaluate(el=>{const chip=el.querySelectorAll('.event-bar')[4],last=el.querySelector('.more'),cell=el.getBoundingClientRect();return {ok:chip.getBoundingClientRect().bottom<=cell.bottom&&last.getBoundingClientRect().bottom<=cell.bottom,cell:cell.height,chip:Math.round(chip.getBoundingClientRect().bottom-cell.top),more:Math.round(last.getBoundingClientRect().bottom-cell.top),scroll:el.closest('.month-scroll').clientHeight,width:innerWidth}});assert.ok(fit.ok,'five tasks and overflow fit within date: '+JSON.stringify(fit));await screenshot('month-scroll-dark-'+width)}
+ // Both month layouts must paint behind the floating actions, including while scrolling.
+ for(const theme of ['light','dark'])for(const width of [320,390,430])for(const layout of ['paged','scroll']){
+  await page.setViewportSize({width,height:width===320?568:844});
+  await page.evaluate(async({theme,layout})=>{state.me.theme=theme;state.me.month_layout=layout;selected='2026-10-17';monthWindow=[];await loadData();render()},{theme,layout});await wait();
+  const selector=layout==='paged'?'.month-with-agenda':'.month-scroll';
+  await page.locator(selector).evaluate(el=>el.scrollTop+=70);await page.waitForTimeout(140);await wait();
+  const band=await page.locator(selector).evaluate(el=>{
+   const box=el.getBoundingClientRect(),actions=document.querySelector('.calendar-actions'),a=actions.getBoundingClientRect();
+   const hit=document.elementFromPoint(a.x+a.width/2,a.y+a.height/2);
+   return {bottom:box.bottom,height:innerHeight,transparent:getComputedStyle(actions).backgroundColor,touchable:Boolean(hit?.closest('.month-with-agenda,.month-scroll'))};
+  });
+  assert.ok(Math.abs(band.bottom-band.height)<2,layout+' extends to screen bottom: '+JSON.stringify(band));
+  assert.equal(band.transparent,'rgba(0, 0, 0, 0)');assert.equal(band.touchable,true,layout+' gap between actions passes to calendar');
+  if(layout==='paged'){
+   await page.locator(selector).evaluate(el=>el.scrollTop=el.scrollHeight);
+   const last=await page.locator('.month-agenda .day-task').last().boundingBox(),actions=await page.locator('.calendar-actions').boundingBox();
+   assert.ok(last.y+last.height<=actions.y,'last month task scrolls above actions');
+  }else{
+   const before=await page.locator(selector).evaluate(el=>monthAnchor(el));await page.evaluate(()=>render());
+   const after=await page.locator(selector).evaluate(el=>monthAnchor(el));assert.equal(after.week,before.week);assert.ok(Math.abs(after.offset-before.offset)<2);
+   await page.locator('.month-scroll .day[data-date="2026-10-17"]').evaluate(el=>el.scrollIntoView({block:'start'}));
+   const more=await page.locator('.month-scroll .day[data-date="2026-10-17"] .more').boundingBox(),actions=await page.locator('.calendar-actions').boundingBox();
+   assert.ok(more.y+more.height<=actions.y,'month overflow button can scroll above actions');
+  }
+  await screenshot('month-no-band-'+layout+'-'+theme+'-'+width);
+ }
  await page.locator('.month-scroll .day[data-date="2026-10-17"] .more').click();await wait();assert.equal(await page.locator('.month-agenda .day-task').count(),7);
  await page.locator('.month-agenda [data-action=event]').first().click();await page.waitForSelector('.detail-title');assert.ok((await page.locator('.detail-title').textContent()).length>0);
   assert.equal(await page.locator('.detail-actions button').count(),2);
