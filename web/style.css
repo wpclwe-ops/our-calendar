@@ -308,3 +308,12 @@ body.dark .week-date.selected{background:#3b3048}
 .calendar-shell:has(> .calendar-motion-viewport > .calendar-motion-page:not(.motion-preview) :is(.timeline,.month-with-agenda,.month-scroll)){height:100dvh}
 .demo+.calendar-shell:has(> .calendar-motion-viewport > .calendar-motion-page:not(.motion-preview) :is(.timeline,.month-with-agenda,.month-scroll)){height:calc(100dvh - 34px)}
 .calendar-shell :is(.timeline,.month-with-agenda,.month-scroll){padding-bottom:calc(var(--nav-height) + 104px);scroll-padding-bottom:calc(var(--nav-height) + 104px)}
+
+/* Owner-private Google selection uses the existing glass surfaces and controls. */
+.g-check{display:flex;align-items:flex-start;gap:12px;padding:16px;min-height:48px;cursor:pointer}
+.g-check input[type=checkbox]{width:22px;height:22px;min-width:22px;margin:2px 0;accent-color:var(--accent,#9B77D1)}
+.g-check span{min-width:0;overflow-wrap:anywhere}.g-check small,.g-link small{display:block;margin-top:5px;opacity:.72}
+.g-choice+.g-choice{border-top:1px solid var(--border,rgba(150,130,180,.16))}.g-choice>.text-button{margin:0 16px 12px}
+.g-date-range{display:flex;gap:12px}.g-date-range label{flex:1;min-width:0}.g-date-range input{width:100%;min-width:0;margin:8px 0 12px;box-sizing:border-box}
+.g-import-actions{padding:12px 0 28px}.g-account h2{font-size:18px;overflow-wrap:anywhere}.g-source-card{border-top:1px solid var(--border,rgba(150,130,180,.16));padding-top:16px;margin-top:18px}
+.g-link{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:12px 0}.g-link>span{min-width:0;overflow-wrap:anywhere}.g-link button{flex-shrink:0}.g-description{white-space:pre-wrap;overflow-wrap:anywhere;max-height:240px;overflow:auto}.g-versions{white-space:pre-wrap;overflow-wrap:anywhere;max-height:240px;overflow:auto;font-size:12px}.g-empty{padding:18px}

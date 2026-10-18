@@ -10,7 +10,7 @@ from .recurrence import UTC,utcnow,stamp,occurrences,instance,zone
 
 log=logging.getLogger('our_calendar.worker')
 TEXT={
- 'ru':{'created':'Новое событие','updated':'Событие изменено','deleted':'Событие удалено','restored':'Событие восстановлено',
+ 'ru':{'google_imported':'Добавлено событий из Google','google_updated':'Событие изменено в Google','google_deleted':'Оригинал удалён в Google. Владелец подключения должен выбрать, сохранить ли общее событие.','google_conflict':'Изменения Google требуют сверки','google_resolved':'Различия с Google согласованы','created':'Новое событие','updated':'Событие изменено','deleted':'Событие удалено','restored':'Событие восстановлено',
        'joined':'Второй участник присоединился к Our Calendar','backup_restored':'Календарь восстановлен из резервной копии',
        'deletion_requested':'Запрошено полное удаление календаря. Откройте настройки, чтобы согласиться или отказаться.',
        'deletion_started':'Календарь будет удалён через 30 дней. Любой из вас может отменить удаление.',
@@ -18,7 +18,7 @@ TEXT={
        'calendar_restored':'Календарь восстановлен. Включите свои напоминания в настройках, когда будете готовы.',
        'event_started':'Событие начинается','reminder':'Напоминание','open_event':'Открыть событие','open':'Открыть календарь','welcome':'Our Calendar — ваш общий календарь для двоих. Откройте приложение, чтобы начать.',
        'all_day':'Весь день','both':'Обоим'},
- 'en':{'created':'New event','updated':'Event updated','deleted':'Event deleted','restored':'Event restored',
+ 'en':{'google_imported':'Events imported from Google','google_updated':'Event changed in Google','google_deleted':'The original was deleted in Google. The connection owner must decide whether to keep the shared event.','google_conflict':'Google changes need reconciliation','google_resolved':'Google differences resolved','created':'New event','updated':'Event updated','deleted':'Event deleted','restored':'Event restored',
        'joined':'Your partner joined Our Calendar','backup_restored':'Calendar restored from backup',
        'deletion_requested':'Calendar deletion requested. Open settings to approve or reject.',
        'deletion_started':'Your calendar will be deleted in 30 days. Either participant can cancel.',
@@ -62,6 +62,8 @@ class Worker:
         self.service=service; self.telegram=telegram or Telegram(service.config)
         from .translation import Translations
         self.translations=Translations(service)
+        from .google_import import GoogleImports
+        self.google=GoogleImports(service)
         self.stop_event=threading.Event(); self.thread=None
         self.setup_complete=False;self.setup_next=None
     def start(self):
@@ -69,7 +71,7 @@ class Worker:
         self.backups=OperatorBackups(self.service)
         self.stop_event.clear()
         self.threads=[threading.Thread(target=target,name=name,daemon=True) for target,name in
-                      ((self.run,'calendar-worker'),(self.run_translations,'calendar-translations'),(self.run_backups,'calendar-backups'))]
+                      ((self.run,'calendar-worker'),(self.run_translations,'calendar-translations'),(self.run_backups,'calendar-backups'),(self.run_google,'calendar-google'))]
         self.thread=self.threads[0]
         for thread in self.threads:thread.start()
     def stop(self):
@@ -98,6 +100,12 @@ class Worker:
             try:self.backups.run_due()
             except Exception:log.error('Operator backup cycle failed')
             self.stop_event.wait(60)
+
+    def run_google(self):
+        while not self.stop_event.is_set():
+            try:self.google.run_due();self.heartbeat('google_heartbeat')
+            except Exception:log.error('Google import worker cycle failed')
+            self.stop_event.wait(15)
 
     def configure_bot(self):
         if not self.service.config.auto_setup_bot or self.service.config.demo or self.setup_complete:return

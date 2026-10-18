@@ -8,6 +8,8 @@ from copy import deepcopy
 from .security import require
 from .recurrence import TIME_FIELDS
 
+TEMPORAL_FIELDS = TIME_FIELDS | {'fold','end_fold'}
+
 @dataclass(frozen=True)
 class Account:
     owner_id:str
@@ -35,14 +37,14 @@ def merge_fields(base,local,remote):
     """Three-way merge: temporal fields are treated as an indivisible group."""
     merged=deepcopy(local);conflicts={}
     keys=set(base)|set(local)|set(remote)
-    local_time=any(base.get(k)!=local.get(k) for k in TIME_FIELDS)
-    remote_time=any(base.get(k)!=remote.get(k) for k in TIME_FIELDS)
-    time_different=any(local.get(k)!=remote.get(k) for k in TIME_FIELDS)
+    local_time=any(base.get(k)!=local.get(k) for k in TEMPORAL_FIELDS)
+    remote_time=any(base.get(k)!=remote.get(k) for k in TEMPORAL_FIELDS)
+    time_different=any(local.get(k)!=remote.get(k) for k in TEMPORAL_FIELDS)
     if local_time and remote_time and time_different:
-        conflicts['timing']={source:{k:value.get(k) for k in TIME_FIELDS} for source,value in [('base',base),('local',local),('remote',remote)]}
+        conflicts['timing']={source:{k:value.get(k) for k in TEMPORAL_FIELDS} for source,value in [('base',base),('local',local),('remote',remote)]}
     for key in keys:
         b,l,r=base.get(key),local.get(key),remote.get(key)
-        if key in TIME_FIELDS and 'timing' in conflicts:continue
+        if key in TEMPORAL_FIELDS and 'timing' in conflicts:continue
         if l==r or r==b:continue
         if l==b:merged[key]=deepcopy(r)
         else:conflicts[key]={'base':b,'local':l,'remote':r}
