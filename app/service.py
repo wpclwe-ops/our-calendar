@@ -216,6 +216,7 @@ class Service:
             ov={v['occurrence']:load(v['data']) for v in c.execute('SELECT * FROM overrides WHERE event_id=?',(event_id,))}
             result['overrides']=ov
             result['google_links']=[dict(v) for v in c.execute('SELECT l.id,l.state,a.user_id AS owner_id FROM google_links l JOIN google_sources s ON s.id=l.source_id JOIN google_accounts a ON a.id=s.account_id WHERE l.event_id=? AND l.state!=\'disconnected\'',(event_id,))]
+            result['icloud_links']=[dict(v) for v in c.execute("SELECT l.id,l.state,a.user_id AS owner_id FROM icloud_links l JOIN icloud_sources s ON s.id=l.source_id JOIN icloud_accounts a ON a.id=s.account_id WHERE l.event_id=? AND l.state!='disconnected'",(event_id,))]
             translation=c.execute("SELECT state,error FROM translation_jobs WHERE kind='event' AND resource_id=?",(event_id,)).fetchone()
             result['translation_status']=dict(translation) if translation else None
             from .recurrence import base_datetime
