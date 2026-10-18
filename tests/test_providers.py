@@ -87,3 +87,47 @@ def test_google_token_missing_permissions_are_distinct_from_client_credentials()
     with pytest.raises(ProviderFailure) as failure:
         GoogleOAuth('client','secret','https://app.example/callback',Partial()).exchange('code','verifier')
     assert failure.value.reason=='missing_scopes'
+
+
+def test_icloud_compact_caldav_projection_and_single_resource_get():
+    from xml.sax.saxutils import escape
+    calendar='https://p42-caldav.icloud.com/123/calendar/'
+    url=calendar+'meeting.ics'
+    ics=('BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\n'
+         'UID:test@example.com\r\nDTSTART;VALUE=DATE:20261024\r\n'
+         'SUMMARY:Medical appointment\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n')
+    xml=('<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">'
+         '<d:response><d:href>/123/calendar/meeting.ics</d:href><d:propstat>'
+         '<d:prop><d:getetag>v1</d:getetag><c:calendar-data>'+escape(ics)+
+         '</c:calendar-data></d:prop><d:status>HTTP/1.1 200 OK</d:status>'
+         '</d:propstat></d:response></d:multistatus>').encode()
+    class Transport:
+        def __init__(self):
+            self.calls=[]
+        def request(self,method,url,headers=None,body=None):
+            self.calls.append((method,url,body))
+            if method=='REPORT':
+                return 207,{},xml
+            assert method=='GET'
+            return 200,{},ics.encode()
+    transport=Transport()
+    client=ICloudCalDAV('user@example.com','test-password',transport)
+    previews=client.previews(calendar)
+    assert len(previews)==1 and previews[0]['url']==url
+    assert previews[0]['etag']=='v1'
+    body=transport.calls[0][2].decode()
+    assert '<c:prop name="SUMMARY"/>' in body
+    assert '<c:prop name="RDATE"/>' in body
+    assert '<c:calendar-data/>' not in body
+    assert all(method!='GET' for method,_,_ in transport.calls)
+    assert client.resource(url)['ics']==ics
+    assert transport.calls[-1][0]=='GET'
+
+    # A partial/failed multi-status cannot masquerade as a deleted event.
+    transport.calls.clear()
+    bad=xml.replace(b'HTTP/1.1 200 OK',b'HTTP/1.1 500 Error')
+    class Failed(Transport):
+        def request(self,method,url,headers=None,body=None):
+            return 207,{},bad
+    with pytest.raises(ProviderFailure):
+        ICloudCalDAV('user','password',Failed()).previews(calendar)

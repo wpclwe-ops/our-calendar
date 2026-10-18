@@ -21,7 +21,9 @@ AUTO_BATCH = 20
 def _local(value, timezone):
     """Convert an iCalendar date/datetime to the internal local wall time."""
     if isinstance(value, datetime):
-        require(value.tzinfo is not None, 'icloud_unsupported_event', 422)
+        # RFC 5545 also permits floating local DATE-TIME values.
+        if value.tzinfo is None:
+            return value.isoformat(timespec='seconds')
         return value.astimezone(zone(timezone)).replace(tzinfo=None).isoformat(timespec='seconds')
     if isinstance(value, date):
         return value.isoformat()
@@ -30,8 +32,22 @@ def _local(value, timezone):
 
 def _fields(component, timezone, recurring=True):
     start = component.decoded('DTSTART')
-    end = component.decoded('DTEND')
     all_day = not isinstance(start, datetime)
+    has_end = component.get('DTEND') is not None
+    has_duration = component.get('DURATION') is not None
+    require(not (has_end and has_duration), 'icloud_unsupported_event', 422)
+    if has_end:
+        end = component.decoded('DTEND')
+    elif has_duration:
+        duration = component.decoded('DURATION')
+        require(isinstance(duration, timedelta) and duration.total_seconds() > 0,
+                'icloud_unsupported_event', 422)
+        end = start + duration
+    else:
+        # RFC 5545: an all-day VEVENT without DTEND lasts exactly one day.
+        # A zero-duration timed VEVENT cannot be represented by Our Calendar.
+        require(all_day, 'icloud_unsupported_event', 422)
+        end = start + timedelta(days=1)
     require(all_day == (not isinstance(end, datetime)), 'icloud_unsupported_event', 422)
     tzid = component.get('DTSTART').params.get('TZID') if isinstance(start,datetime) else None
     timezone = str(tzid or getattr(getattr(start,'tzinfo',None),'key',None) or timezone)
@@ -39,16 +55,16 @@ def _fields(component, timezone, recurring=True):
     rule = ''
     if recurring and component.get('RRULE'):
         rule = component['RRULE'].to_ical().decode('utf-8').upper()
-    require(not component.get('RDATE') and not component.get('DURATION'),
-            'icloud_unsupported_recurrence', 422)
+    # RDATE cannot yet be mapped without losing additional occurrences.
+    require(not component.get('RDATE'), 'icloud_unsupported_recurrence', 422)
     result = {
         'title': str(component.get('SUMMARY') or '(iCloud Calendar)'),
         'description': str(component.get('DESCRIPTION') or ''),
         'location': str(component.get('LOCATION') or ''),
         'start': _local(start, timezone), 'end': _local(end, timezone),
         'all_day': all_day, 'timezone': timezone,
-        'fold': start.astimezone(zone(timezone)).fold if isinstance(start,datetime) else 0,
-        'end_fold': end.astimezone(zone(timezone)).fold if isinstance(end,datetime) else 0,
+        'fold': start.astimezone(zone(timezone)).fold if isinstance(start,datetime) and start.tzinfo else 0,
+        'end_fold': end.astimezone(zone(timezone)).fold if isinstance(end,datetime) and end.tzinfo else 0,
         'rrule': rule
     }
     validate_timing(result)
@@ -134,6 +150,23 @@ class ICloudImports:
         secret=self.vault.decrypt(account['credentials'])
         return self.provider(secret['email'],secret['password'])
 
+    def previews(self,account,source):
+        client=self.client(account)
+        # Keep compatible with older injected providers and test adapters.
+        if callable(getattr(client,'previews',None)):
+            items=client.previews(source['remote_id'])
+        else:
+            items=client.events(source['remote_id'])
+        require(len(items)<=MAX_REMOTE,'icloud_calendar_too_large',413)
+        return client,items
+
+    @staticmethod
+    def full_item(client,item):
+        if callable(getattr(client,'resource',None)):
+            result=client.resource(item['url'])
+            return {**item,'ics':result['ics']}
+        return item
+
     def status(self,actor):
         with self.s.db.transaction() as c:
             cal=self.s.calendar(c,actor)
@@ -142,8 +175,9 @@ class ICloudImports:
                 sources=[]
                 for src in c.execute('SELECT id,name,selected,auto_import,state,checked_at FROM icloud_sources WHERE account_id=?',(a['id'],)):
                     count=c.execute('SELECT COUNT(*) AS n FROM icloud_links WHERE source_id=? AND event_id IS NOT NULL',(src['id'],)).fetchone()['n']
+                    unsupported=c.execute("SELECT COUNT(*) AS n FROM icloud_links WHERE source_id=? AND state='unsupported'",(src['id'],)).fetchone()['n']
                     issues=[dict(v) for v in c.execute("SELECT l.id,l.state,json_extract(e.data,'$.title') AS title FROM icloud_links l JOIN events e ON e.id=l.event_id WHERE l.source_id=? AND l.state IN ('conflict','remote_deleted')",(src['id'],))]
-                    sources.append({**dict(src),'linked_count':count,'issues':issues})
+                    sources.append({**dict(src),'linked_count':count,'unsupported_count':unsupported,'issues':issues})
                 accounts.append({**dict(a),'mode':'import_only','sources':sources})
             return {'configured':self.configured,'accounts':accounts}
 
@@ -262,8 +296,7 @@ class ICloudImports:
 
     def browse(self,actor,source_id):
         with self.s.db.transaction() as c:source,account=self.source(c,actor,source_id)
-        items=self.client(account).events(source['remote_id'])
-        require(len(items)<=MAX_REMOTE,'icloud_calendar_too_large',413)
+        _,items=self.previews(account,source)
         result=[]
         for item in items:
             try:
@@ -273,6 +306,7 @@ class ICloudImports:
                 result.append({'id':item['url'],'title':fields['title'],'start':fields['start'],
                                'end':fields['end'],'supported':True,'series':bool(fields['rrule'])})
             except Problem:
+                # One malformed VEVENT must not hide the rest of the private picker.
                 result.append({'id':item['url'],'title':'(Unsupported iCloud event)',
                                'start':'','end':'','supported':False,'series':False})
         with self.s.db.transaction() as c:
@@ -286,13 +320,14 @@ class ICloudImports:
         require(isinstance(ids,list) and 0<len(ids)<=50 and len(ids)==len(set(ids))
                 and all(isinstance(i,str) and len(i)<2000 for i in ids),'invalid_request')
         with self.s.db.transaction() as c:source,account=self.source(c,actor,source_id)
-        items=self.client(account).events(source['remote_id'])
-        require(len(items)<=MAX_REMOTE,'icloud_calendar_too_large',413)
+        client,items=self.previews(account,source)
         by_id={i['url']:i for i in items}
         require(set(ids)<=set(by_id),'icloud_selection_expired',409)
         values=[]
         for rid in ids:
-            item=by_id[rid];value=parse_resource(item,source['timezone'])
+            # The selected URL is checked against this source before any GET.
+            item=self.full_item(client,by_id[rid])
+            value=parse_resource(item,source['timezone'])
             require(not value.get('deleted'),'icloud_unsupported_event',422)
             values.append((item,value))
         with self.s.db.transaction() as c:
@@ -303,7 +338,10 @@ class ICloudImports:
             for item,value in values:
                 old=c.execute('SELECT id FROM icloud_links WHERE source_id=? AND remote_id=?',
                               (source_id,item['url'])).fetchone()
-                if old:existing+=1;continue
+                if old and c.execute('SELECT event_id FROM icloud_links WHERE id=?',(old['id'],)).fetchone()['event_id']:
+                    existing+=1
+                    continue
+                if old:c.execute('DELETE FROM icloud_links WHERE id=?',(old['id'],))
                 data=self.helpers.new_data(c,actor,account['calendar_id'],value['fields'],provider='icloud')
                 self.s.validate_event(c,self.s.calendar(c,actor),data)
                 for patch in value['overrides'].values():
@@ -333,20 +371,38 @@ class ICloudImports:
             c.execute('UPDATE icloud_sources SET lease_until=? WHERE id=?',(lease,source_id))
             links=[dict(v) for v in c.execute('SELECT * FROM icloud_links WHERE source_id=?',(source_id,))]
         try:
-            items=self.client(account).events(source['remote_id'])
-            require(len(items)<=MAX_REMOTE,'icloud_calendar_too_large',413)
+            client,items=self.previews(account,source)
+            linked_by_id={link['remote_id']:link for link in links}
             present=set()
             parsed=[]
-            failed=set()
+            failed={}
+            more=False
+            considered=0
             for item in items:
                 remote_id=item['url'];present.add(remote_id)
-                old=next((l for l in links if l['remote_id']==remote_id),None)
+                old=linked_by_id.get(remote_id)
                 if old and old['state']=='disconnected':continue
                 if not old and not source['auto_import']:continue
-                if old and old['etag']==item['etag'] and old['state'] in ('ready','local_changes','conflict'):continue
-                try:remote=parse_resource(item,source['timezone'] or 'UTC')
+                if old and old['etag']==item['etag'] and (
+                        old['state'] in ('ready','local_changes','conflict')
+                        or (old['state']=='unsupported' and not force)):
+                    continue
+                if not old:
+                    # Do not spend a network fetch on expired one-off events.
+                    try:
+                        summary=parse_resource(item,source['timezone'] or 'UTC')
+                        if not eligible(summary,now,source['timezone'] or 'UTC'):continue
+                    except Problem:
+                        pass  # A full resource may still be valid (custom VTIMEZONE).
+                if considered>=AUTO_BATCH:
+                    more=True
+                    continue
+                considered+=1
+                try:
+                    remote=parse_resource(self.full_item(client,item),source['timezone'] or 'UTC')
                 except Problem:
-                    failed.add(remote_id);continue
+                    failed[remote_id]=item['etag']
+                    continue
                 parsed.append((item,remote,old))
             with self.s.db.transaction() as c:
                 current,active=self.source(c,actor,source_id)
@@ -355,6 +411,10 @@ class ICloudImports:
                 created=0
                 for item,remote,old in parsed:
                     rid=item['url'];etag=item['etag']
+                    if old and not old['event_id'] and old['state'] in ('unsupported','remote_deleted'):
+                        # A previously unimportable/missing resource may become valid.
+                        c.execute('DELETE FROM icloud_links WHERE id=?',(old['id'],))
+                        old=None
                     if old and old['event_id']:
                         if remote.get('deleted'):
                             if old['state']!='remote_deleted':self.s.notify(c,account['calendar_id'],None,'icloud_deleted',load(row['data']) if (row:=c.execute('SELECT * FROM events WHERE id=?',(old['event_id'],)).fetchone()) else {},old['event_id'])
@@ -401,12 +461,25 @@ class ICloudImports:
                         if row:self.s.notify(c,account['calendar_id'],None,'icloud_deleted',load(row['data']),row['id'])
                         c.execute("UPDATE icloud_links SET state='remote_deleted',remote=?,checked_at=? WHERE id=?",
                                   (dump({'deleted':True}),stamp(),old['id']))
-                # A source with > AUTO_BATCH pending events is drained over later passes.
-                more=sum(1 for item,remote,old in parsed if not old and not remote.get('deleted'))>AUTO_BATCH
+                # Unsupported resources are isolated so one invalid event cannot
+                # repeatedly starve all later imports. Retain local data on parse failure.
+                for rid,etag in failed.items():
+                    old=linked_by_id.get(rid)
+                    if old:
+                        c.execute("UPDATE icloud_links SET state='unsupported',etag=?,checked_at=? WHERE id=?",
+                                  (etag,stamp(),old['id']))
+                    else:
+                        c.execute("""INSERT INTO icloud_links(id,source_id,remote_id,event_id,base,remote,state,etag,checked_at)
+                                     VALUES(?,?,?,NULL,?,?,?,?,?)""",
+                                  (uid(),source_id,rid,dump({}),dump({}),'unsupported',etag,stamp()))
+                unsupported=c.execute(
+                    "SELECT COUNT(*) AS n FROM icloud_links WHERE source_id=? AND state='unsupported'",
+                    (source_id,)).fetchone()['n']
+                state='unsupported' if unsupported else 'ready'
                 c.execute("UPDATE icloud_sources SET next_at=?,state=?,attempts=0,lease_until=NULL,checked_at=? WHERE id=?",
-                          (stamp(now+timedelta(seconds=15 if more else POLL)), 'unsupported' if failed else 'ready',stamp(),source_id))
+                          (stamp(now+timedelta(seconds=15 if more else POLL)),state,stamp(),source_id))
                 if created:self.s.notify(c,account['calendar_id'],actor,'icloud_imported',{'title':str(created)})
-            return {'state':'unsupported' if failed else 'ready','created':created}
+            return {'state':state,'created':created,'unsupported':unsupported}
         except (ProviderFailure,Problem,ValueError,TypeError,KeyError) as exc:
             state='needs_reconnect' if isinstance(exc,ProviderFailure) and exc.code in (400,401) else 'delayed'
             delay=max(getattr(exc,'retry_after',0),min(3600,30*2**min(source['attempts'],7)))+random.randint(0,15)
