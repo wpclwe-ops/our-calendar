@@ -39,7 +39,7 @@ class Service:
             lang = telegram.get('language_code', 'en').split('-')[0]
             data = {'name': telegram.get('first_name',''), 'language': lang if lang in ('ru','en') else 'en',
                     'choose_language': lang not in ('ru','en'), 'timezone': 'UTC', 'timezone_initialized': False, 'theme': 'system',
-                    'view': 'day', 'day_layout': 'timeline', 'month_layout': 'paged', 'touch_bar': ['day','month','settings'], 'default_duration': 60, 'default_reminders': [60], 'reminders_enabled': True, 'notify_at_start': True,
+                    'view': 'day', 'day_layout': 'timeline', 'month_layout': 'paged', 'week_layout': 'agenda', 'touch_bar': ['day','month','settings'], 'default_duration': 60, 'default_reminders': [60], 'reminders_enabled': True, 'notify_at_start': True,
                     'bot_can_message': False, 'delivery_error': None}
             c.execute('INSERT INTO users VALUES(?,?)', (user_id, dump(data)))
         return user_id
@@ -47,7 +47,7 @@ class Service:
     def user(self, c, user_id):
         row = c.execute('SELECT data FROM users WHERE id=?', (user_id,)).fetchone()
         require(row is not None, 'unauthorized', 401)
-        prefs={'id': user_id, 'notify_at_start': True, 'day_layout': 'timeline', 'month_layout': 'paged', 'touch_bar': ['day','month','settings'], 'default_duration': 60, **load(row['data'])}
+        prefs={'id': user_id, 'notify_at_start': True, 'day_layout': 'timeline', 'month_layout': 'paged', 'week_layout': 'agenda', 'touch_bar': ['day','month','settings'], 'default_duration': 60, **load(row['data'])}
         # Older profiles could contain three defaults. Existing event reminders
         # remain untouched; only the template for newly created events is singular.
         prefs['default_reminders']=offsets(prefs.get('default_reminders',[60]))[:1]
@@ -126,12 +126,13 @@ class Service:
             if member:
                 self.calendar(c,user_id)
             me = self.user(c,user_id)
-            require(set(changes) <= {'language','timezone','theme','view','day_layout','month_layout','touch_bar','default_duration','default_reminders','reminders_enabled','notify_at_start'},'invalid_settings')
+            require(set(changes) <= {'language','timezone','theme','view','day_layout','month_layout','week_layout','touch_bar','default_duration','default_reminders','reminders_enabled','notify_at_start'},'invalid_settings')
             if 'language' in changes: require(changes['language'] in ('ru','en'),'invalid_language')
             if 'timezone' in changes: zone(changes['timezone'])
             if 'theme' in changes: require(changes['theme'] in ('light','dark','system'),'invalid_theme')
             if 'view' in changes: require(changes['view'] in ('month','week','day'),'invalid_view')
             if 'day_layout' in changes: require(changes['day_layout'] in ('timeline','list'),'invalid_settings')
+            if 'week_layout' in changes: require(changes['week_layout'] in ('agenda','three','seven'),'invalid_settings')
             if 'month_layout' in changes: require(changes['month_layout'] in ('paged','scroll'),'invalid_settings')
             if 'touch_bar' in changes:
                 items = changes['touch_bar']

@@ -29,7 +29,7 @@
    if(!eventNode&&e.target.closest('[data-action="event"],button:not(.week-date),input,select,textarea'))return;
    if(!eventNode&&!timeline&&!date)return;
    const node=eventNode||date||timeline;
-   press={id:e.pointerId,x:e.clientX,y:e.clientY,originY:e.clientY,node,timeline,date,held:false};
+   press={day:e.target.closest('.timeline-day')?.dataset.date,id:e.pointerId,x:e.clientX,y:e.clientY,originY:e.clientY,node,timeline,date,held:false};
    if(eventNode){
     try{press.event=getEvent(eventNode)}catch(error){cleanup();onError(error);return}
     press.top=Number(eventNode.dataset.top);press.offset=e.clientY-eventNode.getBoundingClientRect().top;
@@ -55,9 +55,9 @@
    const p=press;
    if(p.held){
     suppressed=Date.now()+650;e.preventDefault();
-    const day=p.date?.dataset.date||p.timeline?.dataset.date,minute=p.timeline?minuteAt(p.timeline,p.originY):undefined;
+    const day=p.day||p.date?.dataset.date||p.timeline?.dataset.date,minute=p.timeline?minuteAt(p.timeline,p.originY):undefined;
     cleanup();
-    Promise.resolve().then(()=>p.event?(p.minute!==p.startMinute?onMove(p.event,p.minute,p.startMinute):undefined):onCreate(day,minute)).catch(onError);
+    Promise.resolve().then(()=>p.event?(p.minute!==p.startMinute?onMove(p.event,p.minute,p.startMinute,p.day):undefined):onCreate(day,minute)).catch(onError);
    }else cleanup();
   });
   document.addEventListener('pointercancel',cleanup);window.addEventListener('blur',cleanup);

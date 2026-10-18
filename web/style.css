@@ -266,3 +266,38 @@ body.dark .week-date.selected{background:#3b3048}
 .event-reminder-sheet .reminder-sheet-actions{display:flex;gap:12px;margin-top:20px}
 .event-reminder-sheet .reminder-sheet-actions button{flex:1;margin:0;width:auto}
 .event-reminder-sheet .reminder-sheet-error{margin:12px 0 0}
+/* Additional week layouts inherit the existing surfaces, colours and controls. */
+.week-timeline-shell{--week-days:3;--week-gutter:46px;display:flex;flex-direction:column;flex:1;min-height:0;margin:0 var(--calendar-gutter);overflow:hidden}
+.week-timeline-shell.week-7{--week-days:7}
+.week-columns{display:grid;grid-template-columns:repeat(var(--week-days),minmax(0,1fr));min-width:0}
+.week-timeline-header,.week-all-day{display:grid;grid-template-columns:var(--week-gutter) minmax(0,1fr);flex:none}
+.week-timeline-header{border-bottom:1px solid var(--line);padding-bottom:8px}
+.week-timeline-header .week-date{min-height:58px;padding:6px 0;background:transparent;font-size:11px;min-width:0}
+.week-timeline-header .week-date.selected{background:var(--soft)}
+.week-timeline-header .date-number{display:grid;place-items:center;width:29px;height:29px;margin:4px auto 0;border-radius:50%;font-size:17px}
+.week-timeline-header .today .date-number{background:var(--accent-fill);color:var(--on-accent)}
+.week-all-day{max-height:96px;overflow-y:auto;border-bottom:1px solid var(--line);padding:4px 0}
+.week-all-day>span{align-self:center;font-size:10px;line-height:13px;color:var(--muted);overflow-wrap:anywhere;padding-right:4px}
+.week-all-cell{min-width:0;border-left:1px solid var(--line);padding:0 2px}
+.week-all-event{display:block;width:100%;min-width:0;min-height:25px;border:0;border-radius:5px;margin:2px 0;padding:4px;font-size:11px;line-height:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+.week-timeline-shell .week-timeline{margin:0;background:transparent;overflow-x:hidden;overscroll-behavior-y:contain}
+.week-timeline .timeline-inner{height:1680px;margin:0}
+.week-timeline .hour{margin-left:var(--week-gutter);pointer-events:none}
+.week-timeline .hour span{left:calc(-1 * var(--week-gutter));width:calc(var(--week-gutter) - 5px);text-align:right;font-size:10px}
+.week-grid{position:absolute;top:0;left:var(--week-gutter);right:0;height:1680px}
+.timeline-day{position:relative;min-width:0;height:1680px;border-left:1px solid var(--line)}
+.timeline-day.today{background:color-mix(in srgb,var(--soft) 25%,transparent)}
+.timeline-day .time-event{box-sizing:border-box;border:1px solid var(--bg);padding:4px 3px;justify-content:flex-start;gap:3px;border-radius:6px;min-height:30px}
+.timeline-day .time-event .time-event-heading{display:block}
+.timeline-day .time-event .time-event-title{display:-webkit-box;white-space:normal;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;font-size:12px;line-height:14px;overflow-wrap:anywhere}
+.timeline-day .time-event .time-owner{display:none}
+.timeline-day .time-event .time-range{white-space:normal;overflow-wrap:normal;font-size:10px;line-height:12px}
+.week-7 .timeline-day .time-event .time-event-title{font-size:11px;line-height:13px;-webkit-line-clamp:3}
+.week-7 .timeline-day .time-event .time-range{font-size:9px;line-height:11px}
+.timeline-day .time-event.short-event{padding:1px 2px;gap:0}
+.timeline-day .time-event.short-event .time-event-title{-webkit-line-clamp:1}
+.timeline-day .now-line{left:0;right:0}
+.timeline-day .now-line:before{content:none}
+.week-layout-sheet .week-layout-option{display:flex;align-items:center;gap:12px;text-align:left;font-size:15px;min-height:48px}
+.week-layout-option .grow{flex:1}
+.week-layout-option[aria-pressed=true]{background:var(--soft);color:var(--accent)}
