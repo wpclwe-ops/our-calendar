@@ -25,6 +25,21 @@ POLL = 300
 MAX_BATCH = 50
 
 
+def auto_eligible(item, now):
+    """Only upcoming events and recurring series may enter an opted-in shared calendar."""
+    if item.get('status') == 'cancelled' or item.get('recurringEventId'):
+        return False
+    if item.get('recurrence'):
+        return True
+    start=item.get('start') or {}
+    try:
+        raw=start.get('date') or start['dateTime']
+        day=date.fromisoformat(raw) if len(raw)==10 else datetime.fromisoformat(raw.replace('Z','+00:00')).date()
+        return day >= (now-timedelta(days=1)).date()
+    except (KeyError,ValueError,TypeError):
+        return False
+
+
 def normalize(item, timezone, single=False):
     """Convert only supported Google fields; never silently truncate user data."""
     require(item.get('status') != 'cancelled', 'google_event_deleted', 409)
@@ -205,7 +220,7 @@ class GoogleImports:
             accounts=[]
             for a in c.execute('SELECT id,email,state FROM google_accounts WHERE user_id=? AND calendar_id=?',(actor,cal['id'])):
                 sources=[]
-                for source in c.execute('SELECT id,name,selected,state FROM google_sources WHERE account_id=?',(a['id'],)):
+                for source in c.execute('SELECT id,name,selected,auto_import,state FROM google_sources WHERE account_id=?',(a['id'],)):
                     links=[dict(v) for v in c.execute('SELECT l.id,l.event_id,l.state,l.checked_at,json_extract(e.data,\'$.title\') AS title FROM google_links l LEFT JOIN events e ON e.id=l.event_id WHERE l.source_id=? AND l.event_id IS NOT NULL',(source['id'],))]
                     sources.append({**dict(source),'links':links})
                 accounts.append({**dict(a),'mode':'import_only','sources':sources})
@@ -253,21 +268,25 @@ class GoogleImports:
                 sid=uid()
                 c.execute('INSERT INTO google_sources(id,account_id,remote_id,name,timezone) VALUES(?,?,?,?,?) ON CONFLICT(account_id,remote_id) DO UPDATE SET name=excluded.name,timezone=excluded.timezone',
                           (sid,account_id,item['id'],item.get('summary') or item['id'],item.get('timeZone') or 'UTC'))
-                row=c.execute('SELECT id,name,timezone,selected FROM google_sources WHERE account_id=? AND remote_id=?',(account_id,item['id'])).fetchone()
+                row=c.execute('SELECT id,name,timezone,selected,auto_import FROM google_sources WHERE account_id=? AND remote_id=?',(account_id,item['id'])).fetchone()
                 result.append(dict(row))
         return result
 
-    def select(self,actor,account_id,ids):
+    def select(self,actor,account_id,ids,auto_import=None):
         require(isinstance(ids,list) and len(ids)<=100 and all(isinstance(v,str) for v in ids),'invalid_request')
+        require(auto_import is None or type(auto_import) is bool,'invalid_request')
         with self.s.db.transaction() as c:
             self.account(c,actor,account_id)
             rows=c.execute('SELECT * FROM google_sources WHERE account_id=?',(account_id,)).fetchall()
             require(set(ids)<={r['id'] for r in rows},'google_source_not_found',404)
             for row in rows:
                 chosen=int(row['id'] in ids)
-                if chosen!=row['selected']:
-                    c.execute('UPDATE google_sources SET selected=?,generation=generation+1,sync_token=NULL,next_at=\'\',lease_until=NULL WHERE id=?',(chosen,row['id']))
+                automatic=int(bool(chosen and (row['auto_import'] if auto_import is None else auto_import)))
+                if chosen!=row['selected'] or automatic!=row['auto_import']:
+                    c.execute("UPDATE google_sources SET selected=?,auto_import=?,generation=generation+1,sync_token=NULL,next_at='',lease_until=NULL,state='ready' WHERE id=?",
+                              (chosen,automatic,row['id']))
                     c.execute('DELETE FROM google_previews WHERE source_id=?',(row['id'],))
+                    c.execute('DELETE FROM google_auto_skips WHERE source_id=?',(row['id'],))
                     if not chosen:c.execute("UPDATE google_links SET state='disconnected' WHERE source_id=?",(row['id'],))
         return self.status(actor)
 
@@ -360,6 +379,23 @@ class GoogleImports:
             data['reminders'][m['user_id']]=self.s.user(c,m['user_id'])['default_reminders']
         return data
 
+    def insert_linked_event(self,c,actor,source,account,value,old=None):
+        """Create one deduplicated inbound event inside the caller's transaction."""
+        event_id=uid();link_id=old['id'] if old else uid()
+        data=self.new_data(c,actor,account['calendar_id'],value['snapshot']['fields'])
+        cal=self.s.calendar(c,actor)
+        self.s.validate_event(c,cal,data)
+        for patch in value['snapshot']['overrides'].values():
+            if not patch.get('deleted'):self.s.validate_event(c,cal,{**data,**patch})
+        c.execute('INSERT INTO events(id,calendar_id,data) VALUES(?,?,?)',(event_id,account['calendar_id'],dump(data)))
+        for key,patch in value['snapshot']['overrides'].items():
+            c.execute('INSERT INTO overrides VALUES(?,?,?)',(event_id,key,dump(patch)))
+        c.execute("INSERT INTO google_links(id,source_id,remote_id,event_id,scope,base,remote,state,etag,checked_at,parent_id) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(source_id,remote_id) DO UPDATE SET event_id=excluded.event_id,scope=excluded.scope,base=excluded.base,remote=excluded.remote,state=excluded.state,etag=excluded.etag,checked_at=excluded.checked_at,parent_id=excluded.parent_id",
+                  (link_id,source['id'],value['id'],event_id,value['scope'],dump(value['snapshot']),dump(value['snapshot']),'ready',value['etag'],stamp(),value['parent_id']))
+        from .translation import enqueue_translation
+        enqueue_translation(c,self.s.config,'event',event_id,account['calendar_id'],data,1)
+        return event_id
+
     def apply(self,actor,preview_id,confirmed):
         self.ready();require(confirmed is True,'confirmation_required')
         with self.s.db.transaction() as c:
@@ -388,16 +424,7 @@ class GoogleImports:
                         reconnected+=1
                     else:existing+=1
                     continue
-                event_id=uid();link_id=old['id'] if old else uid()
-                data=self.new_data(c,actor,account['calendar_id'],value['snapshot']['fields'])
-                self.s.validate_event(c,self.s.calendar(c,actor),data)
-                c.execute('INSERT INTO events(id,calendar_id,data) VALUES(?,?,?)',(event_id,account['calendar_id'],dump(data)))
-                for key,patch in value['snapshot']['overrides'].items():
-                    c.execute('INSERT INTO overrides VALUES(?,?,?)',(event_id,key,dump(patch)))
-                c.execute("INSERT INTO google_links(id,source_id,remote_id,event_id,scope,base,remote,state,etag,checked_at,parent_id) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(source_id,remote_id) DO UPDATE SET event_id=excluded.event_id,scope=excluded.scope,base=excluded.base,remote=excluded.remote,state=excluded.state,etag=excluded.etag,checked_at=excluded.checked_at,parent_id=excluded.parent_id",
-                          (link_id,source['id'],value['id'],event_id,value['scope'],dump(value['snapshot']),dump(value['snapshot']),'ready',value['etag'],stamp(),value['parent_id']))
-                from .translation import enqueue_translation
-                enqueue_translation(c,self.s.config,'event',event_id,account['calendar_id'],data,1)
+                self.insert_linked_event(c,actor,source,account,value,old)
                 created+=1
             if created:
                 self.s.notify(c,account['calendar_id'],actor,'google_imported',{'title':str(created)})
@@ -534,7 +561,9 @@ class GoogleImports:
             links=[dict(v) for v in c.execute("SELECT * FROM google_links WHERE source_id=? AND state!='disconnected' AND event_id IS NOT NULL",(source_id,))]
         try:
             client=self.client(account)
-            delta=client.events(source['remote_id'],source['sync_token'],allowed_ids={l['remote_id'] for l in links})
+            # The full provider delta is visible only after explicit calendar-level opt-in.
+            delta=client.events(source['remote_id'],source['sync_token'],
+                                allowed_ids=None if source['auto_import'] else {l['remote_id'] for l in links})
             changed={v['id'] for v in delta['items']}|{v.get('recurringEventId') for v in delta['items']}
             selected=[{'id':l['remote_id'],'scope':l['scope']} for l in links if delta['reset'] or not source['sync_token'] or l['remote_id'] in changed or l['state']=='unsupported']
             deleted={v['id']:v for v in delta['items'] if v.get('status')=='cancelled' and not v.get('recurringEventId')}
@@ -544,6 +573,26 @@ class GoogleImports:
                     values.append({'id':choice['id'],'snapshot':{'deleted':True},'etag':deleted[choice['id']].get('etag')});continue
                 try:values.extend(self.read_selected(client,source,[choice]))
                 except (Problem,KeyError,ValueError,TypeError):failed.append(choice['id'])
+            automatic=[];invalid=[];more=False
+            if source['auto_import']:
+                with self.s.db.transaction() as c:
+                    known={r['remote_id'] for r in c.execute('SELECT remote_id FROM google_links WHERE source_id=?',(source_id,))}
+                    skipped={r['remote_id']:r['etag'] for r in c.execute('SELECT remote_id,etag FROM google_auto_skips WHERE source_id=?',(source_id,))}
+                for item in delta['items']:
+                    remote_id=item.get('id')
+                    if not remote_id or remote_id in known or not auto_eligible(item,now):continue
+                    if remote_id in skipped and skipped[remote_id]==(item.get('etag') or ''):continue
+                    if len(automatic)>=MAX_BATCH:
+                        more=True;break
+                    scope='series' if item.get('recurrence') else 'one'
+                    try:
+                        value=self.read_selected(client,source,[{'id':remote_id,'scope':scope}])[0]
+                        if not value['snapshot'].get('deleted'):
+                            automatic.append(value)
+                    except ProviderFailure as exc:
+                        if exc.code not in (404,410):raise
+                    except (Problem,KeyError,ValueError,TypeError):
+                        invalid.append((remote_id,item.get('etag') or ''))
             with self.s.db.transaction() as c:
                 current=self.check_source(c,actor,source,account)
                 require(current['lease_until']==lease,'google_selection_expired',409)
@@ -562,9 +611,31 @@ class GoogleImports:
                             c.execute('ROLLBACK TO google_event')
                             c.execute("UPDATE google_links SET state='unsupported',checked_at=? WHERE id=?",(stamp(),old['id']))
                         finally:c.execute('RELEASE google_event')
+                imported=0
+                for remote_id,etag in invalid:
+                    c.execute('INSERT INTO google_auto_skips(source_id,remote_id,etag) VALUES(?,?,?) ON CONFLICT(source_id,remote_id) DO UPDATE SET etag=excluded.etag',
+                              (source_id,remote_id,etag))
+                for value in automatic:
+                    if c.execute('SELECT 1 FROM google_links WHERE source_id=? AND remote_id=?',(source_id,value['id'])).fetchone():continue
+                    c.execute('SAVEPOINT google_auto')
+                    try:
+                        self.check_overlap(c,source_id,value,automatic)
+                        self.insert_linked_event(c,actor,source,account,value)
+                        imported+=1
+                    except (Problem,KeyError,ValueError,TypeError):
+                        c.execute('ROLLBACK TO google_auto')
+                        c.execute('INSERT INTO google_auto_skips(source_id,remote_id,etag) VALUES(?,?,?) ON CONFLICT(source_id,remote_id) DO UPDATE SET etag=excluded.etag',
+                                  (source_id,value['id'],value['etag'] or ''))
+                    finally:c.execute('RELEASE google_auto')
+                if imported:
+                    self.s.notify(c,account['calendar_id'],actor,'google_imported',{'title':str(imported)})
+                # Keep the old cursor until every page-sized batch has been considered.
+                # Subsequent runs skip already linked IDs; no new event is lost.
+                cursor=source['sync_token'] if more else delta['sync_token']
+                next_check=15 if more else POLL
                 c.execute("UPDATE google_sources SET sync_token=?,next_at=?,state='ready',attempts=0,lease_until=NULL WHERE id=?",
-                          (delta['sync_token'],stamp(now+timedelta(seconds=POLL)),source_id))
-            return {'state':'ready'}
+                          (cursor,stamp(now+timedelta(seconds=next_check)),source_id))
+            return {'state':'ready','imported':imported}
         except (ProviderFailure,Problem,KeyError,ValueError,TypeError) as exc:
             state='delayed'
             if isinstance(exc,ProviderFailure) and exc.code in (401,):state='needs_reconnect'
