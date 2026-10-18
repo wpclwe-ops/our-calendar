@@ -122,6 +122,9 @@ class Service:
                 c.execute("UPDATE google_links SET state='disconnected' WHERE source_id IN (SELECT s.id FROM google_sources s JOIN google_accounts a ON a.id=s.account_id WHERE a.user_id=? AND a.calendar_id=?)",(user_id,cal['id']))
                 c.execute('DELETE FROM google_oauth_requests WHERE user_id=?',(user_id,))
                 c.execute('DELETE FROM google_previews WHERE user_id=?',(user_id,))
+                c.execute("UPDATE icloud_accounts SET state='disconnected',credentials=NULL,generation=generation+1 WHERE user_id=? AND calendar_id=?",(user_id,cal['id']))
+                c.execute("UPDATE icloud_sources SET selected=0,auto_import=0,generation=generation+1,lease_until=NULL WHERE account_id IN (SELECT id FROM icloud_accounts WHERE user_id=? AND calendar_id=?)",(user_id,cal['id']))
+                c.execute("UPDATE icloud_links SET state='disconnected' WHERE source_id IN (SELECT s.id FROM icloud_sources s JOIN icloud_accounts a ON a.id=s.account_id WHERE a.user_id=? AND a.calendar_id=?)",(user_id,cal['id']))
         return self.state(user_id)
 
     def settings(self,user_id,changes):
@@ -213,6 +216,7 @@ class Service:
             ov={v['occurrence']:load(v['data']) for v in c.execute('SELECT * FROM overrides WHERE event_id=?',(event_id,))}
             result['overrides']=ov
             result['google_links']=[dict(v) for v in c.execute('SELECT l.id,l.state,a.user_id AS owner_id FROM google_links l JOIN google_sources s ON s.id=l.source_id JOIN google_accounts a ON a.id=s.account_id WHERE l.event_id=? AND l.state!=\'disconnected\'',(event_id,))]
+            result['icloud_links']=[dict(v) for v in c.execute("SELECT l.id,l.state,a.user_id AS owner_id FROM icloud_links l JOIN icloud_sources s ON s.id=l.source_id JOIN icloud_accounts a ON a.id=s.account_id WHERE l.event_id=? AND l.state!='disconnected'",(event_id,))]
             translation=c.execute("SELECT state,error FROM translation_jobs WHERE kind='event' AND resource_id=?",(event_id,)).fetchone()
             result['translation_status']=dict(translation) if translation else None
             from .recurrence import base_datetime
@@ -490,6 +494,7 @@ class Service:
                 c.execute('UPDATE events SET deleted_at=?,revision=revision+1,schedule_version=schedule_version+1 WHERE id=?',(None if restore else stamp(),event_id))
                 if not restore:
                     c.execute("UPDATE google_links SET state='disconnected' WHERE event_id=?",(event_id,))
+                    c.execute("UPDATE icloud_links SET state='disconnected' WHERE event_id=?",(event_id,))
             c.execute("UPDATE outbox SET status='cancelled' WHERE event_id=? AND kind='reminder' AND status IN ('pending','sending')",(event_id,))
             if not permanent: self.notify(c,cal['id'],user_id,'restored' if restore else 'deleted',load(row['data']),event_id)
             return {'ok':True}

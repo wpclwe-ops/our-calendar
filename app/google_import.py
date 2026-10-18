@@ -445,7 +445,7 @@ class GoogleImports:
             if external:overrides[ov['occurrence']]=external
         return {'fields':fields,'overrides':overrides}
 
-    def store_snapshot(self,c,account,row,value):
+    def store_snapshot(self,c,account,row,value,provider='google'):
         data=load(row['data']);previous=deepcopy(data)
         data.update(value['fields'])
         text_change=any(data[k]!=previous[k] for k in ('title','description'))
@@ -467,7 +467,7 @@ class GoogleImports:
             from .translation import enqueue_translation
             enqueue_translation(c,self.s.config,'event',row['id'],account['calendar_id'],data,row['revision']+1)
         if any(previous.get(k)!=data.get(k) for k in IMPORTANT) or old['overrides']!=value['overrides']:
-            self.s.notify(c,account['calendar_id'],None,'google_updated',data,row['id'])
+            self.s.notify(c,account['calendar_id'],None,provider+'_updated',data,row['id'])
 
     def reconcile(self,c,account,link,remote,etag):
         row=c.execute('SELECT * FROM events WHERE id=?',(link['event_id'],)).fetchone()
