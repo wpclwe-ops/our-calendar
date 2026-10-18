@@ -297,7 +297,7 @@ class SmartEvents:
             enqueue(c,self.config,event_id,force=True,replace_fields=replace_fields,only_occurrence=occurrence)
         return {'queued':True}
 
-    def edit(self, actor, event_id, revision, occurrence='', short_titles=None, category_action=None, remember=False, excluded=None):
+    def edit(self, actor, event_id, revision, occurrence='', short_titles=None, category_action=None, remember=False, excluded=None, expected_suggestion=None):
         require(type(remember) is bool, 'invalid_request')
         with self.s.db.transaction() as c:
             row = self.s.event_row(c,actor,event_id)
@@ -319,6 +319,7 @@ class SmartEvents:
                 require(category_action in ('accept','reject','unlock'),'invalid_request')
                 suggestion = meta['category'].get('suggestion')
                 if category_action=='accept':
+                    require(suggestion and suggestion==expected_suggestion,'smart_suggestion_stale',409)
                     require(suggestion and c.execute('SELECT 1 FROM categories WHERE id=? AND calendar_id=?',(suggestion,row['calendar_id'])).fetchone(),'invalid_category')
                     catalog=[{'id':r['id'],'name':load(r['data'])['name'],'translations':load(r['data']).get('translations',{})} for r in c.execute('SELECT * FROM categories WHERE calendar_id=? ORDER BY id',(row['calendar_id'],))]
                     require(meta['category'].get('context_hash')==digest(dump(catalog)),'smart_suggestion_stale',409)
@@ -366,13 +367,16 @@ class SmartEvents:
                 c.execute('UPDATE smart_rules SET data=? WHERE id=?',(dump(data),rule_id))
         return {'ok':True}
 
-    def _store(self,c,row,occurrence,data,patch):
+    def _store(self,c,row,occurrence,data,patch,background=False):
+        # Derived text is not a user edit. It must not invalidate an open form.
+        # Manual mutations still increment revision and fence concurrent editors.
+        revision_step = 0 if background else 1
         if occurrence:
             patch={**patch,'smart':data['smart'],'translations':data.get('translations',{}),'category_id':data.get('category_id')}
             c.execute('INSERT INTO overrides VALUES(?,?,?) ON CONFLICT(event_id,occurrence) DO UPDATE SET data=excluded.data',(row['id'],occurrence,dump(patch)))
-            c.execute('UPDATE events SET revision=revision+1 WHERE id=?',(row['id'],))
+            c.execute('UPDATE events SET revision=revision+? WHERE id=?',(revision_step,row['id']))
         else:
-            c.execute('UPDATE events SET data=?,revision=revision+1 WHERE id=?',(dump(data),row['id']))
+            c.execute('UPDATE events SET data=?,revision=revision+? WHERE id=?',(dump(data),revision_step,row['id']))
         for notice in c.execute("SELECT * FROM outbox WHERE event_id=? AND status='pending'",(row['id'],)).fetchall():
             payload=load(notice['payload']);notice_data=payload.get('data',{})
             if (notice_data.get('occurrence') or '')==occurrence:
@@ -466,7 +470,7 @@ class SmartEvents:
                 meta['languages']=result['languages'];meta['input_hash']=cache_hash
                 data['smart']=meta
                 self.s.validate_event(c,dict(c.execute('SELECT * FROM calendars WHERE id=?',(row['calendar_id'],)).fetchone()),data)
-                self._store(c,row,job['occurrence'],data,patch)
+                self._store(c,row,job['occurrence'],data,patch,background=True)
                 c.execute("INSERT INTO runtime VALUES('smart_last_result',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(dump({'state':'ready','checked_at':stamp()}),))
                 # Fingerprint includes manual metadata. Save final state to avoid requeueing on time-only edits.
                 _,final_hash,_,_=_payload(c,row,data,settings)

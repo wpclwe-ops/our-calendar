@@ -71,7 +71,7 @@ def test_category_suggestion_accept_and_manual_null_lock(service):
     fake.category=category['id'];e=create(service);smart.process()
     data=service.get_event('1',e['id'])
     assert data['category_id'] is None and data['smart']['category']['suggestion']==category['id']
-    smart.edit('2',e['id'],data['revision'],category_action='accept',remember=True)
+    smart.edit('2',e['id'],data['revision'],category_action='accept',expected_suggestion=category['id'],remember=True)
     data=service.get_event('1',e['id']);assert data['category_id']==category['id']
     data=service.save_event('1',{'category_id':None},e['id'],data['revision']);smart.process()
     assert service.get_event('1',e['id'])['category_id'] is None
@@ -249,7 +249,7 @@ def test_renamed_category_cannot_accept_old_suggestion(service):
     cat=service.save_category('1',{'name':'Beauty','color':'#9B77D1'});fake.category=cat['id']
     e=create(service);smart.process();data=service.get_event('1',e['id'])
     service.save_category('1',{'name':'Different purpose','color':'#9B77D1'},cat['id'])
-    with pytest.raises(Problem) as exc:smart.edit('1',e['id'],data['revision'],category_action='accept')
+    with pytest.raises(Problem) as exc:smart.edit('1',e['id'],data['revision'],category_action='accept',expected_suggestion=cat['id'])
     assert exc.value.code=='smart_suggestion_stale'
 
 def test_auth_failure_stops_other_paid_attempts_for_same_configuration(service):
@@ -264,3 +264,49 @@ def test_rule_edit_does_not_change_existing_events(service):
     smart.rule('2',rule['id'],changes={'match':'Another title','short_titles':{'ru':'Next'}})
     assert service.get_event('1',e['id'])['smart']['short_titles']['ru']=='Saved'
     assert smart.status('1')['rules'][0]['match']=='Another title'
+
+@pytest.mark.parametrize('occurrence',['','2026-10-25T12:00'])
+def test_background_result_keeps_open_manual_editor_valid(service,occurrence):
+    smart,fake=configured(service)
+    e=create(service,rrule='FREQ=DAILY;COUNT=3' if occurrence else '')
+    smart.request('1',e['id'],occurrence=occurrence)
+    smart.process()
+    assert service.get_event('1',e['id'])['revision']==e['revision']
+    smart.edit('1',e['id'],e['revision'],occurrence=occurrence,short_titles={'ru':'Маникюр · Мой салон'})
+    current=service.get_event('1',e['id'],occurrence=occurrence)
+    shown=current['selected_instance'] if occurrence else current
+    assert shown['smart']['short_titles']['ru']=='Маникюр · Мой салон'
+    with pytest.raises(Problem) as exc:
+        smart.edit('2',e['id'],e['revision'],occurrence=occurrence,short_titles={'ru':'Stale partner edit'})
+    assert exc.value.code=='revision_conflict'
+
+@pytest.mark.parametrize('occurrence',['','2026-10-25T12:00'])
+def test_open_form_translation_patch_keeps_fresh_background_fields(service,occurrence):
+    smart,fake=configured(service)
+    e=create(service,description='Polski opis',rrule='FREQ=DAILY;COUNT=3' if occurrence else '')
+    smart.request('1',e['id'],occurrence=occurrence);smart.process()
+    changes={'location':'New location','translations':{'en':{'title':'My correction'}}}
+    if occurrence:
+        service.occurrence_change('1',e['id'],occurrence,changes,e['revision'])
+    else:
+        service.save_event('1',changes,e['id'],e['revision'])
+    current=service.get_event('1',e['id'],occurrence=occurrence)
+    data=current['selected_instance'] if occurrence else current
+    assert data['translations']['en']['title']=='My correction'
+    assert data['translations']['en']['description']=='en: Polski opis'
+    assert data['translations']['ru']['title'].startswith('ru: Corner')
+    assert data['smart']['fields']['en.title']['manual']
+    assert not data['smart']['fields']['en.description']['manual']
+
+def test_changed_background_suggestion_requires_reconfirmation(service):
+    smart,fake=configured(service)
+    a=service.save_category('1',{'name':'Beauty','color':'#9B77D1'})
+    b=service.save_category('1',{'name':'Other plans','color':'#9B77D1'})
+    fake.category=a['id'];e=create(service);smart.process()
+    fake.category=b['id'];smart.request('1',e['id']);smart.process()
+    with pytest.raises(Problem) as exc:
+        smart.edit('1',e['id'],e['revision'],category_action='accept',expected_suggestion=a['id'])
+    assert exc.value.code=='smart_suggestion_stale'
+    assert service.get_event('1',e['id'])['category_id'] is None
+    smart.edit('1',e['id'],e['revision'],category_action='accept',expected_suggestion=b['id'])
+    assert service.get_event('1',e['id'])['category_id']==b['id']
