@@ -35,6 +35,18 @@ const assert=require('node:assert/strict'),{mkdtempSync,rmSync}=require('node:fs
   await page.locator('[data-action="google-sync"]').click();await wait();
   const shared=await page.evaluate(async()=>{const a=await fetch('/api/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({demo_user:'2'})}).then(r=>r.json());const h={Authorization:'Bearer '+a.token};return {status:await fetch('/api/google',{headers:h}).then(r=>r.json()),events:await fetch('/api/events?start=2026-10-01&end=2026-11-01',{headers:h}).then(r=>r.json())}});
   assert.equal(shared.status.accounts.length,0);assert.equal(shared.events.filter(e=>e.title==='Dentist').length,1);assert.ok(!shared.events.some(e=>e.title==='Never share this'));
+  // Existing integrations stay private until their owner explicitly approves whole-calendar auto import.
+  await page.locator('[data-action="google-calendars"]').click();await wait();
+  assert.equal(await page.locator('#g-auto').isChecked(),false);
+  await page.locator('#g-auto').check();
+  await page.locator('[data-action="google-save-sources"]').click();
+  assert.ok((await page.locator('.modal').textContent()).includes('Включить автоматический импорт'));
+  await page.locator('.modal [data-choice="yes"]').click();await wait();
+  assert.ok((await page.locator('.g-source-card').textContent()).includes('Автоимпорт включён'));
+  await page.locator('[data-action="google-sync"]').click();await wait();
+  const autoShared=await page.evaluate(async()=>{const a=await fetch('/api/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({demo_user:'2'})}).then(r=>r.json());return fetch('/api/events?start=2026-10-01&end=2026-11-01',{headers:{Authorization:'Bearer '+a.token}}).then(r=>r.json())});
+  assert.ok(autoShared.some(e=>e.title==='Never share this'));
+  assert.ok(autoShared.some(e=>e.title==='Weekly shared plan'));
   for(const [width,language,theme] of [[320,'ru','light'],[390,'en','dark'],[430,'ru','dark']]){
    await page.setViewportSize({width,height:844});await page.evaluate(async({language,theme})=>{state=await api('settings','PATCH',{language,theme});render()},{language,theme});
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
