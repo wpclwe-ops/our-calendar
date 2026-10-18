@@ -105,6 +105,37 @@ const cat=id=>categories.find(c=>c.id===id)||{name:t('noCategory'),color:'#88888
 const catName=id=>{const c=cat(id);return c.translations?.[state.me.language]||c.name};
 const title=e=>e.translations?.[state.me.language]?.title||e.title;
 const description=e=>e.translations?.[state.me.language]?.description||e.description;
+// Older Google imports may already contain HTML (including in translations).
+// Convert for display only; never insert remote HTML into the live document.
+function readableGoogleDescription(value){
+ if(typeof value!=='string'||!value)return value||'';
+ const entities={
+  amp:'&',lt:'<',gt:'>',quot:'"',apos:"'",nbsp:' '
+ };
+ const decode=text=>text.replace(/&(#(?:x[0-9a-f]+|\d+)|amp|lt|gt|quot|apos|nbsp);/gi,(whole,code)=>{
+  if(code[0]!=='#')return entities[code.toLowerCase()]??whole;
+  const hex=code[1].toLowerCase()==='x';
+  const n=parseInt(code.slice(hex?2:1),hex?16:10);
+  return Number.isInteger(n)&&n>0&&n<=0x10ffff&&!(n>=0xd800&&n<=0xdfff)?String.fromCodePoint(n):whole;
+ });
+ let source=decode(value);
+ if(!/<\/?\s*(?:p|br|div|span|a|li|ul|ol|b|strong|em|i|u|blockquote|h[1-6]|pre|table|tr|td|th|font)\b[^>]*>/i.test(source))return value;
+ source=source.replace(/<(script|style|iframe|svg)\b[^>]*>[\s\S]*?<\/\1\s*>/gi,'');
+ source=source.replace(/<a\b([^>]*)>([\s\S]*?)<\/a\s*>/gi,(_,attrs,label)=>{
+  const m=attrs.match(/\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
+  const href=m?decode(m[1]||m[2]||m[3]||''):'';
+  const readable=label.replace(/<\/?[a-z][^>]*>/gi,'').trim();
+  return /^https?:\/\/|^mailto:/i.test(href)&&!readable.includes(href)?readable+' ('+href+')':readable;
+ });
+ source=source.replace(/<br\b[^>]*\/?>/gi,'\n')
+  .replace(/<li\b[^>]*>/gi,'\n• ')
+  .replace(/<\/p\s*>/gi,'\n\n')
+  .replace(/<\/(?:div|blockquote|pre|h[1-6]|tr)\s*>/gi,'\n')
+  .replace(/<p\b[^>]*>/gi,'\n\n')
+  .replace(/<\/?[a-z][^>]*>/gi,'');
+ return decode(source).replace(/\u00a0/g,' ').replace(/[ \t]+/g,' ')
+  .replace(/[ \t]*\n[ \t]*/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+}
 const ownership=id=>id==='both'?t('both'):id===state.me.id?t('mine'):t('partner');
 const color=id=>cat(id).color;
 const ink=hex=>{const v=hex.slice(1).match(/../g).map(x=>parseInt(x,16)/255).map(x=>x<=.04045?x/12.92:((x+.055)/1.055)**2.4);return .2126*v[0]+.7152*v[1]+.0722*v[2]>.4?'#201929':'#ffffff'};
@@ -454,7 +485,8 @@ function detail(){
  const lang=detailLanguage||state.me.language,tr=e.translations?.[lang];
  const when=e.all_day?dateLabel(e.start,{weekday:'short',day:'numeric',month:'long',year:'numeric'})+' · '+t('allDay'):`${zoned(e.start_utc,{weekday:'short',day:'numeric',month:'long'})} · ${time(e)} – ${zoned(e.end_utc,{hour:'2-digit',minute:'2-digit'})}`;
  const content=tr?.description||e.description;
- return `<article class="event-detail">${e.google_links?.length?`<p class="privacy">Google Calendar · ${t('gImportOnly')} ${e.google_links.some(l=>['conflict','remote_deleted'].includes(l.state))?t('gNeedsDecision'):''}</p>`:''}<div class="detail-badges"><span class="category-chip" data-bg="${color(e.category_id)}">${esc(catName(e.category_id))}</span>${button('status-options',`<span>${t(e.status)}</span>${icon('down')}`,'status-chip',`aria-label="${t('changeStatus')}" aria-haspopup="dialog"`)}<span class="owner-chip">${ownership(e.owner)}</span></div><h1 class="detail-title">${esc(tr?.title||e.title)}</h1><section class="form-group"><div class="detail-block with-icon">${icon('clock')}<div><strong>${esc(when)}</strong><small>${t('yourTime')} · ${esc(tz())}</small>${!e.all_day&&e.timezone!==tz()?`<div class="source-time"><span>${t('sourceTime')}</span><br>${esc(e.start.replace('T',' '))} → ${esc(e.end.replace('T',' '))}<br>${esc(e.timezone)}</div>`:''}</div></div>${e.rrule?`<div class="detail-block with-icon">${icon('repeat')}<div><span class="muted">${t('repeat')}</span><p>${esc(recurrenceLabel(e))}</p>${button('other-occurrences',t('otherOccurrences'),'text-button')}</div></div>`:''}</section>${e.location||e.links.length?`<section class="form-group"><div class="detail-block with-icon">${icon('pin')}<div><h3><strong>${t('location')}</strong></h3>${e.location?`<p>${esc(e.location)}</p>`:''}${e.links.map(l=>`<p><a href="${esc(l)}" target="_blank" rel="noreferrer noopener">${esc(l)}</a></p>`).join('')}</div></div></section>`:''}${content||Object.keys(e.translations||{}).length?`<section class="form-group description-card"><div class="row spread"><h3><strong>${t('description')}</strong></h3><div class="segment language-segment">${['en','ru'].map(l=>button('detail-language',l.toUpperCase(),lang===l?'active':'',`data-lang="${l}" aria-pressed="${lang===l}"`)).join('')}</div></div><p>${esc(content)}</p>${tr?.stale?`<small>${t('stale')}</small>`:''}${cfg.integrations?.translation==='configured'?button('translate-event',t('translateAgain'),'text-button'):''}</section>`:''}<section class="form-group detail-reminders"><div class="detail-block"><div class="row spread"><h3>${t('reminders')}</h3>${button('edit-reminders',t('edit'),'text-button')}</div><p>${state.me.notify_at_start!==false?esc(t('notify_at_start'))+'<br>':''}${(e.reminders[state.me.id]||[]).map(reminderLabel).join(' · ')||'—'}</p></div></section>${e.translation_status?.state==='pending'?`<p class="privacy">${t('translationQueued')}</p>`:e.translation_status?.state==='failed'?`<p class="error">${t('translationFailed')}</p>`:''}${cfg.integrations?.translation==='configured'&&Object.values(e.translations||{}).some(v=>v.manual)?button('replace-translations',t('replaceManual'),'text-button danger'):''}${cfg.integrations?.translation==='configured'&&!content&&!Object.keys(e.translations||{}).length?button('translate-event',t('translateAgain'),'text-button'):''}<div class="detail-actions">${button('set-status',t(e.status==='done'?'resumeEvent':'markDone'),'soft-button',`data-status="${e.status==='done'?'planned':'done'}"`)}${button('delete-event',t('delete'),'danger destructive')}</div></article>`;
+ const displayDescription=e.google_links?.length?readableGoogleDescription(content):content;
+ return `<article class="event-detail">${e.google_links?.length?`<p class="privacy">Google Calendar · ${t('gImportOnly')} ${e.google_links.some(l=>['conflict','remote_deleted'].includes(l.state))?t('gNeedsDecision'):''}</p>`:''}<div class="detail-badges"><span class="category-chip" data-bg="${color(e.category_id)}">${esc(catName(e.category_id))}</span>${button('status-options',`<span>${t(e.status)}</span>${icon('down')}`,'status-chip',`aria-label="${t('changeStatus')}" aria-haspopup="dialog"`)}<span class="owner-chip">${ownership(e.owner)}</span></div><h1 class="detail-title">${esc(tr?.title||e.title)}</h1><section class="form-group"><div class="detail-block with-icon">${icon('clock')}<div><strong>${esc(when)}</strong><small>${t('yourTime')} · ${esc(tz())}</small>${!e.all_day&&e.timezone!==tz()?`<div class="source-time"><span>${t('sourceTime')}</span><br>${esc(e.start.replace('T',' '))} → ${esc(e.end.replace('T',' '))}<br>${esc(e.timezone)}</div>`:''}</div></div>${e.rrule?`<div class="detail-block with-icon">${icon('repeat')}<div><span class="muted">${t('repeat')}</span><p>${esc(recurrenceLabel(e))}</p>${button('other-occurrences',t('otherOccurrences'),'text-button')}</div></div>`:''}</section>${e.location||e.links.length?`<section class="form-group"><div class="detail-block with-icon">${icon('pin')}<div><h3><strong>${t('location')}</strong></h3>${e.location?`<p>${esc(e.location)}</p>`:''}${e.links.map(l=>`<p><a href="${esc(l)}" target="_blank" rel="noreferrer noopener">${esc(l)}</a></p>`).join('')}</div></div></section>`:''}${content||Object.keys(e.translations||{}).length?`<section class="form-group description-card"><div class="row spread"><h3><strong>${t('description')}</strong></h3><div class="segment language-segment">${['en','ru'].map(l=>button('detail-language',l.toUpperCase(),lang===l?'active':'',`data-lang="${l}" aria-pressed="${lang===l}"`)).join('')}</div></div><p>${esc(displayDescription)}</p>${tr?.stale?`<small>${t('stale')}</small>`:''}${cfg.integrations?.translation==='configured'?button('translate-event',t('translateAgain'),'text-button'):''}</section>`:''}<section class="form-group detail-reminders"><div class="detail-block"><div class="row spread"><h3>${t('reminders')}</h3>${button('edit-reminders',t('edit'),'text-button')}</div><p>${state.me.notify_at_start!==false?esc(t('notify_at_start'))+'<br>':''}${(e.reminders[state.me.id]||[]).map(reminderLabel).join(' · ')||'—'}</p></div></section>${e.translation_status?.state==='pending'?`<p class="privacy">${t('translationQueued')}</p>`:e.translation_status?.state==='failed'?`<p class="error">${t('translationFailed')}</p>`:''}${cfg.integrations?.translation==='configured'&&Object.values(e.translations||{}).some(v=>v.manual)?button('replace-translations',t('replaceManual'),'text-button danger'):''}${cfg.integrations?.translation==='configured'&&!content&&!Object.keys(e.translations||{}).length?button('translate-event',t('translateAgain'),'text-button'):''}<div class="detail-actions">${button('set-status',t(e.status==='done'?'resumeEvent':'markDone'),'soft-button',`data-status="${e.status==='done'?'planned':'done'}"`)}${button('delete-event',t('delete'),'danger destructive')}</div></article>`;
 }
 function eventReminderDialog(){
  const event=currentEvent;if(!event||$('.reminder-backdrop'))return;
