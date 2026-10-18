@@ -169,9 +169,16 @@ class GoogleImports:
             verifier = self.vault.decrypt(request['secret'])['verifier']
         try:
             require(not error and bool(code), 'google_authorization_cancelled')
-            credentials = self.oauth.exchange(code, verifier)
+            try:
+                credentials = self.oauth.exchange(code, verifier)
+            except ProviderFailure as exc:
+                reason=exc.reason if exc.reason in ('invalid_client','invalid_grant','invalid_scope','unauthorized_client','invalid_request','missing_scopes') else 'unavailable'
+                raise Problem(503,'google_oauth_token_'+reason) from None
             require(bool(credentials.get('refresh_token')), 'google_reconnect',409)
-            identity = self.provider(credentials['access_token']).identity()
+            try:
+                identity = self.provider(credentials['access_token']).identity()
+            except ProviderFailure:
+                raise Problem(503,'google_oauth_identity_unavailable') from None
             require(bool(identity.get('sub')) and bool(identity.get('email')) and identity.get('email_verified') is True,
                     'google_identity_invalid',401)
             credentials['expires_at']=stamp(utcnow()+timedelta(seconds=int(credentials.get('expires_in',3600))))

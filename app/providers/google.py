@@ -32,7 +32,8 @@ class GoogleOAuth:
         try:
             result=json.loads(body)
             if not isinstance(result.get('access_token'),str):raise ValueError()
-            if 'scope' in result and not set(SCOPES)<=set(result['scope'].split()):raise ValueError()
+            if 'scope' in result and not set(SCOPES)<=set(result['scope'].split()):
+                raise ProviderFailure(403,reason='missing_scopes')
             return result
         except (ValueError,TypeError):raise ProviderFailure(401)
     def exchange(self,code,verifier):

@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 class ProviderFailure(Exception):
     code:int
     retry_after:int=0
+    reason:str=''
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self,*args,**kwargs):return None
@@ -29,7 +30,14 @@ class HTTPS:
                 return response.status,dict(response.headers),data
         except urllib.error.HTTPError as exc:
             retry=exc.headers.get('Retry-After','0')
-            raise ProviderFailure(exc.code,int(retry) if retry.isdigit() else 0)
+            reason=''
+            if parsed.hostname=='oauth2.googleapis.com' and parsed.path=='/token':
+                try:
+                    error=json.loads(exc.read(4096)).get('error')
+                    if error in ('invalid_client','invalid_grant','invalid_scope','unauthorized_client','invalid_request'):
+                        reason=error
+                except (ValueError,TypeError,AttributeError,OSError):pass
+            raise ProviderFailure(exc.code,int(retry) if retry.isdigit() else 0,reason)
         except (OSError,TimeoutError):raise ProviderFailure(503)
     def json(self,method,url,headers=None,data=None):
         headers=dict(headers or {})
