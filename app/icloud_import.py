@@ -411,7 +411,8 @@ class ICloudImports:
                 created=0
                 for item,remote,old in parsed:
                     rid=item['url'];etag=item['etag']
-                    if old and not old['event_id'] and old['state']=='unsupported':
+                    if old and not old['event_id'] and old['state'] in ('unsupported','remote_deleted'):
+                        # A previously unimportable/missing resource may become valid.
                         c.execute('DELETE FROM icloud_links WHERE id=?',(old['id'],))
                         old=None
                     if old and old['event_id']:
