@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS google_accounts(
 CREATE TABLE IF NOT EXISTS google_sources(
  id TEXT PRIMARY KEY, account_id TEXT NOT NULL REFERENCES google_accounts(id) ON DELETE CASCADE,
  remote_id TEXT NOT NULL, name TEXT NOT NULL, timezone TEXT NOT NULL,
- selected INTEGER NOT NULL DEFAULT 0, sync_token TEXT, next_at TEXT NOT NULL DEFAULT '',
+ selected INTEGER NOT NULL DEFAULT 0, auto_import INTEGER NOT NULL DEFAULT 0, sync_token TEXT, next_at TEXT NOT NULL DEFAULT '',
  state TEXT NOT NULL DEFAULT 'ready', attempts INTEGER NOT NULL DEFAULT 0,
  lease_until TEXT, generation INTEGER NOT NULL DEFAULT 1,
  UNIQUE(account_id,remote_id)
@@ -93,6 +93,11 @@ CREATE TABLE IF NOT EXISTS google_previews(
  source_id TEXT NOT NULL REFERENCES google_sources(id) ON DELETE CASCADE,
  generation INTEGER NOT NULL, data TEXT NOT NULL, expires_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS google_auto_skips(
+ source_id TEXT NOT NULL REFERENCES google_sources(id) ON DELETE CASCADE,
+ remote_id TEXT NOT NULL, etag TEXT NOT NULL,
+ PRIMARY KEY(source_id,remote_id)
+);
 CREATE TABLE IF NOT EXISTS google_watches(
  channel_id TEXT PRIMARY KEY, source_id TEXT NOT NULL REFERENCES google_sources(id) ON DELETE CASCADE,
  token_hash TEXT NOT NULL, resource_id TEXT, expires_at TEXT NOT NULL,
@@ -106,6 +111,10 @@ class Database:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as c:
             c.executescript(SCHEMA)
+            # Existing 0.8.1 databases must retain imports and consent state.
+            columns = {row[1] for row in c.execute('PRAGMA table_info(google_sources)')}
+            if 'auto_import' not in columns:
+                c.execute('ALTER TABLE google_sources ADD COLUMN auto_import INTEGER NOT NULL DEFAULT 0')
 
     def connect(self):
         c = sqlite3.connect(self.path, timeout=30, isolation_level=None)
