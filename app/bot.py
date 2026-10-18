@@ -6,6 +6,7 @@ import urllib.request
 import urllib.error
 from urllib.parse import urlencode, urlsplit, urlunsplit, parse_qsl
 from .service import dump,load
+from .security import is_allowed_user
 from .recurrence import UTC,utcnow,stamp,occurrences,instance,zone
 
 log=logging.getLogger('our_calendar.worker')
@@ -158,6 +159,7 @@ class Worker:
                 for key,event in expanded.items():
                     if event.get('deleted') or event['status']!='planned':continue
                     for member in c.execute('SELECT * FROM members WHERE calendar_id=? AND active=1',(row['calendar_id'],)).fetchall():
+                        if not self.service.config.demo and not is_allowed_user(member['user_id']):continue
                         person=self.service.user(c,member['user_id'])
                         if not person['reminders_enabled']:continue
                         if event['all_day']:
@@ -195,12 +197,15 @@ class Worker:
                 job=c.execute("SELECT * FROM outbox WHERE status='pending' AND due<=? ORDER BY due LIMIT 1",(stamp(now),)).fetchone()
                 if not job:return
                 job=dict(job)
+                if job['kind']!='access_denied' and not self.service.config.demo and not is_allowed_user(job['user_id']):
+                    c.execute("UPDATE outbox SET status='cancelled' WHERE id=?",(job['id'],));continue
                 member=c.execute('SELECT m.active,ca.state FROM members m JOIN calendars ca ON ca.id=m.calendar_id WHERE m.user_id=? AND ca.id=?',(job['user_id'],job['calendar_id'])).fetchone()
                 person_row=c.execute('SELECT data FROM users WHERE id=?',(job['user_id'],)).fetchone()
-                if not person_row:
+                denied=job['kind']=='access_denied'
+                if not person_row and not denied:
                     c.execute("UPDATE outbox SET status='cancelled' WHERE id=?",(job['id'],));continue
-                person={'id':job['user_id'],**load(person_row['data'])}
-                if job['kind']!='admin' and (not member or not member['active'] or member['state']!='active'):
+                person={'id':job['user_id'],'language':'ru'} if denied else {'id':job['user_id'],**load(person_row['data'])}
+                if job['kind'] not in ('admin','access_denied') and (not member or not member['active'] or member['state']!='active'):
                     c.execute("UPDATE outbox SET status='cancelled' WHERE id=?",(job['id'],));continue
                 if job['kind']=='reminder':
                     ev=c.execute('SELECT * FROM events WHERE id=?',(job['event_id'],)).fetchone()
@@ -210,7 +215,7 @@ class Worker:
                     # Do not catch up historical reminders after downtime, pause, or restore.
                     if (now-datetime.fromisoformat(payload.get('scheduled_due',job['due']))).total_seconds()>90:
                         c.execute("UPDATE outbox SET status='expired' WHERE id=?",(job['id'],));continue
-                if not person['bot_can_message']:
+                if not denied and not person['bot_can_message']:
                     person['delivery_error']='start_bot_required';person.pop('id')
                     c.execute('UPDATE users SET data=? WHERE id=?',(dump(person),job['user_id']))
                     c.execute("UPDATE outbox SET status='failed',error='start_bot_required' WHERE id=?",(job['id'],));continue
@@ -228,10 +233,14 @@ class Worker:
                     occurrence=payload.get('data',{}).get('occurrence')
                     if occurrence:query['occurrence']=occurrence
                     url=urlunsplit((parts.scheme,parts.netloc,parts.path,urlencode(query),parts.fragment))
-                self.telegram.send(job['user_id'],self.text(job,person),person['language'],url)
+                if denied:
+                    # No Mini App button, profile, or calendar membership for outsiders.
+                    self.telegram.call('sendMessage',{'chat_id':int(job['user_id']),'text':'Доступ запрещён'})
+                else:
+                    self.telegram.send(job['user_id'],self.text(job,person),person['language'],url)
             except TelegramAPIError as exc:
                 with self.service.db.transaction() as c:
-                    if exc.code in (400,403):
+                    if exc.code in (400,403) and not denied:
                         row=c.execute('SELECT data FROM users WHERE id=?',(job['user_id'],)).fetchone()
                         prefs=load(row['data']);prefs['bot_can_message']=False;prefs['delivery_error']='telegram_'+str(exc.code)
                         c.execute('UPDATE users SET data=? WHERE id=?',(dump(prefs),job['user_id']))
@@ -257,12 +266,20 @@ class Worker:
             if update.get('my_chat_member'):
                 item=update['my_chat_member']
                 if item.get('chat',{}).get('type')=='private':
+                    if not self.service.config.demo and not is_allowed_user(item['chat']['id']):return
                     row=c.execute('SELECT data FROM users WHERE id=?',(str(item['chat']['id']),)).fetchone()
                     if row:
                         prefs=load(row['data']);prefs['bot_can_message']=item['new_chat_member']['status']!='kicked'
                         c.execute('UPDATE users SET data=? WHERE id=?',(dump(prefs),str(item['chat']['id'])))
                 return
             if not actor or chat.get('type')!='private' or actor.get('is_bot'):return
+            if not self.service.config.demo and not is_allowed_user(actor.get('id')):
+                command=message.get('text','').split(' ',1)[0]
+                if command in ('/start','/help'):
+                    # Idempotent reply without creating a user for the outsider.
+                    self.service.enqueue(c,None,str(actor['id']),'access_denied',
+                                         {'action':'access_denied'},key='denied:'+str(update['update_id']))
+                return
             user_id=self.service.ensure_user(c,actor);person=self.service.user(c,user_id)
             person.pop('id');person['bot_can_message']=True;person['delivery_error']=None
             c.execute('UPDATE users SET data=? WHERE id=?',(dump(person),user_id))
