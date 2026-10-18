@@ -190,6 +190,15 @@ def create_app(config=None,start_worker=True):
     @app.post('/api/icloud/sources/{source_id}/sync')
     async def icloud_sync(request:Request,source_id:str):
         return await asyncio.to_thread(icloud.sync_source,actor(request),source_id,True)
+    @app.get('/api/icloud/links/{link_id}')
+    def icloud_conflict(request:Request,link_id:str):
+        return icloud.conflict(actor(request),link_id)
+    @app.post('/api/icloud/links/{link_id}/resolve')
+    async def icloud_resolve(request:Request,link_id:str):
+        data=await body(request)
+        return await asyncio.to_thread(icloud.resolve,actor(request),link_id,
+                                       data.get('choice'),data.get('revision'),
+                                       data.get('remote_version'))
     @app.post('/api/auth')
     async def auth(request:Request):
         data=await body(request)
