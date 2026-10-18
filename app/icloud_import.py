@@ -46,7 +46,9 @@ def _fields(component, timezone, recurring=True):
         'description': str(component.get('DESCRIPTION') or ''),
         'location': str(component.get('LOCATION') or ''),
         'start': _local(start, timezone), 'end': _local(end, timezone),
-        'all_day': all_day, 'timezone': timezone, 'fold': 0, 'end_fold': 0,
+        'all_day': all_day, 'timezone': timezone,
+        'fold': start.astimezone(zone(timezone)).fold if isinstance(start,datetime) else 0,
+        'end_fold': end.astimezone(zone(timezone)).fold if isinstance(end,datetime) else 0,
         'rrule': rule
     }
     validate_timing(result)
