@@ -74,7 +74,8 @@ CREATE TABLE IF NOT EXISTS google_accounts(
 CREATE TABLE IF NOT EXISTS google_sources(
  id TEXT PRIMARY KEY, account_id TEXT NOT NULL REFERENCES google_accounts(id) ON DELETE CASCADE,
  remote_id TEXT NOT NULL, name TEXT NOT NULL, timezone TEXT NOT NULL,
- selected INTEGER NOT NULL DEFAULT 0, sync_token TEXT, next_at TEXT NOT NULL DEFAULT '',
+ selected INTEGER NOT NULL DEFAULT 0, auto_import INTEGER NOT NULL DEFAULT 0,
+ sync_token TEXT, next_at TEXT NOT NULL DEFAULT '',
  state TEXT NOT NULL DEFAULT 'ready', attempts INTEGER NOT NULL DEFAULT 0,
  lease_until TEXT, generation INTEGER NOT NULL DEFAULT 1,
  UNIQUE(account_id,remote_id)
@@ -106,6 +107,10 @@ class Database:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as c:
             c.executescript(SCHEMA)
+            # Upgrade existing production databases without touching account credentials or links.
+            columns={row['name'] for row in c.execute('PRAGMA table_info(google_sources)')}
+            if 'auto_import' not in columns:
+                c.execute('ALTER TABLE google_sources ADD COLUMN auto_import INTEGER NOT NULL DEFAULT 0')
 
     def connect(self):
         c = sqlite3.connect(self.path, timeout=30, isolation_level=None)
