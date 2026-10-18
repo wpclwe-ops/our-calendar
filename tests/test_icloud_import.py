@@ -195,3 +195,87 @@ def test_icloud_event_reappearing_after_remote_delete_is_reconciled(linked):
     with g.s.db.transaction() as c:
         link=c.execute('SELECT state FROM icloud_links WHERE source_id=?',(source,)).fetchone()
         assert link['state']=='ready'
+
+
+def test_rfc5545_all_day_without_dtend_and_duration():
+    base=('BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\n'
+          'UID:holiday@example.com\r\nDTSTART;VALUE=DATE:20261024\r\n'
+          'SUMMARY:Holiday\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n')
+    out=parse_resource({'ics':base},'Europe/Warsaw')
+    assert out['fields']['all_day']
+    assert out['fields']['start']=='2026-10-24'
+    assert out['fields']['end']=='2026-10-25'
+
+    all_day_duration=base.replace('SUMMARY:Holiday\r\n','DURATION:P2D\r\nSUMMARY:Holiday\r\n')
+    assert parse_resource({'ics':all_day_duration},'Europe/Warsaw')['fields']['end']=='2026-10-26'
+
+    timed=base.replace('DTSTART;VALUE=DATE:20261024\r\n',
+                       'DTSTART;TZID=Europe/Warsaw:20261024T120000\r\nDURATION:PT45M\r\n')
+    assert parse_resource({'ics':timed},'Europe/Warsaw')['fields']['end']=='2026-10-24T12:45:00'
+
+    floating=base.replace('DTSTART;VALUE=DATE:20261024\r\n',
+                          'DTSTART:20261024T120000\r\nDURATION:PT30M\r\n')
+    value=parse_resource({'ics':floating},'Europe/Warsaw')['fields']
+    assert value['start']=='2026-10-24T12:00:00'
+    assert value['end']=='2026-10-24T12:30:00'
+    assert value['timezone']=='Europe/Warsaw'
+
+
+def test_icloud_compact_previews_do_not_download_full_calendar(linked):
+    g,original,account,source=linked
+    second_url='https://p42-caldav.icloud.com/123/events/second.ics'
+    invalid=event_ics('Broken').replace('DTEND;TZID=Europe/Warsaw:20261024T160000\r\n','')
+    valid=event_ics('Valid').replace('visit@example.com','second@example.com')
+    class CompactICloud(FakeICloud):
+        def __init__(self):
+            super().__init__()
+            self.calls=[]
+            self.full_reads=[]
+        def previews(self,url):
+            self.calls.append('previews')
+            return [
+                {'url':self.remote['url'],'etag':'broken','ics':invalid},
+                {'url':second_url,'etag':'v2','ics':valid},
+            ]
+        def events(self,url):
+            raise AssertionError('Whole-calendar full fetch must never run')
+        def resource(self,url):
+            self.full_reads.append(url)
+            if url==second_url:return {'url':url,'ics':valid}
+            return {'url':url,'ics':invalid}
+
+    fake=CompactICloud()
+    g.provider=fake
+    g.select('1',account,[source],[])
+    picker=g.browse('1',source)['items']
+    assert len(picker)==2
+    assert not picker[0]['supported'] and picker[1]['supported']
+    assert fake.full_reads==[]
+    assert g.import_selected('1',source,[second_url],True)=={'created':1,'existing':0}
+    assert fake.full_reads==[second_url]
+    assert g.s.events('2','2026-10-01','2026-11-01')[0]['title']=='Valid'
+
+    # Enabling auto-import must not hide valid events due to an invalid one.
+    g.select('1',account,[source],[source])
+    result=g.sync_source('1',source,True)
+    assert result['state']=='unsupported' and result['created']==0
+    assert result['unsupported']==1
+    assert g.s.events('2','2026-10-01','2026-11-01')[0]['title']=='Valid'
+    reads=len(fake.full_reads)
+    assert g.sync_source('1',source)['state']!='delayed'
+    assert len(fake.full_reads)==reads  # known invalid ETag does not starve future scans
+
+
+def test_icloud_incomplete_scan_never_marks_link_as_deleted(linked):
+    from app.providers.http import ProviderFailure
+    g,original,account,source=linked
+    g.select('1',account,[source],[source])
+    assert g.sync_source('1',source,True)['created']==1
+    class FailedPreview(FakeICloud):
+        def previews(self,url):
+            raise ProviderFailure(503)
+    g.provider=FailedPreview()
+    assert g.sync_source('1',source)['state']=='delayed'
+    with g.s.db.transaction() as c:
+        link=c.execute('SELECT state FROM icloud_links WHERE source_id=?',(source,)).fetchone()
+        assert link['state']=='ready'
