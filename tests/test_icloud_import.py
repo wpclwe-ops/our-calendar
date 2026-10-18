@@ -113,3 +113,49 @@ def test_unsupported_event_does_not_import(linked):
     f.remote['ics']=event_ics().replace('DTEND;TZID=Europe/Warsaw:20261024T160000\r\n','')
     assert g.sync_source('1',source,True)['state']=='unsupported'
     assert not g.s.events('2','2026-10-01','2026-11-01')
+
+
+def test_manual_import_requires_explicit_confirmation(linked):
+    g,f,account,source=linked
+    g.select('1',account,[source],[])
+    event_id=f.remote['url']
+    assert g.browse('1',source)['items'][0]['title']=='Dentist'
+    with pytest.raises(Problem):g.browse('2',source)
+    with pytest.raises(Problem):g.import_selected('2',source,[event_id],True)
+    with pytest.raises(Problem):g.import_selected('1',source,[event_id],False)
+    assert g.import_selected('1',source,[event_id],True)['created']==1
+    assert g.import_selected('1',source,[event_id],True)['existing']==1
+    assert len(g.s.events('2','2026-10-01','2026-11-01'))==1
+
+
+def test_icloud_conflict_is_owner_resolved_without_remote_writes(linked):
+    g,f,account,source=linked
+    g.select('1',account,[source],[source])
+    g.sync_source('1',source,True)
+    with g.s.db.transaction() as c:
+        link=dict(c.execute('SELECT * FROM icloud_links WHERE source_id=?',(source,)).fetchone())
+    g.s.save_event('2',{'title':'Shared edit'},link['event_id'],1)
+    f.remote['ics']=event_ics('Apple edit');f.remote['etag']='v2'
+    g.sync_source('1',source,True)
+    review=g.conflict('1',link['id'])
+    assert review['state']=='conflict'
+    assert g.s.get_event('1',link['event_id'])['title']=='Shared edit'
+    with pytest.raises(Problem):g.resolve('2',link['id'],'icloud',review['revision'],review['remote_version'])
+    assert g.resolve('1',link['id'],'icloud',review['revision'],review['remote_version'])['ok']
+    assert g.s.get_event('1',link['event_id'])['title']=='Apple edit'
+    assert 'Apple edit' in f.remote['ics']
+
+
+def test_leave_revokes_icloud_credentials_and_auto_consent(linked):
+    g,f,account,source=linked
+    g.select('1',account,[source],[source])
+    g.sync_source('1',source,True)
+    g.s.membership('1')
+    with g.s.db.transaction() as c:
+        row=c.execute('SELECT * FROM icloud_accounts WHERE id=?',(account,)).fetchone()
+        assert row['credentials'] is None and row['state']=='disconnected'
+        selected=c.execute('SELECT auto_import,selected FROM icloud_sources WHERE id=?',(source,)).fetchone()
+        assert selected['auto_import']==0 and selected['selected']==0
+    assert len(g.s.events('2','2026-10-01','2026-11-01'))==1
+    g.s.membership('1',True)
+    assert g.status('1')['accounts'][0]['state']=='disconnected'
