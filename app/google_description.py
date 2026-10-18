@@ -50,8 +50,6 @@ class _PlainDescription(HTMLParser):
             return
         if tag in _BLOCK:
             self.parts.append('\n\n' if tag == 'p' else '\n')
-        elif tag == 'li':
-            self.parts.append('\n')
         elif tag == 'a' and self.anchors:
             href, index = self.anchors.pop()
             label = ''.join(self.parts[index:]).strip()
