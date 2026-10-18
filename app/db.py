@@ -59,6 +59,45 @@ CREATE TABLE IF NOT EXISTS restore_requests(
  id TEXT PRIMARY KEY, calendar_id TEXT UNIQUE NOT NULL, first_id TEXT NOT NULL, second_id TEXT NOT NULL,
  archive TEXT NOT NULL, votes TEXT NOT NULL, created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS google_oauth_requests(
+ state_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ calendar_id TEXT NOT NULL REFERENCES calendars(id) ON DELETE CASCADE,
+ state TEXT NOT NULL, secret TEXT, expires_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS google_accounts(
+ id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ calendar_id TEXT NOT NULL REFERENCES calendars(id) ON DELETE CASCADE,
+ subject TEXT NOT NULL, email TEXT NOT NULL, credentials TEXT,
+ state TEXT NOT NULL DEFAULT 'connected', generation INTEGER NOT NULL DEFAULT 1,
+ UNIQUE(user_id,calendar_id,subject)
+);
+CREATE TABLE IF NOT EXISTS google_sources(
+ id TEXT PRIMARY KEY, account_id TEXT NOT NULL REFERENCES google_accounts(id) ON DELETE CASCADE,
+ remote_id TEXT NOT NULL, name TEXT NOT NULL, timezone TEXT NOT NULL,
+ selected INTEGER NOT NULL DEFAULT 0, sync_token TEXT, next_at TEXT NOT NULL DEFAULT '',
+ state TEXT NOT NULL DEFAULT 'ready', attempts INTEGER NOT NULL DEFAULT 0,
+ lease_until TEXT, generation INTEGER NOT NULL DEFAULT 1,
+ UNIQUE(account_id,remote_id)
+);
+CREATE TABLE IF NOT EXISTS google_links(
+ id TEXT PRIMARY KEY, source_id TEXT NOT NULL REFERENCES google_sources(id) ON DELETE CASCADE,
+ remote_id TEXT NOT NULL, event_id TEXT REFERENCES events(id) ON DELETE SET NULL,
+ scope TEXT NOT NULL, base TEXT NOT NULL, remote TEXT NOT NULL,
+ state TEXT NOT NULL, etag TEXT, checked_at TEXT NOT NULL,
+ parent_id TEXT NOT NULL DEFAULT '',
+ UNIQUE(source_id,remote_id)
+);
+CREATE INDEX IF NOT EXISTS google_links_event ON google_links(event_id);
+CREATE TABLE IF NOT EXISTS google_previews(
+ id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ source_id TEXT NOT NULL REFERENCES google_sources(id) ON DELETE CASCADE,
+ generation INTEGER NOT NULL, data TEXT NOT NULL, expires_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS google_watches(
+ channel_id TEXT PRIMARY KEY, source_id TEXT NOT NULL REFERENCES google_sources(id) ON DELETE CASCADE,
+ token_hash TEXT NOT NULL, resource_id TEXT, expires_at TEXT NOT NULL,
+ source_generation INTEGER NOT NULL, account_generation INTEGER NOT NULL
+);
 '''
 
 class Database:

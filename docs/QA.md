@@ -72,3 +72,18 @@ Live-проверка после размещения фиксируется в 
 
 `python -m pytest -q`: 145 тестов. `node --test tests/*.test.cjs`: 26 тестов. Проверки включают личный выбор week_layout, старые профили, ZIP roundtrip, запрет изменения при выходе/блокировке, недельные границы года, продолжение через полночь, исключающее окончание в полночь, пересечения, зоны и повторяющийся DST-час.
 Новый сценарий `node tests/browser-calendar-week.cjs` проверяет оба таймлайна и возврат к списку, сохранность кнопок/Touch Bar, ошибку сохранения без потери выбора, открытие деталей, удержание пустой колонки, перенос события в колонке при другой выбранной дате, Сегодня/недельные стрелки, фильтр/поиск, перезагрузку/изоляцию участников. Матрица оформления: RU/EN × light/dark × 320/390/430 px. Пять прежних браузерных сценариев также обязательны. Настоящий Telegram iOS не подменяется Chromium-проверкой.
+
+## Google import-only 0.8.0
+
+Run `python -m pytest -q`, `python -m compileall -q app scripts`,
+`node --check web/app.js`, `node --check web/google-import.js`,
+`node --test tests/*.test.cjs`, and `node tests/browser-google-import.cjs`.
+The Google browser scenario uses only `tests/google_browser_server.py` and
+synthetic test events. Also retain all existing calendar browser checks.
+
+Real acceptance after OAuth configuration: complete external-browser login on
+Telegram iOS/Android/Desktop; import one event and a batch; verify an unselected
+new event remains private; change Google time; edit independent/conflicting local
+fields; stop push and confirm polling; revoke Google access; reconnect manually;
+verify all-day, DST and series exceptions; inspect no external changes. Confirm
+Google scope grants and test/production refresh-token behaviour.

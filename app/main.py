@@ -6,7 +6,7 @@ import hmac
 from pathlib import Path
 import time
 from fastapi import FastAPI,Request
-from fastapi.responses import JSONResponse,Response,FileResponse
+from fastapi.responses import JSONResponse,Response,FileResponse,HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from .config import Config
 from .db import Database
@@ -26,12 +26,19 @@ def create_app(config=None,start_worker=True):
         if start_worker:worker.start()
         yield
         worker.stop()
-    app=FastAPI(title='Our Calendar',version='0.7.2',lifespan=lifespan,docs_url=None,redoc_url=None,openapi_url=None)
+    app=FastAPI(title='Our Calendar',version='0.8.0',lifespan=lifespan,docs_url=None,redoc_url=None,openapi_url=None)
     app.state.service=service;app.state.backups=backups;app.state.worker=worker
+    google=worker.google
+    app.state.google=google
     buckets=defaultdict(deque)
     @app.exception_handler(Problem)
     async def problem(request,exc):
         return JSONResponse({'error':exc.code,'detail':exc.detail},status_code=exc.status)
+    from .providers.http import ProviderFailure
+    @app.exception_handler(ProviderFailure)
+    async def provider_problem(request,exc):
+        code='google_reconnect' if exc.code in (400,401) else 'google_unavailable' if exc.code in (403,404) else 'google_delayed'
+        return JSONResponse({'error':code},status_code=503)
     @app.exception_handler(KeyError)
     @app.exception_handler(TypeError)
     @app.exception_handler(ValueError)
@@ -89,8 +96,54 @@ def create_app(config=None,start_worker=True):
         result=health_status(service)
         return {k:result[k] for k in ('ready','degraded','translation','backup')}
     @app.get('/api/config')
-    def public_config():return {'demo':config.demo,'bot_username':config.bot_username,'version':'0.7.2',
-                              'integrations':{'google':'not_configured','icloud':'pilot_required','translation':'configured' if config.translation_url else 'not_configured'}}
+    def public_config():return {'demo':config.demo,'bot_username':config.bot_username,'version':'0.8.0',
+                              'integrations':{'google':'import_only' if google.configured else 'not_configured','icloud':'pilot_required','translation':'configured' if config.translation_url else 'not_configured'}}
+    @app.get('/api/google')
+    def google_status(request:Request):return google.status(actor(request))
+    @app.post('/api/google/connect')
+    def google_connect(request:Request):return google.start(actor(request))
+    @app.post('/api/google/push')
+    def google_push(request:Request):return google.pushed(request.headers)
+    @app.get('/api/google/callback')
+    def google_callback(state:str='',code:str='',error:str=''):
+        from html import escape
+        try:
+            google.callback(state,code,error)
+            message='Вернитесь в Our Calendar в Telegram и подтвердите выбранный аккаунт. / Return to Our Calendar in Telegram and confirm the selected account.'
+        except (Problem,ProviderFailure):
+            message='Подключение не завершено. Вернитесь в Telegram и повторите вход. / Connection was not completed. Return to Telegram and try again.'
+        link='https://t.me/'+config.bot_username+'?startapp=google'
+        return HTMLResponse('<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Our Calendar · Google</title><link rel="stylesheet" href="/assets/style.css"><main class="shell"><section class="card"><h1>Our Calendar · Google</h1><p>'+message+'</p><a href="'+escape(link,quote=True)+'">Открыть Telegram / Open Telegram</a></section></main></html>')
+    @app.post('/api/google/confirm')
+    async def google_confirm(request:Request):
+        return google.confirm_account(actor(request),(await body(request)).get('approved') is True)
+    @app.delete('/api/google/accounts/{account_id}')
+    def google_disconnect(request:Request,account_id:str):return google.disconnect(actor(request),account_id)
+    @app.get('/api/google/accounts/{account_id}/calendars')
+    def google_calendars(request:Request,account_id:str):return google.calendars(actor(request),account_id)
+    @app.post('/api/google/accounts/{account_id}/calendars')
+    async def google_select_calendars(request:Request,account_id:str):
+        return google.select(actor(request),account_id,(await body(request)).get('ids'))
+    @app.get('/api/google/sources/{source_id}/events')
+    def google_browse(request:Request,source_id:str,page:str|None=None,parent:str|None=None,start:str|None=None,end:str|None=None):
+        return google.browse(actor(request),source_id,page,parent,start,end)
+    @app.post('/api/google/sources/{source_id}/preview')
+    async def google_preview(request:Request,source_id:str):
+        user=actor(request);data=await body(request)
+        return await asyncio.to_thread(google.preview,user,source_id,data.get('selections'))
+    @app.post('/api/google/import')
+    async def google_apply(request:Request):
+        user=actor(request);data=await body(request)
+        return await asyncio.to_thread(google.apply,user,data.get('preview_id'),data.get('confirmed'))
+    @app.post('/api/google/sources/{source_id}/sync')
+    async def google_sync(request:Request,source_id:str):
+        return await asyncio.to_thread(google.sync_source,actor(request),source_id,True)
+    @app.get('/api/google/links/{link_id}')
+    def google_conflict(request:Request,link_id:str):return google.conflict(actor(request),link_id)
+    @app.post('/api/google/links/{link_id}/resolve')
+    async def google_resolve(request:Request,link_id:str):
+        user=actor(request);data=await body(request)
+        return await asyncio.to_thread(google.resolve,user,link_id,data.get('choice'),data.get('revision'),data.get('remote_version'))
     @app.post('/api/auth')
     async def auth(request:Request):
         data=await body(request)
