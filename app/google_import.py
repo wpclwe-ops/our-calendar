@@ -10,6 +10,7 @@ import random
 import secrets
 import hmac
 from .providers.google import GoogleOAuth, GoogleCalendar
+from .google_description import google_description_text
 from .providers.vault import CredentialVault
 from .providers.http import ProviderFailure
 from .security import require, Problem, digest
@@ -53,7 +54,7 @@ def normalize(item, timezone, single=False):
     tz = start.get('timeZone') or timezone or 'UTC'
     target = zone(tz)
     result = {'title': item.get('summary') or '(Google Calendar)',
-              'description': item.get('description') or '',
+              'description': google_description_text(item.get('description') or ''),
               'location': item.get('location') or '', 'all_day': all_day,
               'timezone': tz, 'fold': 0, 'end_fold': 0, 'rrule': ''}
     if all_day:
