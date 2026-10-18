@@ -22,6 +22,7 @@ const assert=require('node:assert/strict'),{mkdtempSync,rmSync}=require('node:fs
    await make('Friday overlap','2026-10-16T18:30','2026-10-16T19:30');
    await make('Night appointment','2026-10-16T23:30','2026-10-17T01:00');
    await make('All-day specimen','2026-10-17','2026-10-19',{all_day:true});
+   await make('Late appointment','2026-10-18T23:30','2026-10-18T23:50');
    await make('Short appointment','2026-10-18T15:00','2026-10-18T15:05');
    selected='2026-10-18';await changeView('week');return {sunday,category};
   });await wait();
@@ -88,6 +89,19 @@ const assert=require('node:assert/strict'),{mkdtempSync,rmSync}=require('node:fs
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
     assert.ok((await page.locator('.timeline').boundingBox()).height>100);
     const controls=await page.locator('.calendar-tools').boundingBox();assert.ok(controls.x+controls.width<=width);
+    const space=await page.evaluate(()=>{
+     const shell=document.querySelector('.week-timeline-shell').getBoundingClientRect(),timeline=document.querySelector('.timeline').getBoundingClientRect();
+     const range=document.querySelector('.week-range').getBoundingClientRect(),header=document.querySelector('.week-timeline-header').getBoundingClientRect();
+     const actions=document.querySelector('.calendar-actions'),a=actions.getBoundingClientRect(),hit=document.elementFromPoint(a.x+a.width/2,a.y+a.height/2);
+     return {left:shell.left,right:innerWidth-shell.right,dateGap:header.top-range.bottom,bottom:timeline.bottom,viewport:innerHeight,transparent:getComputedStyle(actions).backgroundColor,hit:Boolean(hit?.closest('.timeline'))};
+    });
+    assert.ok(space.left<=8&&space.right<=8,JSON.stringify(space));assert.ok(space.dateGap<=8,JSON.stringify(space));
+    assert.ok(Math.abs(space.bottom-space.viewport)<=1,'timeline continues to screen bottom: '+JSON.stringify(space));
+    assert.equal(space.transparent,'rgba(0, 0, 0, 0)');assert.equal(space.hit,true,'calendar remains touchable between actions');
+    await page.locator('.timeline').evaluate(el=>el.scrollTop=el.scrollHeight);
+    const late=page.locator('.timeline-day .time-event').filter({hasText:'Late appointment'});
+    const last=await late.boundingBox(),actions=await page.locator('.calendar-actions').boundingBox();assert.ok(last.y+last.height<=actions.y,'late event scrolls above actions');
+    await page.locator('.timeline').evaluate(el=>el.scrollTop=630);
     if(process.env.CALENDAR_SCREENSHOT_DIR)await page.screenshot({path:join(process.env.CALENDAR_SCREENSHOT_DIR,`week-${layout}-${language}-${theme}-${width}.png`)});
    }
   }
