@@ -19,6 +19,6 @@ def health_status(service):
     backup_age=age(backup.get('last_success'))
     if backup.get('state')=='ready' and backup_age is not None and backup_age>26*3600:backup={**backup,'state':'stale'}
     degraded=not ready or (bool(service.config.translation_url) and translation['state']!='ready') or (bool(service.config.backup_bucket) and backup['state']!='ready')
-    return {'ok':True,'ready':ready,'degraded':degraded,'version':'0.8.2','demo':service.config.demo,
+    return {'ok':True,'ready':ready,'degraded':degraded,'version':'0.8.3','demo':service.config.demo,
             'worker_heartbeat':heartbeat,'heartbeat_age_seconds':seconds,'bot_setup':values.get('bot_setup','not_started'),
             'translation':translation,'backup':backup,'release_checkpoint':load(values['release_checkpoint']) if values.get('release_checkpoint') else {'state':'not_requested'}}
