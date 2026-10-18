@@ -56,3 +56,14 @@ PR #5 слит с явного разрешения пользователя. Re
 ## 0.7.2 — оба вида месяца без нижней полосы
 
 Применить полную высоту рабочего календаря и нижний запас прокрутки также к month-with-agenda/month-scroll. Проверить оба вида в light/dark на 320/390/430 px: календарь до нижнего края, касания между плавающими кнопками проходят к календарю, последний элемент поднимается выше кнопок, общий scrollport/якорь/подгрузка/Сегодня сохранены. Версия API/health/package и URL CSS/JS — 0.7.2.
+
+## Google import-only 0.8.0
+
+- Preserve the current one-replica SQLite volume and release checkpoint.
+- Run Python, JS and all browser CI checks, including Google synthetic acceptance.
+- Google settings remain explicitly unconfigured until all OAuth variables exist.
+- Set the exact callback URL and read-only scopes from `docs/GOOGLE_IMPORT.md`.
+- Keep the independent credential key outside Git/DB and preserve it for recovery.
+- Do not claim live Google acceptance before testing actual accounts and devices.
+- Rolling back application code is additive-schema compatible; restore data only
+  through the existing verified operator recovery procedures if required.

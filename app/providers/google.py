@@ -10,7 +10,8 @@ from urllib.parse import urlencode,quote
 from .http import HTTPS,ProviderFailure
 
 SCOPES=('https://www.googleapis.com/auth/calendar.calendarlist.readonly',
-        'https://www.googleapis.com/auth/calendar.events.readonly')
+        'https://www.googleapis.com/auth/calendar.events.readonly',
+        'openid','https://www.googleapis.com/auth/userinfo.email')
 
 class GoogleOAuth:
     def __init__(self,client_id,client_secret,redirect_uri,transport=None):
@@ -54,6 +55,19 @@ class GoogleCalendar:
             if page in seen:raise ProviderFailure(502)
             seen.add(page)
         raise ProviderFailure(413)
+    def identity(self):
+        return self.http.json('GET','https://www.googleapis.com/oauth2/v3/userinfo',
+                              headers={'Authorization':'Bearer '+self.token})
+    def watch_events(self,calendar_id,channel_id,token,address,expiration):
+        # A read-only subscription, never an event create/update/delete.
+        return self.http.json('POST','https://www.googleapis.com/calendar/v3/calendars/'+quote(calendar_id,safe='')+'/events/watch',
+                              headers={'Authorization':'Bearer '+self.token},
+                              data={'id':channel_id,'type':'web_hook','token':token,'address':address,'expiration':str(expiration)})
+    def browse(self,calendar_id,page=None,parent=None,start=None,end=None):
+        path='calendars/'+quote(calendar_id,safe='')+'/events'
+        if parent:path+='/'+quote(parent,safe='')+'/instances'
+        return self._get(path,{'maxResults':100,'pageToken':page,'showDeleted':'false',
+                              'timeMin':start,'timeMax':end})
     def event(self,calendar_id,event_id):
         return self._get('calendars/'+quote(calendar_id,safe='')+'/events/'+quote(event_id,safe=''))
     def events(self,calendar_id,sync_token=None,allowed_ids=None):
@@ -70,7 +84,7 @@ class GoogleCalendar:
                     data=self._get('calendars/'+quote(calendar_id,safe='')+'/events',
                                    {'maxResults':250,'singleEvents':'false','showDeleted':'true','syncToken':sync_token,'pageToken':page})
                     for item in data.get('items',[]):
-                        if allowed_ids is None or item.get('id') in allowed_ids:items.append(item)
+                        if allowed_ids is None or item.get('id') in allowed_ids or item.get('recurringEventId') in allowed_ids:items.append(item)
                     page=data.get('nextPageToken')
                     if not page:return {'items':items,'sync_token':data.get('nextSyncToken'),'reset':reset}
                     if page in seen:raise ProviderFailure(502)
