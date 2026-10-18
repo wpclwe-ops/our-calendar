@@ -89,6 +89,11 @@ CREATE TABLE IF NOT EXISTS google_links(
  UNIQUE(source_id,remote_id)
 );
 CREATE INDEX IF NOT EXISTS google_links_event ON google_links(event_id);
+CREATE TABLE IF NOT EXISTS google_auto_skips(
+ source_id TEXT NOT NULL REFERENCES google_sources(id) ON DELETE CASCADE,
+ remote_id TEXT NOT NULL, etag TEXT NOT NULL,
+ PRIMARY KEY(source_id,remote_id)
+);
 CREATE TABLE IF NOT EXISTS google_previews(
  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
  source_id TEXT NOT NULL REFERENCES google_sources(id) ON DELETE CASCADE,
