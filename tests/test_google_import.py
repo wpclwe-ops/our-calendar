@@ -445,3 +445,70 @@ def test_unsafe_dst_series_is_explicitly_rejected(google):
     with pytest.raises(Problem) as exc:g.preview('1',source,[{'id':'dst','scope':'series'}])
     assert exc.value.code=='google_unsupported_recurrence'
     assert not g.s.events('2','2026-03-01','2026-04-01')
+
+
+def test_auto_import_requires_owner_opt_in_and_imports_new_events_without_duplication(google):
+    g,f,source=google
+    assert g.status('1')['accounts'][0]['sources'][0]['auto_import']==0
+    f.items['test']=remote('test',summary='Automatic test',
+        start={'dateTime':'2099-11-01T19:00:00Z','timeZone':'UTC'},
+        end={'dateTime':'2099-11-01T20:00:00Z','timeZone':'UTC'})
+    f.items['old']=remote('old',summary='Past private meeting',
+        start={'dateTime':'2001-01-01T10:00:00Z','timeZone':'UTC'},
+        end={'dateTime':'2001-01-01T11:00:00Z','timeZone':'UTC'})
+    assert g.sync_source('1',source,True)['created']==0
+    assert g.s.events('2','2099-11-01','2099-11-03')==[]
+    with pytest.raises(Problem):
+        g.select('2','account',[source],[source])
+    with pytest.raises(Problem):
+        g.select('1','account',[source],['not-owned'])
+    g.select('1','account',[source],[source])
+    assert g.status('1')['accounts'][0]['sources'][0]['auto_import']==1
+    assert g.sync_source('1',source,True)['created']==3  # visit, private, test
+    shared=g.s.events('2','2099-11-01','2099-11-03')
+    assert len(shared)==1 and shared[0]['title']=='Automatic test'
+    with g.s.db.transaction() as c:
+        assert c.execute("SELECT COUNT(*) FROM google_links WHERE source_id=?",(source,)).fetchone()[0]==3
+        assert c.execute("SELECT COUNT(*) FROM google_links WHERE remote_id='old'").fetchone()[0]==0
+    assert g.sync_source('1',source,True)['created']==0
+    assert len(g.s.events('2','2099-11-01','2099-11-03'))==1
+    g.select('1','account',[source],[])
+    f.items['another']=remote('another',summary='Should stay private',
+        start={'dateTime':'2099-11-02T09:00:00Z','timeZone':'UTC'},
+        end={'dateTime':'2099-11-02T10:00:00Z','timeZone':'UTC'})
+    assert g.sync_source('1',source,True)['created']==0
+    assert len(g.s.events('2','2099-11-01','2099-11-03'))==1
+
+
+def test_auto_import_drains_large_batches_and_isolates_unsupported_events(google):
+    g,f,source=google
+    f.items.clear()
+    for number in range(23):
+        event_id=f'future-{number:02}'
+        f.items[event_id]=remote(event_id,summary=event_id,
+            start={'dateTime':f'2099-11-{number+1:02}T10:00:00Z','timeZone':'UTC'},
+            end={'dateTime':f'2099-11-{number+1:02}T11:00:00Z','timeZone':'UTC'})
+    f.items['future-00']['eventType']='unsupported'
+    g.select('1','account',[source],[source])
+    assert g.sync_source('1',source,True)['created']==19
+    with g.s.db.transaction() as c:
+        assert c.execute('SELECT sync_token FROM google_sources WHERE id=?',(source,)).fetchone()[0] is None
+        assert c.execute('SELECT etag FROM google_auto_skips WHERE source_id=? AND remote_id=?',(source,'future-00')).fetchone()[0]=='v1'
+    assert g.sync_source('1',source,True)['created']==3
+    assert g.sync_source('1',source,True)['created']==0
+    with g.s.db.transaction() as c:
+        assert c.execute('SELECT COUNT(*) FROM google_links WHERE source_id=?',(source,)).fetchone()[0]==22
+    f.items['future-00']['eventType']='default'
+    f.items['future-00']['etag']='v2'
+    assert g.sync_source('1',source,True)['created']==1
+    assert len(g.s.events('2','2099-11-01','2099-12-01'))==23
+
+
+def test_auto_import_cannot_restore_disconnected_records_or_reenable_on_reconnect(google):
+    g,f,source=google
+    link=imported(google)
+    g.select('1','account',[source],[source])
+    g.disconnect('1','account')
+    assert g.status('1')['accounts'][0]['sources'][0]['auto_import']==0
+    assert g.s.get_event('2',link['event_id'])
+    assert g.status('1')['accounts'][0]['sources'][0]['links'][0]['state']=='disconnected'
