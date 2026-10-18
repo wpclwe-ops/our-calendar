@@ -734,7 +734,7 @@ $('#app').addEventListener('click',async e=>{const el=e.target.closest('[data-ac
 $('#app').addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('.day')){e.preventDefault();e.target.click()}});
 $('#app').addEventListener('submit',async e=>{if(e.target.id==='event-form'){e.preventDefault();if(busy)return;busy=true;e.target.classList.add('busy');try{await saveForm()}finally{busy=false;$('#event-form')?.classList.remove('busy')}}});
 $('#app').addEventListener('change',async e=>{const el=e.target;try{
- if(el.name==='touchbar-item'){const items=touchBarItems().filter(id=>id!=='settings'&&id!==el.value);if(el.checked)items.push(el.value);try{await saveTouchBar([...items,'settings'])}catch(error){render();throw error}return}
+ if(el.name==='touchbar-item'){if(busy){render();return}busy=true;try{const items=touchBarItems().filter(id=>id!=='settings'&&id!==el.value);if(el.checked)items.push(el.value);await saveTouchBar([...items,'settings'])}catch(error){render();throw error}finally{busy=false}return}
  if(el.id==='demo-user'){await login(el.value);return}
  if(el.name==='start'){
   const previous={...formEvent};captureForm();
