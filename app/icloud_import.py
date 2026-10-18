@@ -21,7 +21,9 @@ AUTO_BATCH = 20
 def _local(value, timezone):
     """Convert an iCalendar date/datetime to the internal local wall time."""
     if isinstance(value, datetime):
-        require(value.tzinfo is not None, 'icloud_unsupported_event', 422)
+        # RFC 5545 also permits floating local DATE-TIME values.
+        if value.tzinfo is None:
+            return value.isoformat(timespec='seconds')
         return value.astimezone(zone(timezone)).replace(tzinfo=None).isoformat(timespec='seconds')
     if isinstance(value, date):
         return value.isoformat()
@@ -30,8 +32,22 @@ def _local(value, timezone):
 
 def _fields(component, timezone, recurring=True):
     start = component.decoded('DTSTART')
-    end = component.decoded('DTEND')
     all_day = not isinstance(start, datetime)
+    has_end = component.get('DTEND') is not None
+    has_duration = component.get('DURATION') is not None
+    require(not (has_end and has_duration), 'icloud_unsupported_event', 422)
+    if has_end:
+        end = component.decoded('DTEND')
+    elif has_duration:
+        duration = component.decoded('DURATION')
+        require(isinstance(duration, timedelta) and duration.total_seconds() > 0,
+                'icloud_unsupported_event', 422)
+        end = start + duration
+    else:
+        # RFC 5545: an all-day VEVENT without DTEND lasts exactly one day.
+        # A zero-duration timed VEVENT cannot be represented by Our Calendar.
+        require(all_day, 'icloud_unsupported_event', 422)
+        end = start + timedelta(days=1)
     require(all_day == (not isinstance(end, datetime)), 'icloud_unsupported_event', 422)
     tzid = component.get('DTSTART').params.get('TZID') if isinstance(start,datetime) else None
     timezone = str(tzid or getattr(getattr(start,'tzinfo',None),'key',None) or timezone)
@@ -39,16 +55,16 @@ def _fields(component, timezone, recurring=True):
     rule = ''
     if recurring and component.get('RRULE'):
         rule = component['RRULE'].to_ical().decode('utf-8').upper()
-    require(not component.get('RDATE') and not component.get('DURATION'),
-            'icloud_unsupported_recurrence', 422)
+    # RDATE cannot yet be mapped without losing additional occurrences.
+    require(not component.get('RDATE'), 'icloud_unsupported_recurrence', 422)
     result = {
         'title': str(component.get('SUMMARY') or '(iCloud Calendar)'),
         'description': str(component.get('DESCRIPTION') or ''),
         'location': str(component.get('LOCATION') or ''),
         'start': _local(start, timezone), 'end': _local(end, timezone),
         'all_day': all_day, 'timezone': timezone,
-        'fold': start.astimezone(zone(timezone)).fold if isinstance(start,datetime) else 0,
-        'end_fold': end.astimezone(zone(timezone)).fold if isinstance(end,datetime) else 0,
+        'fold': start.astimezone(zone(timezone)).fold if isinstance(start,datetime) and start.tzinfo else 0,
+        'end_fold': end.astimezone(zone(timezone)).fold if isinstance(end,datetime) and end.tzinfo else 0,
         'rrule': rule
     }
     validate_timing(result)
