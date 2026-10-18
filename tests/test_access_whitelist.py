@@ -95,3 +95,18 @@ def test_allowed_start_still_opens_calendar(service):
         assert telegram.sent[0][0] == '319946231'
         assert 'ваш общий календарь' in telegram.sent[0][1]
         assert telegram.calls == []
+
+
+def test_old_unapproved_recipient_cannot_receive_queued_messages(service):
+    app = create_app(replace(service.config, demo=False), start_worker=False)
+    telegram = RecordingTelegram()
+    app.state.worker.telegram = telegram
+    with app.state.service.db.transaction() as cursor:
+        app.state.service.enqueue(cursor, None, '3', 'admin',
+                                  {'action': 'welcome'}, key='legacy-outsider-test')
+    app.state.worker.deliver()
+    assert telegram.sent == []
+    assert telegram.calls == []
+    with app.state.service.db.transaction() as cursor:
+        row = cursor.execute("SELECT status FROM outbox WHERE id='legacy-outsider-test'").fetchone()
+        assert row['status'] == 'cancelled'
