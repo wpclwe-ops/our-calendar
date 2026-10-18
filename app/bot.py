@@ -159,6 +159,7 @@ class Worker:
                 for key,event in expanded.items():
                     if event.get('deleted') or event['status']!='planned':continue
                     for member in c.execute('SELECT * FROM members WHERE calendar_id=? AND active=1',(row['calendar_id'],)).fetchall():
+                        if not self.service.config.demo and not is_allowed_user(member['user_id']):continue
                         person=self.service.user(c,member['user_id'])
                         if not person['reminders_enabled']:continue
                         if event['all_day']:
@@ -196,6 +197,8 @@ class Worker:
                 job=c.execute("SELECT * FROM outbox WHERE status='pending' AND due<=? ORDER BY due LIMIT 1",(stamp(now),)).fetchone()
                 if not job:return
                 job=dict(job)
+                if job['kind']!='access_denied' and not self.service.config.demo and not is_allowed_user(job['user_id']):
+                    c.execute("UPDATE outbox SET status='cancelled' WHERE id=?",(job['id'],));continue
                 member=c.execute('SELECT m.active,ca.state FROM members m JOIN calendars ca ON ca.id=m.calendar_id WHERE m.user_id=? AND ca.id=?',(job['user_id'],job['calendar_id'])).fetchone()
                 person_row=c.execute('SELECT data FROM users WHERE id=?',(job['user_id'],)).fetchone()
                 denied=job['kind']=='access_denied'
@@ -263,6 +266,7 @@ class Worker:
             if update.get('my_chat_member'):
                 item=update['my_chat_member']
                 if item.get('chat',{}).get('type')=='private':
+                    if not self.service.config.demo and not is_allowed_user(item['chat']['id']):return
                     row=c.execute('SELECT data FROM users WHERE id=?',(str(item['chat']['id']),)).fetchone()
                     if row:
                         prefs=load(row['data']);prefs['bot_can_message']=item['new_chat_member']['status']!='kicked'
