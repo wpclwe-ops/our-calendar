@@ -103,6 +103,30 @@ CREATE TABLE IF NOT EXISTS google_watches(
  token_hash TEXT NOT NULL, resource_id TEXT, expires_at TEXT NOT NULL,
  source_generation INTEGER NOT NULL, account_generation INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS icloud_accounts(
+ id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ calendar_id TEXT NOT NULL REFERENCES calendars(id) ON DELETE CASCADE,
+ email TEXT NOT NULL, credentials TEXT,
+ state TEXT NOT NULL DEFAULT 'connected', generation INTEGER NOT NULL DEFAULT 1,
+ UNIQUE(user_id,calendar_id,email)
+);
+CREATE TABLE IF NOT EXISTS icloud_sources(
+ id TEXT PRIMARY KEY, account_id TEXT NOT NULL REFERENCES icloud_accounts(id) ON DELETE CASCADE,
+ remote_id TEXT NOT NULL, name TEXT NOT NULL, timezone TEXT NOT NULL DEFAULT 'UTC',
+ selected INTEGER NOT NULL DEFAULT 0, auto_import INTEGER NOT NULL DEFAULT 0,
+ state TEXT NOT NULL DEFAULT 'ready', attempts INTEGER NOT NULL DEFAULT 0,
+ next_at TEXT NOT NULL DEFAULT '', checked_at TEXT NOT NULL DEFAULT '',
+ lease_until TEXT, generation INTEGER NOT NULL DEFAULT 1,
+ UNIQUE(account_id,remote_id)
+);
+CREATE TABLE IF NOT EXISTS icloud_links(
+ id TEXT PRIMARY KEY, source_id TEXT NOT NULL REFERENCES icloud_sources(id) ON DELETE CASCADE,
+ remote_id TEXT NOT NULL, event_id TEXT REFERENCES events(id) ON DELETE SET NULL,
+ base TEXT NOT NULL, remote TEXT NOT NULL, state TEXT NOT NULL,
+ etag TEXT, checked_at TEXT NOT NULL,
+ UNIQUE(source_id,remote_id)
+);
+CREATE INDEX IF NOT EXISTS icloud_links_event ON icloud_links(event_id);
 '''
 
 class Database:
