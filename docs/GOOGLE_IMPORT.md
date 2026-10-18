@@ -1,4 +1,4 @@
-# Google Calendar: inbound import (0.8.0)
+# Google Calendar: inbound import (0.8.2)
 
 This release implements the first integration stage only. Google event creation,
 updates, deletion, automatic export, and two-way mode are absent. OAuth requests
@@ -62,9 +62,16 @@ not a limit on the lifetime of imported events or background synchronization.
 A series selection explicitly includes future occurrences. An individual
 occurrence is imported as a single event. Source/instance overlap is rejected
 rather than producing duplicates. Technical batch size is 50 selected items;
-provider pagination supports additional pages. New external events are never
-automatically shared. Selection uses escaped text, including Google HTML
-Descriptions; no imported HTML is executed.
+provider pagination supports additional pages. By default, new external events
+are not shared until the owner explicitly imports them. An additional opt-in
+checkbox enables *automatic import per source calendar* after a clear one-time
+confirmation: all existing upcoming appointments and later new events (including
+title, details and full supported recurring series) then become shared with the
+partner. Existing one-off past events are not backfilled. Disabling source
+selection or reconnecting never silently restores auto import. The owner can
+turn auto import off while retaining manually/previously imported linked events.
+All writes to Google Calendar remain prohibited. Selection uses escaped text,
+including Google HTML Descriptions; no imported HTML is executed.
 
 Only source owners can read their accounts, source lists, unselected events,
 previews and conflict controls. Shared event details contain only the link ID,
@@ -85,12 +92,18 @@ access logging is disabled; callback responses prohibit caching/referrers.
 
 Per-source sync cursors, due times, retry attempts and crash-recoverable leases
 are in SQLite. Network calls never hold a DB transaction. On each apply, owner,
-membership, source selection, account/source generations and lifecycle are
-checked again. Manual and background checks share the same engine. A separate
+membership, source selection, automatic-import consent, account/source generations
+and lifecycle are checked again. Manual and background checks share the same engine. A separate
 Google thread isolates provider delays from reminders, translation and backups.
 
 A full read precedes incremental `syncToken` reads. Pagination completes before
-the new cursor commits. `410` triggers a new provider read; shared records are
+the new cursor commits. Auto import reads a bounded batch (20 newly detected
+events) per pass; while a backfill remains, the previous cursor is retained and
+the next pass runs soon so unprocessed remote events cannot disappear. Bad or
+unsupported events are skipped by remote ID and ETag until Google changes them;
+they cannot starve other new events. Any local Google-import links, including
+disconnected links, suppress automatic duplicate creation. Client previews and
+Google changes are never used to write back to Google. `410` triggers a new provider read; shared records are
 not erased. Push channels are registered only for selected sources and renewed
 before expiry. Callback channel tokens/resource IDs/generations are checked;
 push only marks the source due. Initial messages arriving before watch returns
