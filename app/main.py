@@ -26,10 +26,12 @@ def create_app(config=None,start_worker=True):
         if start_worker:worker.start()
         yield
         worker.stop()
-    app=FastAPI(title='Our Calendar',version='0.8.3',lifespan=lifespan,docs_url=None,redoc_url=None,openapi_url=None)
+    app=FastAPI(title='Our Calendar',version='0.8.4',lifespan=lifespan,docs_url=None,redoc_url=None,openapi_url=None)
     app.state.service=service;app.state.backups=backups;app.state.worker=worker
     google=worker.google
+    icloud=worker.icloud
     app.state.google=google
+    app.state.icloud=icloud
     buckets=defaultdict(deque)
     @app.exception_handler(Problem)
     async def problem(request,exc):
@@ -37,7 +39,8 @@ def create_app(config=None,start_worker=True):
     from .providers.http import ProviderFailure
     @app.exception_handler(ProviderFailure)
     async def provider_problem(request,exc):
-        code='google_reconnect' if exc.code in (400,401) else 'google_unavailable' if exc.code in (403,404) else 'google_delayed'
+        prefix='icloud' if request.url.path.startswith('/api/icloud/') else 'google'
+        code=prefix+('_reconnect' if exc.code in (400,401) else '_unavailable' if exc.code in (403,404) else '_delayed')
         return JSONResponse({'error':code},status_code=503)
     @app.exception_handler(KeyError)
     @app.exception_handler(TypeError)
@@ -96,8 +99,8 @@ def create_app(config=None,start_worker=True):
         result=health_status(service)
         return {k:result[k] for k in ('ready','degraded','translation','backup')}
     @app.get('/api/config')
-    def public_config():return {'demo':config.demo,'bot_username':config.bot_username,'version':'0.8.3',
-                              'integrations':{'google':'import_only' if google.configured else 'not_configured','icloud':'pilot_required','translation':'configured' if config.translation_url else 'not_configured'}}
+    def public_config():return {'demo':config.demo,'bot_username':config.bot_username,'version':'0.8.4',
+                              'integrations':{'google':'import_only' if google.configured else 'not_configured','icloud':'import_only' if icloud.configured else 'not_configured','translation':'configured' if config.translation_url else 'not_configured'}}
     @app.get('/api/google')
     def google_status(request:Request):return google.status(actor(request))
     @app.post('/api/google/connect')
@@ -162,6 +165,41 @@ def create_app(config=None,start_worker=True):
     async def google_resolve(request:Request,link_id:str):
         user=actor(request);data=await body(request)
         return await asyncio.to_thread(google.resolve,user,link_id,data.get('choice'),data.get('revision'),data.get('remote_version'))
+    @app.get('/api/icloud')
+    def icloud_status(request:Request):return icloud.status(actor(request))
+    @app.post('/api/icloud/connect')
+    async def icloud_connect(request:Request):
+        data=await body(request)
+        return await asyncio.to_thread(icloud.connect,actor(request),data.get('email'),data.get('password'))
+    @app.delete('/api/icloud/accounts/{account_id}')
+    def icloud_disconnect(request:Request,account_id:str):return icloud.disconnect(actor(request),account_id)
+    @app.get('/api/icloud/accounts/{account_id}/calendars')
+    async def icloud_calendars(request:Request,account_id:str):
+        return await asyncio.to_thread(icloud.calendars,actor(request),account_id)
+    @app.post('/api/icloud/accounts/{account_id}/calendars')
+    async def icloud_select(request:Request,account_id:str):
+        data=await body(request)
+        return icloud.select(actor(request),account_id,data.get('ids'),data.get('auto_ids'))
+    @app.get('/api/icloud/sources/{source_id}/events')
+    async def icloud_browse(request:Request,source_id:str):
+        return await asyncio.to_thread(icloud.browse,actor(request),source_id)
+    @app.post('/api/icloud/sources/{source_id}/import')
+    async def icloud_import(request:Request,source_id:str):
+        data=await body(request)
+        return await asyncio.to_thread(icloud.import_selected,actor(request),source_id,
+                                       data.get('ids'),data.get('confirmed'))
+    @app.post('/api/icloud/sources/{source_id}/sync')
+    async def icloud_sync(request:Request,source_id:str):
+        return await asyncio.to_thread(icloud.sync_source,actor(request),source_id,True)
+    @app.get('/api/icloud/links/{link_id}')
+    def icloud_conflict(request:Request,link_id:str):
+        return icloud.conflict(actor(request),link_id)
+    @app.post('/api/icloud/links/{link_id}/resolve')
+    async def icloud_resolve(request:Request,link_id:str):
+        data=await body(request)
+        return await asyncio.to_thread(icloud.resolve,actor(request),link_id,
+                                       data.get('choice'),data.get('revision'),
+                                       data.get('remote_version'))
     @app.post('/api/auth')
     async def auth(request:Request):
         data=await body(request)
