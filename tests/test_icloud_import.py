@@ -60,6 +60,8 @@ def test_selection_is_private_and_auto_import_is_opt_in(linked):
     assert g.status('1')['accounts'][0]['sources'][0]['auto_import']==0
     with pytest.raises(Problem):g.calendars('2',account)
     with pytest.raises(Problem):g.sync_source('2',source,True)
+    with pytest.raises(Problem):g.sync_source('1',source,True)
+    g.select('1',account,[source],[])
     assert g.sync_source('1',source,True)['created']==0
     assert not g.s.events('2','2026-10-01','2026-11-01')
     g.select('1',account,[source],[source])
