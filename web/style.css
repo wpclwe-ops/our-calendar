@@ -302,9 +302,9 @@ body.dark .week-date.selected{background:#3b3048}
 .week-layout-option .grow{flex:1}
 .week-layout-option[aria-pressed=true]{background:var(--soft);color:var(--accent)}
 
-/* Compact week spacing; time grids continue behind the floating actions/nav. */
+/* Compact week spacing; calendar scrollports reach behind floating actions/nav. */
 .calendar-motion-page[data-view=week] .calendar-controls{padding-top:12px;padding-bottom:6px}
 .calendar-motion-page[data-view=week] .calendar-tools{transform:translateY(-6px)}
-.calendar-shell:has(> .calendar-motion-viewport > .calendar-motion-page:not(.motion-preview) .timeline){height:100dvh}
-.demo+.calendar-shell:has(> .calendar-motion-viewport > .calendar-motion-page:not(.motion-preview) .timeline){height:calc(100dvh - 34px)}
-.calendar-shell .timeline{padding-bottom:calc(var(--nav-height) + 104px);scroll-padding-bottom:calc(var(--nav-height) + 104px)}
+.calendar-shell:has(> .calendar-motion-viewport > .calendar-motion-page:not(.motion-preview) :is(.timeline,.month-with-agenda,.month-scroll)){height:100dvh}
+.demo+.calendar-shell:has(> .calendar-motion-viewport > .calendar-motion-page:not(.motion-preview) :is(.timeline,.month-with-agenda,.month-scroll)){height:calc(100dvh - 34px)}
+.calendar-shell :is(.timeline,.month-with-agenda,.month-scroll){padding-bottom:calc(var(--nav-height) + 104px);scroll-padding-bottom:calc(var(--nav-height) + 104px)}
