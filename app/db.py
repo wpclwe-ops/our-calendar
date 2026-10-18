@@ -53,6 +53,29 @@ CREATE TABLE IF NOT EXISTS translation_jobs(
  version TEXT NOT NULL,payload TEXT NOT NULL,state TEXT NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,
  error TEXT,next_at TEXT NOT NULL,PRIMARY KEY(kind,resource_id)
 );
+CREATE TABLE IF NOT EXISTS smart_jobs(
+ event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE, occurrence TEXT NOT NULL DEFAULT '',
+ calendar_id TEXT NOT NULL REFERENCES calendars(id) ON DELETE CASCADE,
+ generation TEXT NOT NULL,input_hash TEXT NOT NULL,cache_hash TEXT NOT NULL,payload TEXT NOT NULL,
+ state TEXT NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,error TEXT,next_at TEXT NOT NULL,lease_until TEXT,
+ PRIMARY KEY(event_id,occurrence)
+);
+CREATE INDEX IF NOT EXISTS smart_jobs_due ON smart_jobs(state,next_at);
+CREATE TABLE IF NOT EXISTS smart_cache(
+ calendar_id TEXT NOT NULL REFERENCES calendars(id) ON DELETE CASCADE,hash TEXT NOT NULL,model TEXT NOT NULL,
+ result TEXT NOT NULL,expires_at TEXT NOT NULL,PRIMARY KEY(calendar_id,hash,model)
+);
+CREATE TABLE IF NOT EXISTS smart_rules(
+ id TEXT PRIMARY KEY,calendar_id TEXT NOT NULL REFERENCES calendars(id) ON DELETE CASCADE,data TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS smart_previews(
+ id TEXT PRIMARY KEY,user_id TEXT NOT NULL,calendar_id TEXT NOT NULL REFERENCES calendars(id) ON DELETE CASCADE,
+ data TEXT NOT NULL,expires_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS smart_usage(
+ id TEXT PRIMARY KEY,month TEXT NOT NULL,reserved REAL NOT NULL,model TEXT NOT NULL,state TEXT NOT NULL,usage TEXT
+);
+CREATE INDEX IF NOT EXISTS smart_usage_month ON smart_usage(month);
 CREATE TABLE IF NOT EXISTS bot_updates(id INTEGER PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS runtime(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS restore_requests(
@@ -135,6 +158,10 @@ class Database:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as c:
             c.executescript(SCHEMA)
+            columns_tr = {row[1] for row in c.execute('PRAGMA table_info(translation_jobs)')}
+            if 'generation' not in columns_tr:
+                c.execute("ALTER TABLE translation_jobs ADD COLUMN generation TEXT NOT NULL DEFAULT ''")
+            c.execute('INSERT OR IGNORE INTO schema_version VALUES(2)')
             # Existing 0.8.1 databases must retain imports and consent state.
             columns = {row[1] for row in c.execute('PRAGMA table_info(google_sources)')}
             if 'auto_import' not in columns:

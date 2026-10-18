@@ -67,3 +67,17 @@ PR #5 слит с явного разрешения пользователя. Re
 - Do not claim live Google acceptance before testing actual accounts and devices.
 - Rolling back application code is additive-schema compatible; restore data only
   through the existing verified operator recovery procedures if required.
+
+## Smart Events 0.9.0 activation
+
+- [ ] Established encrypted operator recovery checkpoint before a production upgrade.
+- [ ] Verify separate OpenAI API billing/model access; set the key only on the backend.
+- [ ] Check the conservative monthly reservation budget and current model tariffs.
+- [ ] Participant consent/source scope tested; old records require explicit selection.
+- [ ] Review real model quality; keep SMART_AUTO_CATEGORIES_ENABLED=false until accepted.
+- [ ] Verify actual Telegram/iPhone WebKit, live provider updates and reminders.
+- [ ] Restore ZIP v1/v2; full restore leaves API consent and reminders disabled.
+
+A draft PR with synthetic checks does not mark any of these production acceptance
+items complete. Rollback to 0.8.4 requires its compatible recovery checkpoint,
+not running its old validator against new smart event JSON.

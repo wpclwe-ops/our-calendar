@@ -340,7 +340,7 @@ class GoogleImports:
             require(choice['scope']!='series' or bool(item.get('recurrence')) or item.get('status')=='cancelled', 'google_selection_expired',409)
             value=snapshot(item,source['timezone'],[v for v in children if v.get('recurringEventId')==item['id']],choice['scope']=='one')
             if not value.get('deleted'):validate_series(value)
-            result.append({'id':item['id'],'parent_id':item.get('recurringEventId',''),'scope':choice['scope'],'etag':item.get('etag'), 'snapshot':value})
+            result.append({'id':item['id'],'parent_id':item.get('recurringEventId',''),'scope':choice['scope'],'etag':item.get('etag'), 'snapshot':value,'original_overrides':{occurrence_key(child,source['timezone']):{'title':child.get('summary') or value.get('fields',{}).get('title',''),'description':child.get('description') or ''} for child in children if child.get('recurringEventId')==item['id'] and child.get('status')!='cancelled'},'original':{'title':item.get('summary') or '(Google Calendar)','description':item.get('description') or ''}})
         return result
 
     def preview(self,actor,source_id,selections):
@@ -357,7 +357,7 @@ class GoogleImports:
                 self.check_overlap(c,source_id,value,values)
             for value in values:
                 # Validate lengths, timing and overrides before offering a successful preview.
-                data=self.new_data(c,actor,account['calendar_id'],value['snapshot']['fields'])
+                data=self.new_data(c,actor,account['calendar_id'],value['snapshot']['fields'],original=value.get('original'))
                 cal=self.s.calendar(c,actor);self.s.validate_event(c,cal,data)
                 for patch in value['snapshot']['overrides'].values():
                     if not patch.get('deleted'):self.s.validate_event(c,cal,{**data,**patch})
@@ -381,13 +381,25 @@ class GoogleImports:
             if value['id']==link['remote_id']:continue
             require(not (value['parent_id']==link['remote_id'] or link['parent_id']==value['id']), 'google_series_overlap',409)
 
-    def new_data(self,c,actor,calendar_id,fields):
+    def new_data(self,c,actor,calendar_id,fields,original=None,provider='google'):
         me=self.s.user(c,actor)
         data={**fields,'language':me['language'],'translations':{},'owner':actor,'creator_id':actor,
               'category_id':None,'status':'planned','links':[],'reminders':{}}
         for m in c.execute('SELECT user_id FROM members WHERE calendar_id=?',(calendar_id,)):
             data['reminders'][m['user_id']]=self.s.user(c,m['user_id'])['default_reminders']
+        from .smart_events import capture_source
+        capture_source(data,provider=provider,**(original or {}))
         return data
+
+    def import_overrides(self,value,provider='google',originals=None):
+        from .smart_events import capture_source
+        for key,fields in value['overrides'].items():
+            patch=deepcopy(fields)
+            if not patch.get('deleted'):
+                effective={**value['fields'],**patch}
+                capture_source(effective,provider=provider,**((originals or {}).get(key,{})))
+                patch['smart']=effective['smart']
+            yield key,patch
 
     def apply(self,actor,preview_id,confirmed):
         self.ready();require(confirmed is True,'confirmation_required')
@@ -413,15 +425,15 @@ class GoogleImports:
                     require(not event['deleted_at'],'google_restore_local_first',409)
                     if old['state']=='disconnected':
                         c.execute("UPDATE google_links SET state='ready' WHERE id=?",(old['id'],))
-                        self.reconcile(c,account,dict(old),value['snapshot'],value['etag'])
+                        self.reconcile(c,account,dict(old),value['snapshot'],value['etag'],original=value.get('original'),original_overrides=value.get('original_overrides'))
                         reconnected+=1
                     else:existing+=1
                     continue
                 event_id=uid();link_id=old['id'] if old else uid()
-                data=self.new_data(c,actor,account['calendar_id'],value['snapshot']['fields'])
+                data=self.new_data(c,actor,account['calendar_id'],value['snapshot']['fields'],original=value.get('original'))
                 self.s.validate_event(c,self.s.calendar(c,actor),data)
                 c.execute('INSERT INTO events(id,calendar_id,data) VALUES(?,?,?)',(event_id,account['calendar_id'],dump(data)))
-                for key,patch in value['snapshot']['overrides'].items():
+                for key,patch in self.import_overrides(value['snapshot'],originals=value.get('original_overrides')):
                     c.execute('INSERT INTO overrides VALUES(?,?,?)',(event_id,key,dump(patch)))
                 c.execute("INSERT INTO google_links(id,source_id,remote_id,event_id,scope,base,remote,state,etag,checked_at,parent_id) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(source_id,remote_id) DO UPDATE SET event_id=excluded.event_id,scope=excluded.scope,base=excluded.base,remote=excluded.remote,state=excluded.state,etag=excluded.etag,checked_at=excluded.checked_at,parent_id=excluded.parent_id",
                           (link_id,source['id'],value['id'],event_id,value['scope'],dump(value['snapshot']),dump(value['snapshot']),'ready',value['etag'],stamp(),value['parent_id']))
@@ -445,31 +457,48 @@ class GoogleImports:
             if external:overrides[ov['occurrence']]=external
         return {'fields':fields,'overrides':overrides}
 
-    def store_snapshot(self,c,account,row,value,provider='google'):
+    def store_snapshot(self,c,account,row,value,provider='google',original=None,original_overrides=None):
         data=load(row['data']);previous=deepcopy(data)
         data.update(value['fields'])
         text_change=any(data[k]!=previous[k] for k in ('title','description'))
-        if text_change:data['translations']={k:{**v,'stale':True} for k,v in data['translations'].items()}
+        if text_change:
+            data['translations']={k:{**v,'stale':True} for k,v in data['translations'].items()}
+            from .smart_events import source_changed,capture_source
+            source_changed(data);capture_source(data,provider=provider,**(original or {}))
         self.s.validate_event(c,self.s.calendar(c,account['user_id']),data)
         for key,patch in value['overrides'].items():
             if not patch.get('deleted'):self.s.validate_event(c,self.s.calendar(c,account['user_id']),{**data,**patch})
+        if original:
+            from .smart_events import capture_source
+            capture_source(data,provider=provider,**original)
+        self.s.validate_event(c,self.s.calendar(c,account['user_id']),data)
         old=self.local_snapshot(c,row)
-        if old==value:return
+        if old==value:
+            if data!=previous:c.execute('UPDATE events SET data=?,revision=revision+1 WHERE id=?',(dump(data),row['id']))
+            return
         old_patches={r['occurrence']:load(r['data']) for r in c.execute('SELECT * FROM overrides WHERE event_id=?',(row['id'],))}
+        override_text_change=False
         for key in set(old_patches)|set(value['overrides']):
             personal={k:v for k,v in old_patches.get(key,{}).items() if k not in FIELDS and k!='deleted'}
             patch={**personal,**value['overrides'].get(key,{})}
+            before={**previous,**old_patches.get(key,{})};after={**data,**patch}
+            changed=any(before.get(k)!=after.get(k) for k in ('title','description'))
+            if changed:
+                override_text_change=True
+                patch['translations']={l:{**tr,'stale':True} for l,tr in patch.get('translations',{}).items()}
+                from .smart_events import source_changed,capture_source
+                source_changed(after);capture_source(after,provider=provider,**((original_overrides or {}).get(key,{})));patch['smart']=after['smart']
             if patch:c.execute('INSERT INTO overrides VALUES(?,?,?) ON CONFLICT(event_id,occurrence) DO UPDATE SET data=excluded.data',(row['id'],key,dump(patch)))
             else:c.execute('DELETE FROM overrides WHERE event_id=? AND occurrence=?',(row['id'],key))
         c.execute('UPDATE events SET data=?,revision=revision+1,schedule_version=schedule_version+1 WHERE id=?',(dump(data),row['id']))
         c.execute("UPDATE outbox SET status='cancelled' WHERE event_id=? AND kind='reminder' AND status IN ('pending','sending')",(row['id'],))
-        if text_change:
+        if text_change or override_text_change:
             from .translation import enqueue_translation
             enqueue_translation(c,self.s.config,'event',row['id'],account['calendar_id'],data,row['revision']+1)
         if any(previous.get(k)!=data.get(k) for k in IMPORTANT) or old['overrides']!=value['overrides']:
             self.s.notify(c,account['calendar_id'],None,provider+'_updated',data,row['id'])
 
-    def reconcile(self,c,account,link,remote,etag):
+    def reconcile(self,c,account,link,remote,etag,original=None,original_overrides=None):
         row=c.execute('SELECT * FROM events WHERE id=?',(link['event_id'],)).fetchone()
         if not row or row['deleted_at']:
             c.execute("UPDATE google_links SET state='disconnected' WHERE id=?",(link['id'],));return
@@ -488,7 +517,7 @@ class GoogleImports:
             if dump(remote)!=link['remote'] or link['state']!='conflict':self.s.notify(c,account['calendar_id'],None,'google_conflict',load(row['data']),row['id'])
             c.execute("UPDATE google_links SET state='conflict',remote=?,etag=?,checked_at=? WHERE id=?",(dump(remote),etag,stamp(),link['id']));return
         merged=unflattened(merge['merged'])
-        self.store_snapshot(c,account,row,merged)
+        self.store_snapshot(c,account,row,merged,original=original,original_overrides=original_overrides)
         c.execute('UPDATE google_links SET state=?,base=?,remote=?,etag=?,checked_at=? WHERE id=?',
                   ('ready' if merged==remote else 'local_changes',dump(remote),dump(remote),etag,stamp(),link['id']))
 
@@ -543,7 +572,7 @@ class GoogleImports:
                         chosen=flattened(remote if choice=='google' else local)
                         for field in keys:merged[field]=chosen.get(field)
                     result=unflattened(merged)
-                    self.store_snapshot(c,account,row,result)
+                    self.store_snapshot(c,account,row,result,original=fresh.get('original'),original_overrides=fresh.get('original_overrides'))
                     c.execute('UPDATE google_links SET state=?,base=?,remote=?,etag=?,checked_at=? WHERE id=?',
                               ('ready' if result==remote else 'local_changes',dump(remote),dump(remote),fresh['etag'],stamp(),link_id))
                     self.s.notify(c,account['calendar_id'],actor,'google_resolved',load(row['data']),row['id'])
@@ -611,7 +640,7 @@ class GoogleImports:
                     if link and link['state']!='disconnected':
                         value=by_id[old['remote_id']]
                         c.execute('SAVEPOINT google_event')
-                        try:self.reconcile(c,account,dict(link),value['snapshot'],value['etag'])
+                        try:self.reconcile(c,account,dict(link),value['snapshot'],value['etag'],original=value.get('original'),original_overrides=value.get('original_overrides'))
                         except (Problem,KeyError,ValueError,TypeError):
                             c.execute('ROLLBACK TO google_event')
                             c.execute("UPDATE google_links SET state='unsupported',checked_at=? WHERE id=?",(stamp(),old['id']))
@@ -627,7 +656,7 @@ class GoogleImports:
                         try:
                             self.check_overlap(c,source_id,value,[value])
                             fields=value['snapshot']['fields']
-                            data=self.new_data(c,actor,account['calendar_id'],fields)
+                            data=self.new_data(c,actor,account['calendar_id'],fields,original=value.get('original'))
                             cal=self.s.calendar(c,actor)
                             self.s.validate_event(c,cal,data)
                             for patch in value['snapshot']['overrides'].values():
@@ -636,7 +665,7 @@ class GoogleImports:
                             event_id=uid()
                             c.execute('INSERT INTO events(id,calendar_id,data) VALUES(?,?,?)',
                                       (event_id,account['calendar_id'],dump(data)))
-                            for key,patch in value['snapshot']['overrides'].items():
+                            for key,patch in self.import_overrides(value['snapshot'],originals=value.get('original_overrides')):
                                 c.execute('INSERT INTO overrides VALUES(?,?,?)',(event_id,key,dump(patch)))
                             c.execute("INSERT INTO google_links(id,source_id,remote_id,event_id,scope,base,remote,state,etag,checked_at,parent_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
                                       (uid(),source_id,value['id'],event_id,value['scope'],dump(value['snapshot']),dump(value['snapshot']),

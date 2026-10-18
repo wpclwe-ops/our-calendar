@@ -26,7 +26,7 @@ def create_app(config=None,start_worker=True):
         if start_worker:worker.start()
         yield
         worker.stop()
-    app=FastAPI(title='Our Calendar',version='0.8.4',lifespan=lifespan,docs_url=None,redoc_url=None,openapi_url=None)
+    app=FastAPI(title='Our Calendar',version='0.9.0',lifespan=lifespan,docs_url=None,redoc_url=None,openapi_url=None)
     app.state.service=service;app.state.backups=backups;app.state.worker=worker
     google=worker.google
     icloud=worker.icloud
@@ -99,8 +99,34 @@ def create_app(config=None,start_worker=True):
         result=health_status(service)
         return {k:result[k] for k in ('ready','degraded','translation','backup')}
     @app.get('/api/config')
-    def public_config():return {'demo':config.demo,'bot_username':config.bot_username,'version':'0.8.4',
-                              'integrations':{'google':'import_only' if google.configured else 'not_configured','icloud':'import_only' if icloud.configured else 'not_configured','translation':'configured' if config.translation_url else 'not_configured'}}
+    def public_config():return {'demo':config.demo,'bot_username':config.bot_username,'version':'0.9.0',
+                              'integrations':{'google':'import_only' if google.configured else 'not_configured','icloud':'import_only' if icloud.configured else 'not_configured','translation':'configured' if config.translation_url or config.openai_api_key else 'not_configured','smart_events':bool(config.openai_api_key)}}
+    @app.get('/api/smart-events')
+    def smart_status(request:Request):return worker.smart.status(actor(request))
+    @app.post('/api/smart-events/preview')
+    async def smart_preview(request:Request):
+        data=await body(request)
+        return worker.smart.preview(actor(request),data.get('offset',0))
+    @app.post('/api/smart-events/batch')
+    async def smart_batch(request:Request):
+        data=await body(request)
+        return worker.smart.batch(actor(request),data.get('preview_id'),data.get('ids'))
+    @app.post('/api/events/{eid}/smart/reprocess')
+    async def smart_request(request:Request,eid:str):
+        data=await body(request)
+        return worker.smart.request(actor(request),eid,data.get('occurrence',''),data.get('replace_fields',[]))
+    @app.patch('/api/events/{eid}/smart')
+    async def smart_edit(request:Request,eid:str):
+        data=await body(request)
+        require(set(data)<={'revision','occurrence','short_titles','category_action','remember','excluded'},'invalid_request')
+        return worker.smart.edit(actor(request),eid,**data)
+    @app.patch('/api/smart-events/rules/{rid}')
+    async def smart_rule(request:Request,rid:str):
+        data=await body(request)
+        return worker.smart.rule(actor(request),rid,changes=data)
+    @app.delete('/api/smart-events/rules/{rid}')
+    def smart_delete_rule(request:Request,rid:str):return worker.smart.rule(actor(request),rid,delete=True)
+
     @app.get('/api/google')
     def google_status(request:Request):return google.status(actor(request))
     @app.post('/api/google/connect')
@@ -278,7 +304,7 @@ def create_app(config=None,start_worker=True):
     @app.post('/api/backup/apply')
     async def apply(request:Request):
         data=await body(request);require(data.get('previewed') is True,'preview_required')
-        return backups.apply(actor(request),archive(data),data.get('selections',[]),data.get('missing_ids',[]),data.get('category_ids',[]),preview_id=data.get('preview_id'),override_selections=data.get('override_selections',[]),profile_fields=data.get('profile_fields',[]))
+        return backups.apply(actor(request),archive(data),data.get('selections',[]),data.get('missing_ids',[]),data.get('category_ids',[]),preview_id=data.get('preview_id'),override_selections=data.get('override_selections',[]),profile_fields=data.get('profile_fields',[]),smart_rule_ids=data.get('smart_rule_ids',[]))
     @app.post('/api/backup/restore-deleted')
     async def restore_deleted(request:Request):return backups.request_deleted(actor(request),archive(await body(request)))
     @app.post('/api/backup/restore-deleted/{rid}')
