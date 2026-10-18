@@ -11,7 +11,7 @@ from .recurrence import (UTC, utcnow, stamp, zone, validate_timing, occurrences,
 PALETTE = ['#9B77D1','#D47AAE','#D77777','#E0A34B','#D0BD55','#55A77B','#4DA5A8','#598DD4','#7778C9','#888888','#333333','#F3B6D4']
 MAX_REMINDER_MINUTES = 525600
 EVENT_FIELDS = {'title','description','language','translations','start','end','all_day','timezone','fold','end_fold',
-                'owner','category_id','status','location','links','rrule','reminders'}
+                'owner','category_id','status','location','links','rrule','reminders','smart'}
 IMPORTANT = {'start','end','all_day','timezone','status','location','rrule'}
 
 def uid():
@@ -134,7 +134,7 @@ class Service:
             if member:
                 self.calendar(c,user_id)
             me = self.user(c,user_id)
-            require(set(changes) <= {'language','timezone','theme','view','day_layout','month_layout','week_layout','touch_bar','default_duration','default_reminders','reminders_enabled','notify_at_start'},'invalid_settings')
+            require(set(changes) <= {'language','timezone','theme','view','day_layout','month_layout','week_layout','touch_bar','default_duration','default_reminders','reminders_enabled','notify_at_start','smart_events'},'invalid_settings')
             if 'language' in changes: require(changes['language'] in ('ru','en'),'invalid_language')
             if 'timezone' in changes: zone(changes['timezone'])
             if 'theme' in changes: require(changes['theme'] in ('light','dark','system'),'invalid_theme')
@@ -152,6 +152,13 @@ class Service:
                 require(len(changes['default_reminders'])<=1,'invalid_default_reminder')
             for key in ('reminders_enabled','notify_at_start'):
                 if key in changes: require(type(changes[key]) is bool,'invalid_settings')
+            if 'smart_events' in changes:
+                from .smart_events import preferences,validate_preferences
+                validate_preferences(changes['smart_events'])
+                changes['smart_events']={**preferences(me),**changes['smart_events']}
+                # Revocation/settings changes also fence an already in-flight API response.
+                if member and any(changes['smart_events'].get(k)!=preferences(me).get(k) for k in ('consent','titles','categorize','mode','include_internal')):
+                    c.execute("UPDATE smart_jobs SET state='cancelled',generation=? WHERE calendar_id=?",(uid(),self.calendar(c,user_id)['id']))
             me.update(changes); me.pop('id')
             if 'language' in changes:me['choose_language']=False
             if 'timezone' in changes:me['timezone_initialized']=True
@@ -174,14 +181,27 @@ class Service:
                 c.execute('DELETE FROM categories WHERE id=?',(category_id,))
                 for r in c.execute('SELECT * FROM events WHERE calendar_id=?',(cal['id'],)).fetchall():
                     ev=load(r['data'])
-                    if ev['category_id']==category_id:
-                        ev['category_id']=None
+                    removed=ev['category_id']==category_id
+                    suggestion=ev.get('smart',{}).get('category',{}).get('suggestion')==category_id
+                    if removed or suggestion:
+                        if removed:ev['category_id']=None
+                        if 'smart' in ev:
+                            ev['smart']['category'].pop('suggestion',None)
+                            if removed:ev['smart']['category']={'manual':True,'origin':'manual'}
                         c.execute('UPDATE events SET data=?,revision=revision+1 WHERE id=?',(dump(ev),r['id']))
                 for ov in c.execute('SELECT o.* FROM overrides o JOIN events e ON e.id=o.event_id WHERE e.calendar_id=?',(cal['id'],)).fetchall():
                     patch=load(ov['data'])
-                    if patch.get('category_id')==category_id:
-                        patch['category_id']=None
+                    removed=patch.get('category_id')==category_id
+                    suggestion=patch.get('smart',{}).get('category',{}).get('suggestion')==category_id
+                    if removed or suggestion:
+                        if removed:patch['category_id']=None
+                        if 'smart' in patch:
+                            patch['smart']['category'].pop('suggestion',None)
+                            if removed:patch['smart']['category']={'manual':True,'origin':'manual'}
+                        c.execute('UPDATE events SET revision=revision+1 WHERE id=?',(ov['event_id'],))
                         c.execute('UPDATE overrides SET data=? WHERE event_id=? AND occurrence=?',(dump(patch),ov['event_id'],ov['occurrence']))
+                for rule in c.execute('SELECT * FROM smart_rules WHERE calendar_id=?',(cal['id'],)).fetchall():
+                    if load(rule['data']).get('category_id')==category_id:c.execute('DELETE FROM smart_rules WHERE id=?',(rule['id'],))
                 return {'ok':True}
             require(set(data)<={'name','color','translations'},'invalid_category')
             require(isinstance(data.get('name'),str) and 0<len(data['name'].strip())<=100,'invalid_name')
@@ -219,6 +239,9 @@ class Service:
             result['icloud_links']=[dict(v) for v in c.execute("SELECT l.id,l.state,a.user_id AS owner_id FROM icloud_links l JOIN icloud_sources s ON s.id=l.source_id JOIN icloud_accounts a ON a.id=s.account_id WHERE l.event_id=? AND l.state!='disconnected'",(event_id,))]
             translation=c.execute("SELECT state,error FROM translation_jobs WHERE kind='event' AND resource_id=?",(event_id,)).fetchone()
             result['translation_status']=dict(translation) if translation else None
+            smart_job=c.execute('SELECT state,error FROM smart_jobs WHERE event_id=? AND occurrence=?',(event_id,occurrence or '')).fetchone()
+            if not smart_job:smart_job=c.execute("SELECT state,error FROM smart_jobs WHERE event_id=? AND occurrence=''",(event_id,)).fetchone()
+            result['smart_status']=dict(smart_job) if smart_job else None
             from .recurrence import base_datetime
             from dateutil.rrule import rrulestr
             base=base_datetime(result)
@@ -260,12 +283,15 @@ class Service:
         for v in tr.values():
             require(isinstance(v,dict) and set(v)<={'title','description','manual','stale'},'invalid_translation')
             require(all(isinstance(v.get(k,''),str) and len(v.get(k,''))<=n for k,n in [('title',300),('description',20000)]),'invalid_translation')
+        if 'smart' in data:
+            from .smart_events import validate_metadata
+            validate_metadata(data['smart'])
         validate_timing(data)
 
     def save_event(self,user_id,changes,event_id=None,revision=None):
         with self.db.transaction() as c:
             cal=self.calendar(c,user_id)
-            require(set(changes)<=EVENT_FIELDS,'invalid_event_fields')
+            require(set(changes)<=EVENT_FIELDS-{'smart'},'invalid_event_fields')
             if event_id:
                 row=self.event_row(c,user_id,event_id)
                 require(revision==row['revision'],'revision_conflict',409, self.event_data(row))
@@ -285,7 +311,15 @@ class Service:
             data.update(changes)
             if previous and any(k in changes and changes[k]!=previous[k] for k in ('title','description')):
                 data['translations']={k:{**v,'stale':True} for k,v in data['translations'].items()}
+            from .smart_events import manual_edit
+            manual_edit(data,previous,changes)
             self.validate_event(c,cal,data)
+            if event_id and previous.get('rrule') and any(previous.get(k)!=data.get(k) for k in ('start','timezone','all_day','rrule')):
+                from .recurrence import remap_override_keys
+                overrides={r['occurrence']:r['data'] for r in c.execute('SELECT * FROM overrides WHERE event_id=?',(event_id,))}
+                mapped=remap_override_keys(previous,data,overrides)
+                c.execute('DELETE FROM overrides WHERE event_id=?',(event_id,))
+                for key,patch in mapped.items():c.execute('INSERT INTO overrides VALUES(?,?,?)',(event_id,key,patch))
             if event_id:
                 schedule_change=any(data.get(k)!=previous.get(k) for k in TIME_FIELDS|{'status','reminders'})
                 c.execute('UPDATE events SET data=?,revision=revision+1,schedule_version=schedule_version+? WHERE id=?',(dump(data),int(schedule_change),event_id))
@@ -298,11 +332,19 @@ class Service:
                 c.execute('INSERT INTO events(id,calendar_id,data) VALUES(?,?,?)',(event_id,cal['id'],dump(data)))
                 self.notify(c,cal['id'],user_id,'created',data,event_id)
             row=c.execute('SELECT * FROM events WHERE id=?',(event_id,)).fetchone()
-            if not previous or any(data.get(k)!=previous.get(k) for k in ('title','description')):
+            if not previous or any(data.get(k)!=previous.get(k) for k in ('title','description','owner','category_id')):
                 if previous:
                     changed={k for k in ('title','description') if data.get(k)!=previous.get(k)}
                     for ov in c.execute('SELECT * FROM overrides WHERE event_id=?',(event_id,)).fetchall():
                         patch=load(ov['data'])
+                        if changed-set(patch) and patch.get('smart'):
+                            from .smart_events import source_changed
+                            source_changed(patch)
+                            original=data.get('smart',{}).get('source',{})
+                            if 'source' in patch['smart']:
+                                for field in changed-set(patch):
+                                    if field in original:patch['smart']['source'][field]=original[field]
+                            c.execute('UPDATE overrides SET data=? WHERE event_id=? AND occurrence=?',(dump(patch),event_id,ov['occurrence']))
                         if changed-set(patch) and patch.get('translations'):
                             patch['translations']={k:{**v,'stale':True} for k,v in patch['translations'].items()}
                             c.execute('UPDATE overrides SET data=? WHERE event_id=? AND occurrence=?',(dump(patch),event_id,ov['occurrence']))
@@ -344,7 +386,7 @@ class Service:
         if category and (data['category_id'] or 'none')!=category:return False
         if status and data['status']!=status:return False
         cat=categories.get(data['category_id'],{})
-        texts=[data['title'],data['description'],data['location'],cat.get('name','')]
+        texts=[data['title'],data['description'],data['location'],cat.get('name',''),*data.get('smart',{}).get('short_titles',{}).values()]
         texts.extend(cat.get('translations',{}).values())
         for tr in data.get('translations',{}).values():texts.extend([tr.get('title',''),tr.get('description','')])
         return not query or query.casefold() in ' '.join(texts).casefold()
@@ -426,7 +468,7 @@ class Service:
             found=[(k,a,b) for k,a,b in occurrences(data,target-timedelta(days=2),target+timedelta(days=2)) if k==key]
             require(bool(found),'invalid_occurrence')
             k,a,b=found[0]
-            require(set(changes)<=EVENT_FIELDS,'invalid_occurrence_fields')
+            require(set(changes)<=EVENT_FIELDS-{'smart'},'invalid_occurrence_fields')
             prior=c.execute('SELECT data FROM overrides WHERE event_id=? AND occurrence=?',(event_id,key)).fetchone()
             prior=load(prior['data']) if prior else {}
             if 'reminders' in changes:
@@ -436,7 +478,11 @@ class Service:
                 changes={**changes,'translations':{k:{**v,'stale':True} for k,v in changes.get('translations',prior.get('translations',{})).items()}}
             single=instance(data,key,a,b,prior)
             for remove in ('occurrence','start_utc','end_utc'): single.pop(remove,None)
+            before_single=load(dump(single))
             single.update(changes)
+            from .smart_events import manual_edit
+            manual_edit(single,before_single,changes)
+            changes={**changes,'smart':single['smart']}
             self.validate_event(c,cal,single)
             if scope=='one':
                 patch={**prior,**changes}
@@ -446,11 +492,19 @@ class Service:
                 if delete:
                     c.execute('UPDATE events SET deleted_at=? WHERE id=?',(stamp(),event_id))
                 else:
+                    original=load(dump(data))
                     data.update(changes); self.validate_event(c,cal,data)
+                    if any(original.get(k)!=data.get(k) for k in ('start','timezone','all_day','rrule')):
+                        from .recurrence import remap_override_keys
+                        overrides={r['occurrence']:r['data'] for r in c.execute('SELECT * FROM overrides WHERE event_id=?',(event_id,))}
+                        mapped=remap_override_keys(original,data,overrides)
+                        c.execute('DELETE FROM overrides WHERE event_id=?',(event_id,))
+                        for k,patch in mapped.items():c.execute('INSERT INTO overrides VALUES(?,?,?)',(event_id,k,patch))
                     c.execute('UPDATE events SET data=? WHERE id=?',(dump(data),event_id))
             else:
                 # Split with UNTIL in UTC; never silently duplicate the remaining COUNT.
                 require(a>local_datetime(data['start']+'T00:00' if data['all_day'] else data['start'],data['timezone'],data.get('fold')),'use_all_for_first_occurrence')
+                original_data=load(dump(data))
                 row_data_rule=data['rrule']
                 parts=dict(p.split('=',1) for p in row_data_rule.removeprefix('RRULE:').split(';'))
                 original_parts=dict(parts)
@@ -469,8 +523,11 @@ class Service:
                 single['rrule']=changes['rrule'] if 'rrule' in changes and changes['rrule']!=row_data_rule else ';'.join(f'{p}={v}' for p,v in original_parts.items())
                 new_id=uid()
                 c.execute('INSERT INTO events(id,calendar_id,data,deleted_at) VALUES(?,?,?,?)',(new_id,cal['id'],dump(single),stamp() if delete else None))
-                for ov in c.execute('SELECT * FROM overrides WHERE event_id=? AND occurrence>=?',(event_id,key)).fetchall():
-                    c.execute('INSERT INTO overrides VALUES(?,?,?)',(new_id,ov['occurrence'],ov['data']))
+                from .recurrence import remap_override_keys
+                remaining={ov['occurrence']:ov['data'] for ov in c.execute('SELECT * FROM overrides WHERE event_id=? AND occurrence>=?',(event_id,key))}
+                mapped=remap_override_keys(original_data,single,remaining,anchor=a)
+                for new_key,patch in mapped.items():
+                    c.execute('INSERT INTO overrides VALUES(?,?,?)',(new_id,new_key,patch))
                 c.execute('DELETE FROM overrides WHERE event_id=? AND occurrence>=?',(event_id,key))
             c.execute('UPDATE events SET revision=revision+1,schedule_version=schedule_version+1 WHERE id=?',(event_id,))
             c.execute("UPDATE outbox SET status='cancelled' WHERE event_id=? AND kind='reminder' AND status IN ('pending','sending')",(event_id,))
@@ -551,6 +608,7 @@ class Service:
         with self.db.transaction() as c:
             cutoff=stamp(utcnow()-timedelta(days=30))
             c.execute('DELETE FROM backup_previews WHERE expires_at<=?',(stamp(),))
+            c.execute('DELETE FROM smart_previews WHERE expires_at<=?',(stamp(),))
             c.execute('DELETE FROM google_oauth_requests WHERE expires_at<=?',(stamp(),))
             c.execute('DELETE FROM google_previews WHERE expires_at<=?',(stamp(),))
             c.execute('DELETE FROM events WHERE deleted_at IS NOT NULL AND deleted_at<=?',(cutoff,))

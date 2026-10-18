@@ -4,18 +4,21 @@ import urllib.error
 import urllib.request
 from datetime import timedelta
 from .security import require,Problem,digest
-from .service import dump,load
+from .service import dump,load,uid
 from .recurrence import stamp,utcnow
 
 def resource_version(kind,row):
     return str(row['revision']) if kind=='event' else digest(row['data'])
 
 def enqueue_translation(c,config,kind,resource_id,calendar_id,row_data,version,force=False,overwrite_manual=False):
+    if kind=='event':
+        from .smart_events import enqueue
+        if enqueue(c,config,resource_id,force=force):return True
     if not config.translation_url:return False
-    c.execute('''INSERT INTO translation_jobs(kind,resource_id,calendar_id,version,payload,state,next_at)
-      VALUES(?,?,?,?,?,'pending',?) ON CONFLICT(kind,resource_id) DO UPDATE SET
-      version=excluded.version,payload=excluded.payload,state='pending',attempts=0,error=NULL,next_at=excluded.next_at''',
-      (kind,resource_id,calendar_id,str(version),dump({'source':row_data,'force':force,'overwrite_manual':overwrite_manual,'overrides':{r['occurrence']:load(r['data']) for r in c.execute('SELECT * FROM overrides WHERE event_id=?',(resource_id,))} if kind=='event' else {}}),stamp()))
+    c.execute('''INSERT INTO translation_jobs(kind,resource_id,calendar_id,version,payload,state,next_at,generation)
+      VALUES(?,?,?,?,?,'pending',?,?) ON CONFLICT(kind,resource_id) DO UPDATE SET
+      version=excluded.version,payload=excluded.payload,generation=excluded.generation,state='pending',attempts=0,error=NULL,next_at=excluded.next_at''',
+      (kind,resource_id,calendar_id,str(version),dump({'source':row_data,'force':force,'overwrite_manual':overwrite_manual,'overrides':{r['occurrence']:load(r['data']) for r in c.execute('SELECT * FROM overrides WHERE event_id=?',(resource_id,))} if kind=='event' else {}}),stamp(),uid()))
     return True
 
 class LibreTranslate:
@@ -73,6 +76,9 @@ class Translations:
                     enqueue_translation(c,self.config,kind,row['id'],row['calendar_id'],data,resource_version(kind,row))
             c.execute('INSERT INTO runtime VALUES(?,?)',(marker,stamp()))
     def request(self,user_id,resource_id,kind='event',overwrite_manual=False):
+        if kind=='event' and self.config.openai_api_key:
+            from .smart_events import SmartEvents
+            return SmartEvents(self.service).request(user_id,resource_id,replace_fields=[l+'.'+f for l in ('ru','en') for f in ('title','description')] if overwrite_manual else [])
         require(bool(self.config.translation_url),'translation_not_configured',503)
         require(kind in ('event','category'),'invalid_resource')
         with self.service.db.transaction() as c:
@@ -88,14 +94,18 @@ class Translations:
         for lang in ('ru','en'):
             existing=translations.get(lang)
             manual=existing.get('manual',False) if isinstance(existing,dict) else source.get('translation_manual',{}).get(lang,bool(existing))
-            if manual and not settings['overwrite_manual']:continue
+            if manual and not settings['overwrite_manual'] and (kind=='category' or not source.get('smart')):continue
             if existing and not settings['force'] and not (isinstance(existing,dict) and existing.get('stale')):continue
             fields=['name'] if kind=='category' else ['title','description']
-            nonempty=[k for k in fields if source.get(k)]
+            nonempty=[k for k in fields if source.get(k) and (settings['overwrite_manual'] or not source.get('smart',{}).get('fields',{}).get(lang+'.'+k,{}).get('manual'))]
             values=self.transport.translate([source[k] for k in nonempty],lang) if nonempty else []
             translated=dict(zip(nonempty,values))
             if kind=='category':translations[lang]=translated.get('name','')
-            else:translations[lang]={'title':translated.get('title',''),'description':translated.get('description',''),'manual':False,'stale':False}
+            else:
+                prior=existing if isinstance(existing,dict) else {}
+                values={k:prior.get(k,'') if not settings['overwrite_manual'] and source.get('smart',{}).get('fields',{}).get(lang+'.'+k,{}).get('manual') else translated.get(k,'') for k in fields}
+                protected=any(source.get('smart',{}).get('fields',{}).get(lang+'.'+k,{}).get('manual') for k in fields) and not settings['overwrite_manual']
+                translations[lang]={**values,'manual':bool(protected),'stale':bool(protected and prior.get('stale'))}
         return translations
 
     def process(self,limit=1):
@@ -103,7 +113,7 @@ class Translations:
         self.backfill()
         for _ in range(limit):
             with self.service.db.transaction() as c:
-                job=c.execute("SELECT j.* FROM translation_jobs j JOIN calendars ca ON ca.id=j.calendar_id WHERE ca.state='active' AND j.state IN ('pending','failed') AND j.next_at<=? ORDER BY j.next_at LIMIT 1",(stamp(),)).fetchone()
+                job=c.execute("SELECT j.* FROM translation_jobs j JOIN calendars ca ON ca.id=j.calendar_id WHERE ca.state='active' AND j.state='pending' AND j.next_at<=? ORDER BY j.next_at LIMIT 1",(stamp(),)).fetchone()
                 if not job:return
                 job=dict(job);source=load(job['payload'])['source'];settings=load(job['payload'])
             try:
@@ -118,8 +128,11 @@ class Translations:
                     fresh=c.execute('SELECT * FROM '+table+' WHERE id=? AND calendar_id=?',(job['resource_id'],job['calendar_id'])).fetchone()
                     current_job=c.execute('SELECT * FROM translation_jobs WHERE kind=? AND resource_id=?',(job['kind'],job['resource_id'])).fetchone()
                     cal=c.execute('SELECT state FROM calendars WHERE id=?',(job['calendar_id'],)).fetchone()
-                    if not fresh or not current_job or current_job['version']!=job['version']:continue
-                    if not cal or cal['state']!='active':continue
+                    if not fresh or not current_job or current_job['generation']!=job['generation']:continue
+                    if not cal or cal['state']!='active' or (job['kind']=='event' and fresh['deleted_at']):continue
+                    if job['kind']=='event':
+                        from .smart_events import enqueue
+                        if enqueue(c,self.config,job['resource_id']):continue
                     if resource_version(job['kind'],fresh)!=job['version']:
                         # A later manual edit wins. Requeue the latest source without
                         # permission to overwrite manual versions.
@@ -143,9 +156,9 @@ class Translations:
                             if translations.get(lang)!=source.get('translations',{}).get(lang):manual[lang]=False
                         data['translation_manual']=manual
                         c.execute('UPDATE categories SET data=? WHERE id=?',(dump(data),job['resource_id']))
-                    c.execute("UPDATE translation_jobs SET state='ready',error=NULL WHERE kind=? AND resource_id=? AND version=?",(job['kind'],job['resource_id'],job['version']))
+                    c.execute("UPDATE translation_jobs SET state='ready',error=NULL WHERE kind=? AND resource_id=? AND generation=?",(job['kind'],job['resource_id'],job['generation']))
             except Problem as exc:
                 with self.service.db.transaction() as c:
                     attempts=job['attempts']+1
-                    c.execute('UPDATE translation_jobs SET state=?,attempts=?,error=?,next_at=? WHERE kind=? AND resource_id=? AND version=?',
-                              ('failed' if attempts>=4 else 'pending',attempts,exc.code,stamp(utcnow()+timedelta(seconds=30*2**min(attempts,7))),job['kind'],job['resource_id'],job['version']))
+                    c.execute('UPDATE translation_jobs SET state=?,attempts=?,error=?,next_at=? WHERE kind=? AND resource_id=? AND generation=?',
+                              ('failed' if attempts>=4 else 'pending',attempts,exc.code,stamp(utcnow()+timedelta(seconds=30*2**min(attempts,7))),job['kind'],job['resource_id'],job['generation']))

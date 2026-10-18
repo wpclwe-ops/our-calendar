@@ -87,3 +87,12 @@ new event remains private; change Google time; edit independent/conflicting loca
 fields; stop push and confirm polling; revoke Google access; reconnect manually;
 verify all-day, DST and series exceptions; inspect no external changes. Confirm
 Google scope grants and test/production refresh-token behaviour.
+
+## Smart Events 0.9.0
+
+Run `python -m pytest -q`, `node --test tests/*.test.cjs`, syntax/compile checks,
+then `node tests/browser-smart-events.cjs` alongside all existing browser scripts.
+Tests use fake AI and synthetic data only. Real-model quality/latency/billing and
+real Telegram iOS WebKit acceptance are not inferred from these checks. See
+[SMART_EVENTS.md](SMART_EVENTS.md) for activation, consent, the auto-category gate
+and rollback compatibility.

@@ -12,3 +12,20 @@
 - `/health`, мониторинг и журналы обслуживания не должны содержать событий, имён или секретов. Завершённые/неуспешные задания отправки очищаются через 30 дней; предпросмотры ZIP истекают через 15 минут. Технические ключи проверки подписей сохраняются для проверки старых архивов.
 
 До публичного запуска оператор должен зафиксировать контакт ответственного лица, юридические основания обработки и процедуру запросов на удаление профиля. Эти организационные действия не подменяются техническими тестами.
+
+## Optional Smart Events / OpenAI
+
+Smart Events is off until the appropriate participant consents. Processing sends
+an event's title/description, pseudonymous owner label and needed existing
+category names/IDs to OpenAI. Provider credentials, Telegram IDs, private
+unimported selections and the complete calendar are not sent. Internal shared
+events require both participants' explicit opt-in. An event can be excluded.
+Revoking consent stops future processing and prevents an in-flight result from
+being applied; it cannot recall a request already transmitted.
+
+Requests use store=false, which is not a zero-retention guarantee. OpenAI API data
+is not used for training by default; applicable abuse-monitoring and prompt-cache
+retention can still apply. See https://developers.openai.com/api/docs/guides/your-data.
+Local result caches expire after 30 days and are removed with the logical calendar.
+Manual corrections and source originals remain part of shared event data and
+signed backups. Restoring a backup never restores permission to send data to AI.

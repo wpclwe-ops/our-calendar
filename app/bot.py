@@ -62,6 +62,8 @@ class Worker:
         self.service=service; self.telegram=telegram or Telegram(service.config)
         from .translation import Translations
         self.translations=Translations(service)
+        from .smart_events import SmartEvents
+        self.smart=SmartEvents(service)
         from .google_import import GoogleImports
         self.google=GoogleImports(service)
         from .icloud_import import ICloudImports
@@ -94,7 +96,7 @@ class Worker:
     def run_translations(self):
         while not self.stop_event.is_set():
             try:
-                self.translations.process();self.translations.probe();self.heartbeat('translation_heartbeat')
+                self.smart.process();self.translations.process();self.translations.probe();self.heartbeat('translation_heartbeat')
             except Exception:log.error('Translation worker cycle failed')
             self.stop_event.wait(5)
     def run_backups(self):
