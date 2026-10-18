@@ -130,7 +130,7 @@ function readableGoogleDescription(value){
  source=source.replace(/<br\b[^>]*\/?>/gi,'\n')
   .replace(/<li\b[^>]*>/gi,'\n• ')
   .replace(/<\/p\s*>/gi,'\n\n')
-  .replace(/<\/(?:div|blockquote|pre|h[1-6]|tr|li)\s*>/gi,'\n')
+  .replace(/<\/(?:div|blockquote|pre|h[1-6]|tr)\s*>/gi,'\n')
   .replace(/<p\b[^>]*>/gi,'\n\n')
   .replace(/<[^>]*>/g,'');
  return decode(source).replace(/\u00a0/g,' ').replace(/[ \t]+/g,' ')
