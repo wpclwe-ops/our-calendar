@@ -429,6 +429,101 @@ def test_new_unselected_events_stay_private_and_local_fields_never_write_google(
     assert 'New private event' not in dump(shared)
 
 
+
+def test_automatic_import_requires_explicit_owner_opt_in(google):
+    g,f,source=google
+    assert g.status('1')['accounts'][0]['sources'][0]['auto_import']==0
+    with pytest.raises(Problem):
+        g.select('2','account',[source],auto_import=True)
+    with pytest.raises(Problem):
+        g.select('1','account',[source],auto_import='yes')
+    g.sync_source('1',source,True)
+    assert g.s.events('2','2026-10-01','2026-11-01')==[]
+    g.select('1','account',[source],auto_import=True)
+    assert g.status('1')['accounts'][0]['sources'][0]['auto_import']==1
+    assert g.status('2')['accounts']==[]
+    assert g.sync_source('1',source,True)['imported']==2
+    titles={e['title'] for e in g.s.events('2','2026-10-01','2026-11-01')}
+    assert titles=={'Dentist','Never share this'}
+    assert not any(isinstance(call,tuple) and call[0].startswith('POST') for call in f.calls)
+
+
+def test_automatic_import_new_events_and_edits_without_duplicates(google):
+    g,f,source=google
+    g.select('1','account',[source],auto_import=True)
+    assert g.sync_source('1',source,True)['imported']==2
+    g.sync_source('1',source,True)
+    f.items['new']=remote('new',summary='New appointment')
+    result=g.sync_source('1',source,True)
+    assert result['imported']==1
+    with g.s.db.transaction() as c:
+        assert c.execute('SELECT COUNT(*) FROM google_links WHERE source_id=?',(source,)).fetchone()[0]==3
+        row=c.execute("SELECT event_id FROM google_links WHERE source_id=? AND remote_id='new'",(source,)).fetchone()
+    eid=row['event_id'];before=g.s.get_event('1',eid)
+    f.items['new']['summary']='Renamed appointment';f.items['new']['etag']='v2'
+    assert g.sync_source('1',source,True)['imported']==0
+    assert g.s.get_event('1',eid)['title']=='Renamed appointment'
+    assert g.s.get_event('1',eid)['revision']>before['revision']
+    assert g.sync_source('1',source,True)['imported']==0
+    with g.s.db.transaction() as c:
+        assert c.execute('SELECT COUNT(*) FROM events').fetchone()[0]==3
+
+
+def test_automatic_import_opt_out_does_not_delete_existing_events(google):
+    g,f,source=google
+    g.select('1','account',[source],auto_import=True);g.sync_source('1',source,True)
+    g.select('1','account',[source],auto_import=False)
+    f.items['later']=remote('later',summary='Not automatically imported')
+    g.sync_source('1',source,True)
+    shared=g.s.events('2','2026-10-01','2026-11-01')
+    assert len(shared)==2
+    assert not any(e['title']=='Not automatically imported' for e in shared)
+    assert g.status('1')['accounts'][0]['sources'][0]['auto_import']==0
+
+
+def test_automatic_import_skips_past_and_unsupported_event_and_recovers_on_edit(google):
+    g,f,source=google
+    f.items['old']=remote('old',summary='Old visit',
+                          start={'dateTime':'2026-01-01T10:00:00+01:00'},
+                          end={'dateTime':'2026-01-01T11:00:00+01:00'})
+    f.items['invalid']=remote('invalid',summary='x'*301)
+    g.select('1','account',[source],auto_import=True)
+    assert g.sync_source('1',source,True)['imported']==2
+    with g.s.db.transaction() as c:
+        assert c.execute("SELECT COUNT(*) FROM google_auto_skips WHERE source_id=?",(source,)).fetchone()[0]==1
+    f.items['invalid']['summary']='Now valid';f.items['invalid']['etag']='v2'
+    assert g.sync_source('1',source,True)['imported']==1
+    shared=g.s.events('2','2026-10-01','2026-11-01')
+    assert 'Now valid' in {e['title'] for e in shared}
+    assert 'Old visit' not in {e['title'] for e in shared}
+
+
+def test_automatic_import_processes_batches_without_skipping_following_events(google):
+    g,f,source=google
+    f.items={f'event-{i}':remote(f'event-{i}',summary=f'Event {i}') for i in range(58)}
+    g.select('1','account',[source],auto_import=True)
+    assert g.sync_source('1',source,True)['imported']==50
+    with g.s.db.transaction() as c:
+        assert c.execute('SELECT sync_token FROM google_sources WHERE id=?',(source,)).fetchone()[0] is None
+    assert g.sync_source('1',source,True)['imported']==8
+    assert g.sync_source('1',source,True)['imported']==0
+    with g.s.db.transaction() as c:
+        assert c.execute('SELECT COUNT(*) FROM google_links WHERE source_id=?',(source,)).fetchone()[0]==58
+
+
+def test_automatic_import_generation_check_blocks_inflight_opt_out(google):
+    g,f,source=google
+    g.select('1','account',[source],auto_import=True)
+    original=f.event
+    def change_during_read(calendar_id,remote_id):
+        g.select('1','account',[source],auto_import=False)
+        f.event=original
+        return original(calendar_id,remote_id)
+    f.event=change_during_read
+    with pytest.raises(Problem) as exc:g.sync_source('1',source,True)
+    assert exc.value.code=='google_selection_expired'
+    assert g.s.events('2','2026-10-01','2026-11-01')==[]
+
 def test_google_deletion_tombstone_disappearing_does_not_trap_owner(google):
     g,f,source=google;link=imported(google)
     f.items['visit']={'id':'visit','status':'cancelled'};g.sync_source('1',source,True)
