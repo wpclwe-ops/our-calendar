@@ -43,6 +43,16 @@ const assert=require('node:assert/strict'),{mkdtempSync,rmSync}=require('node:fs
    await page.setViewportSize({width,height:844});await page.evaluate(async({language,theme})=>{state=await api('settings','PATCH',{language,theme});render()},{language,theme});
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   }
-  assert.deepEqual(errors,[]);console.log('Google import mobile acceptance passed: private selection, preview, retry, deduplication, shared visibility, RU/EN, 320/390/430 px.');
+  // Automatic sharing must require a separate explicit confirmation.
+  await page.locator('[data-action="google-calendars"]').click();await wait();
+  await page.locator('.g-auto').check();
+  await page.locator('[data-action="google-save-sources"]').click();
+  await page.locator('.modal [data-choice="yes"]').click();await wait();
+  assert.ok((await page.locator('#app').textContent()).includes('Автоматический импорт включён'));
+  await page.locator('[data-action="google-sync"]').click();await wait();
+  assert.ok(await page.locator('.g-link').count()>=3);
+  const allShared=await page.evaluate(async()=>{const a=await fetch('/api/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({demo_user:'2'})}).then(r=>r.json());return fetch('/api/events?start=2026-10-01&end=2026-11-01',{headers:{Authorization:'Bearer '+a.token}}).then(r=>r.json())});
+  assert.ok(allShared.some(e=>e.title==='Never share this'));
+  assert.deepEqual(errors,[]);console.log('Google import mobile acceptance passed: manual privacy, consent-gated auto import, preview, retry, deduplication, RU/EN and mobile viewports.');
  }finally{if(browser)await browser.close();server.kill();rmSync(directory,{recursive:true,force:true})}
 })().catch(e=>{console.error(e);process.exit(1)});
