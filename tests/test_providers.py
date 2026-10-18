@@ -59,3 +59,31 @@ def test_transport_rejects_non_https_and_untrusted_hosts_before_network():
     http=HTTPS(lambda h:h=='www.googleapis.com')
     for url in ['http://www.googleapis.com/','https://evil.example/','https://www.googleapis.com:444/']:
         with pytest.raises(ProviderFailure):http.request('GET',url)
+
+
+@pytest.mark.parametrize('error,expected',[
+    ('invalid_client','invalid_client'),('invalid_grant','invalid_grant'),
+    ('secret-access-token',''),
+])
+def test_oauth_transport_only_retains_allowlisted_error_codes(error,expected):
+    from io import BytesIO
+    from urllib.error import HTTPError
+    http=HTTPS(lambda h:h=='oauth2.googleapis.com')
+    class Reject:
+        def open(self,*args,**kwargs):
+            raise HTTPError('https://oauth2.googleapis.com/token',401,'Unauthorized',{},
+                            BytesIO(json.dumps({'error':error,'error_description':'secret-access-token'}).encode()))
+    http.opener=Reject()
+    with pytest.raises(ProviderFailure) as failure:
+        http.request('POST','https://oauth2.googleapis.com/token',body=b'code=private-code')
+    assert failure.value.reason==expected
+    assert 'secret-access-token' not in str(failure.value)
+
+
+def test_google_token_missing_permissions_are_distinct_from_client_credentials():
+    class Partial(GoogleFake):
+        def request(self,*args,**kwargs):
+            return 200,{},json.dumps({'access_token':'private-token','scope':'openid'}).encode()
+    with pytest.raises(ProviderFailure) as failure:
+        GoogleOAuth('client','secret','https://app.example/callback',Partial()).exchange('code','verifier')
+    assert failure.value.reason=='missing_scopes'

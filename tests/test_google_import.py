@@ -272,6 +272,38 @@ def test_oauth_callback_needs_original_telegram_confirmation_and_is_one_use(goog
         assert 'secret-access' not in db and 'secret-refresh' not in db
 
 
+@pytest.mark.parametrize('reason,expected',[
+    ('invalid_client','google_oauth_token_invalid_client'),
+    ('missing_scopes','google_oauth_token_missing_scopes'),
+    ('private-token','google_oauth_token_unavailable'),
+])
+def test_callback_failure_identifies_stage_and_clears_pending_credentials(google,reason,expected):
+    g,f,_=google
+    attempt=g.oauth.start()
+    g.oauth.start=lambda:attempt
+    g.start('1')
+    def reject(*args):raise ProviderFailure(401,reason=reason)
+    g.oauth.exchange=reject
+    with pytest.raises(Problem) as failure:g.callback(attempt['state'],'private-code')
+    assert failure.value.code==expected
+    assert g.status('1')['confirmation'] is None
+    with g.s.db.transaction() as c:
+        row=c.execute('SELECT state,secret FROM google_oauth_requests').fetchone()
+        assert row['state']=='failed' and row['secret'] is None
+
+
+def test_callback_page_explains_server_credentials_without_exposing_request_or_secrets(google,caplog):
+    g,_,_=google
+    app=create_app(g.s.config,start_worker=False)
+    def reject(*args):raise Problem(503,'google_oauth_token_invalid_client','private-secret')
+    app.state.google.callback=reject
+    with TestClient(app) as client:
+        response=client.get('/api/google/callback?state=private-state&code=private-code')
+    assert 'Client Secret' in response.text and 'google_oauth_token_invalid_client' in response.text
+    assert all(secret not in response.text+caplog.text for secret in ('private-code','private-state','private-secret'))
+    assert 'google_oauth_token_invalid_client' in caplog.text
+
+
 def test_archive_has_no_google_credentials_or_links(google):
     from app.backup import Backups
     g,_,_=google;link=imported(google)
