@@ -161,12 +161,12 @@ class Worker:
                     for member in c.execute('SELECT * FROM members WHERE calendar_id=? AND active=1',(row['calendar_id'],)).fetchall():
                         if not self.service.config.demo and not is_allowed_user(member['user_id']):continue
                         person=self.service.user(c,member['user_id'])
-                        if not person['reminders_enabled']:continue
+                        if not person['reminders_enabled'] or not person.get('notifications_enabled',True):continue
                         if event['all_day']:
                             begin=datetime.fromisoformat(event['start']).replace(tzinfo=zone(person['timezone']))
                         else:begin=datetime.fromisoformat(event['start_utc'])
                         intervals=list(event['reminders'].get(person['id'],[]))
-                        if person['notify_at_start']:intervals.append(0)
+                        if event.get('reminder_at_start',{}).get(person['id'],person['notify_at_start']):intervals.append(0)
                         for minutes in intervals:
                             due=begin.astimezone(UTC)-timedelta(minutes=minutes)
                             if not (now<due<=horizon):continue
@@ -178,6 +178,18 @@ class Worker:
         p=load(job['payload']); data=p.get('data',{}); lang=person['language']; strings=TEXT[lang]
         title=data.get('translations',{}).get(lang,{}).get('title') or data.get('title') or p.get('title','')
         text=strings.get(p['action'],p['action'])+(': '+title if title else '')
+        if p.get('actor') and p['action'] in ('created','updated','deleted','restored'):
+            with self.service.db.transaction() as c:
+                row=c.execute('SELECT data FROM users WHERE id=?',(p['actor'],)).fetchone()
+            author=load(row['data']) if row else {}
+            name=author.get('name','')
+            if name:
+                if lang=='ru':
+                    verbs={'created':('создал','создала'),'updated':('изменил','изменила'),'deleted':('удалил','удалила'),'restored':('восстановил','восстановила')}
+                    gender=author.get('gender','unspecified')
+                    prefix=name+' '+verbs[p['action']][gender=='female']+' событие' if gender in ('male','female') else name+' — '+strings[p['action']].lower()
+                else:prefix=name+' '+{'created':'created','updated':'updated','deleted':'deleted','restored':'restored'}[p['action']]+' an event'
+                text=prefix+(': '+title if title else '')
         if data.get('start'):
             if data['all_day']:when=data['start']+' · '+strings['all_day']
             else:
@@ -204,13 +216,16 @@ class Worker:
                 denied=job['kind']=='access_denied'
                 if not person_row and not denied:
                     c.execute("UPDATE outbox SET status='cancelled' WHERE id=?",(job['id'],));continue
-                person={'id':job['user_id'],'language':'ru'} if denied else {'id':job['user_id'],**load(person_row['data'])}
+                person={'id':job['user_id'],'language':'ru'} if denied else self.service.user(c,job['user_id'])
+                if job['kind'] in ('action','reminder') and not person.get('notifications_enabled',True):
+                    c.execute("UPDATE outbox SET status='cancelled' WHERE id=?",(job['id'],));continue
                 if job['kind'] not in ('admin','access_denied') and (not member or not member['active'] or member['state']!='active'):
                     c.execute("UPDATE outbox SET status='cancelled' WHERE id=?",(job['id'],));continue
                 if job['kind']=='reminder':
                     ev=c.execute('SELECT * FROM events WHERE id=?',(job['event_id'],)).fetchone()
                     payload=load(job['payload'])
-                    if not ev or ev['deleted_at'] or ev['schedule_version']!=payload['schedule_version'] or not person['reminders_enabled'] or (payload.get('minutes')==0 and not person.get('notify_at_start',True)):
+                    at_start=payload.get('data',{}).get('reminder_at_start',{}).get(job['user_id'],person.get('notify_at_start',True))
+                    if not ev or ev['deleted_at'] or ev['schedule_version']!=payload['schedule_version'] or not person['reminders_enabled'] or (payload.get('minutes')==0 and not at_start):
                         c.execute("UPDATE outbox SET status='cancelled' WHERE id=?",(job['id'],));continue
                     # Do not catch up historical reminders after downtime, pause, or restore.
                     if (now-datetime.fromisoformat(payload.get('scheduled_due',job['due']))).total_seconds()>90:
@@ -288,3 +303,4 @@ class Worker:
                 # Persist welcome before returning 200. A retried webhook cannot enqueue it twice.
                 payload={'action':'welcome','title':'','data':{}}
                 self.service.enqueue(c,None,user_id,'admin',payload,key='start:'+str(update['update_id']))
+

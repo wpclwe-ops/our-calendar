@@ -36,8 +36,9 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  await page.locator('[name="start"]').fill('2026-10-17T00:00');await page.locator('[name="start"]').dispatchEvent('change');assert.equal(await page.inputValue('[name="end"]'),'2026-10-17T02:00');await back();
  // Personal settings, Today preserves the current view, and settings survive a fresh login.
  await page.locator('[data-tab="settings"]').last().click();await wait();
- await page.selectOption('[name="setting-day_layout"]','list');await wait();await page.selectOption('[name="setting-month_layout"]','scroll');await wait();
+ await page.locator('[data-section=views]').click();await page.locator('[data-action=settings-view][data-key=day_layout]').click();await page.locator('[data-action=settings-view-choose][data-value=list]').click();await wait();await page.locator('[data-action=settings-view][data-key=month_layout]').click();await page.locator('[data-action=settings-view-choose][data-value=scroll]').click();await wait();await page.locator('[data-action=settings-back]').click();await page.locator('[data-section=events]').click();await wait();
  await page.selectOption('[name="duration-preset"]','custom');await page.locator('[name="setting-default_duration"]').fill('95');await page.locator('[name="setting-default_duration"]').dispatchEvent('change');await wait();
+ await page.locator('[data-action=settings-back]').click();await wait();
  await page.locator('.bottom-nav [data-view="day"]').click();await wait();await set('2026-11-10','week');await page.locator('[data-action="today"]').click();await wait();
  assert.equal(await page.evaluate(()=>selected),'2026-10-16');assert.equal(await page.evaluate(()=>view),'week');
  await page.locator('.bottom-nav [data-view="day"]').click();await wait();assert.equal(await page.locator('.day-checklist').count(),1);
@@ -93,3 +94,4 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  assert.deepEqual(errors,[]);console.log('PASS: defaults, end tracking, midnight, personal settings, Today, current-time positioning, scrolling months, long press in all views, real touch event drag, ownership/category markers, exact-event and occurrence links, responsive layout');
  }finally{await browser?.close();server.kill();await new Promise(resolve=>server.once('exit',resolve));rmSync(directory,{recursive:true,force:true})}
 })().catch(e=>{console.error(e);process.exit(1)});
+

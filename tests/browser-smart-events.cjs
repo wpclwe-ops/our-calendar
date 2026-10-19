@@ -28,16 +28,16 @@ const {mkdtempSync,rmSync}=require('node:fs'),{tmpdir}=require('node:os'),{join}
   await page.route('**/api/google',r=>r.fulfill({json:{configured:true,accounts:[{state:'connected',sources:[{selected:true,state:'ready'}]}]}}));
   let appleState='connected';
   await page.route('**/api/icloud',r=>r.fulfill({json:{configured:true,accounts:[{state:appleState,sources:[{selected:true,state:'ready'}]}]}}));
-  await page.evaluate(async()=>{tab='settings';page='main';await loadData();render()});assert.deepEqual(await page.locator('.provider-status').allTextContents(),['Работает','Работает']);
-  appleState='needs_reconnect';await page.evaluate(async()=>{await loadData();render()});
+  await page.evaluate(async()=>{tab='settings';page='main';await loadData();await openSettingsSection('connections')});assert.deepEqual(await page.locator('.provider-status').allTextContents(),['Работает','Работает']);
+  appleState='needs_reconnect';await page.evaluate(async()=>{page='main';await loadData();await openSettingsSection('connections')});
   assert.deepEqual(await page.locator('.provider-status').allTextContents(),['Работает','Нужно войти заново']);
-  appleState='connected';await page.evaluate(async()=>{await loadData();render()});
-  await page.locator('[data-action=smart-open]').click();await page.waitForSelector('[data-smart-pref=consent]');
-  assert.ok((await page.locator('#app').textContent()).includes('OpenAI'));
+  appleState='connected';await page.evaluate(async()=>{page='main';await loadData();await openSettingsSection('memory')});
   assert.equal(await page.locator('.smart-rule').count(),1);
+  await page.evaluate(()=>openSettingsSection('events'));await page.waitForSelector('[data-smart-pref=consent]');
+  assert.ok((await page.locator('#app').textContent()).includes('OpenAI'));
   assert.equal(await page.locator('[data-smart-pref=display_short]').count(),0);
-  assert.equal(await page.locator('#smart-mode option[value=auto]').isDisabled(),false);
-  await page.selectOption('#smart-mode','auto');await page.waitForFunction(()=>state.me.smart_events?.mode==='auto');
+  await page.locator('[data-smart-pref=categorize]').uncheck();await page.waitForFunction(()=>state.me.smart_events?.categorize===false);
+  await page.locator('[data-smart-pref=categorize]').check();await page.waitForFunction(()=>state.me.smart_events?.mode==='auto');
   await page.locator('[data-smart-pref=titles]').uncheck();await page.waitForFunction(()=>state.me.smart_events?.titles===false);
   assert.equal(await page.evaluate(async id=>title(await api('events/'+id)),id),'Уход за волосами');
   await page.locator('[data-smart-pref=titles]').check();await page.waitForFunction(()=>state.me.smart_events?.titles===true);
@@ -59,7 +59,7 @@ const {mkdtempSync,rmSync}=require('node:fs'),{tmpdir}=require('node:os'),{join}
   const updated=await page.evaluate(async id=>api('events/'+id),flight);
   assert.equal(updated.location,'Airport');assert.equal(updated.translations.en.description,'en: Trip details');
   assert.equal(updated.smart.short_titles.ru,'Уход за волосами');
-  await page.evaluate(async()=>{tab='settings';page='main';await loadData();render()});await page.locator('[data-action=smart-open]').click();
+  await page.evaluate(async()=>{tab='settings';page='main';await loadData();await openSettingsSection('events')});
   for(const [width,language,theme] of [[320,'ru','light'],[390,'en','dark'],[430,'ru','dark']]){
    await page.setViewportSize({width,height:844});await page.evaluate(async({language,theme})=>{state=await api('settings','PATCH',{language,theme});render()},{language,theme});
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'no horizontal overflow');
@@ -70,3 +70,4 @@ const {mkdtempSync,rmSync}=require('node:fs'),{tmpdir}=require('node:os'),{join}
   assert.deepEqual(errors,[]);console.log('Smart Events mobile acceptance passed: background/manual concurrency, partial form edits, unified titles in 7 views, title switch, live account states, auto mode, RU/EN and 320/390/430 px.');
  }finally{if(browser)await browser.close();server.kill();rmSync(directory,{recursive:true,force:true})}
 })().catch(e=>{console.error(e);process.exitCode=1});
+

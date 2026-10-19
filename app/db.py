@@ -166,6 +166,18 @@ class Database:
             columns = {row[1] for row in c.execute('PRAGMA table_info(google_sources)')}
             if 'auto_import' not in columns:
                 c.execute('ALTER TABLE google_sources ADD COLUMN auto_import INTEGER NOT NULL DEFAULT 0')
+            columns = {row[1] for row in c.execute('PRAGMA table_info(calendars)')}
+            if 'profile' not in columns:
+                c.execute("ALTER TABLE calendars ADD COLUMN profile TEXT NOT NULL DEFAULT '{}'")
+                c.execute('ALTER TABLE calendars ADD COLUMN profile_revision INTEGER NOT NULL DEFAULT 1')
+            c.execute('INSERT OR IGNORE INTO schema_version VALUES(3)')
+            columns = {row[1] for row in c.execute('PRAGMA table_info(smart_usage)')}
+            if 'calendar_id' not in columns:
+                c.execute('ALTER TABLE smart_usage ADD COLUMN calendar_id TEXT REFERENCES calendars(id) ON DELETE SET NULL')
+                calendars=c.execute('SELECT id FROM calendars').fetchall()
+                if len(calendars)==1:
+                    c.execute('UPDATE smart_usage SET calendar_id=?',(calendars[0]['id'],))
+            c.execute('INSERT OR IGNORE INTO schema_version VALUES(4)')
 
     def connect(self):
         c = sqlite3.connect(self.path, timeout=30, isolation_level=None)
@@ -186,3 +198,4 @@ class Database:
             raise
         finally:
             c.close()
+

@@ -1,6 +1,6 @@
 # Smart Events — implementation and activation
 
-Version 0.9.1. Smart Events is optional. Without an API key or without consent,
+Version 0.10.0. Smart Events is optional. Without an API key or without consent,
 calendar CRUD, existing private LibreTranslate, imports and reminders continue to work.
 No outbound Google/CalDAV event writes are introduced.
 
@@ -15,7 +15,7 @@ Set these **server environment variables**, never client-side configuration:
 | --- | --- | --- |
 | OPENAI_API_KEY | empty | Separate OpenAI API project key; do not commit or send it in chat |
 | OPENAI_MODEL | gpt-6-luna | Supported: gpt-6-luna or gpt-5.4-mini |
-| SMART_MONTHLY_BUDGET_USD | 5 | Hard conservative application reservation budget across this deployment |
+| SMART_MONTHLY_BUDGET_USD | 5 | Legacy configuration; no application spending cap in 0.10.0 |
 | OPENAI_MAX_OUTPUT_TOKENS | 16384 | Upper output bound; 1024–32768 allowed |
 | SMART_AUTO_CATEGORIES_ENABLED | true | Operator kill switch; false pauses automatic shared-category assignment |
 
@@ -23,7 +23,7 @@ ChatGPT subscription billing does not configure this API project. The operator m
 separately enable API billing and verify access to the selected model. Adding a key
 alone does not grant consent or automatically process old calendar data.
 
-In Settings → Smart Events, each participant controls consent and their imported
+In Settings → Events and notifications, each participant controls consent and their imported
 source scope. Internal events require both participants to opt in to internal
 processing. Automatic common-category assignment additionally needs the server
 switch and both participants' automatic mode; the default personal mode is suggestions.
@@ -85,13 +85,14 @@ call the model. No periodic paid synthetic health probes are used.
 
 Before each paid attempt the worker atomically reserves a conservative input-byte
 and maximum-output estimate. Reservations, including uncertain outcomes, remain
-in the monthly hard-budget ledger; the UI labels this as a reserve, not a precise
+in the calendar-scoped monthly ledger; the UI labels this as a reserve, not a precise
 invoice. Actual token usage is recorded for completed calls. There is no promise
 of exactly-once external billing after a lost network response. Reconcile this
 ledger against the OpenAI project's billing. Prices are explicit in
 app/smart_events.py and must be reviewed when changing supported model tariffs.
-Budget-paused work resumes in the next UTC billing month or by explicit retry
-following an operator budget change. Missing AI leaves the source calendar usable.
+The reserve is informational: it does not stop processing, including when the legacy
+SMART_MONTHLY_BUDGET_USD is zero. Previously budget-paused jobs resume normally.
+Missing AI leaves the source calendar usable.
 
 ## Privacy, lifecycle and archives
 
@@ -122,7 +123,7 @@ subsequent user changes. Prefer disabling OPENAI_API_KEY to rolling back data.
 
 Automated tests use synthetic events and fake AI transports. They cover original
 preservation, field-level manual edits, in-flight changes/revocation, generations,
-finite retries, budget, manual null categories, shared auto policy, scoped rules,
+finite retries, informational spending, manual null categories, shared auto policy, scoped rules,
 provider exception changes, recurrence moves, archives, API ownership and the
 Responses request shape/refusal path. Mobile Chromium checks cover empty
 Description, title-only RU/EN switching, manual short titles, remembered rules,
@@ -163,3 +164,13 @@ Provider status on Settings is fetched for the signed-in participant only. Ready
 connections display Working; missing configuration, missing account, reconnect
 requirements, selected-source failures and unavailable status are distinguished.
 No live provider probe or paid AI call runs merely to draw these labels.
+
+
+## 0.10.0 — settings and personal memory
+
+Every participant sees and changes only their own remembered decisions. Clearing
+memory deletes those rules without changing existing events or scheduling paid
+reprocessing. The advanced Smart Events page shows the current calendar's monthly
+reserve and selected-job progress, and links to the existing preview/selection flow.
+Ordinary settings show consent, title simplification, remembering and categories.
+Internal-event processing still requires both participants' explicit consent.

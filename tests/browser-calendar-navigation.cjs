@@ -62,7 +62,7 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  await page.waitForTimeout(510);await page.locator('[data-action="date"][data-date="2026-10-16"] .day-number').tap();await wait();assert.equal((await info()).view,'month');assert.equal(await page.locator('.month-agenda').count(),1);await page.locator('.bottom-nav [data-view="day"]').tap();await wait();
  // Search stays isolated; a tab absent from Touch Bar has no long-swipe neighbour.
  await page.locator('[data-action="search"]').tap();await wait();await page.locator('#search').blur();await swipe(325,60);assert.equal((await info()).view,'day');assert.equal((await info()).selected,'2026-10-16');
- await page.locator('[data-action="search"]').tap();await wait();await page.locator('.bottom-nav [data-tab="settings"]').tap();await wait();await page.locator('[data-tab="categories"]').tap();await wait();await swipe(325,60);assert.equal((await info()).view,'day');
+ await page.locator('[data-action="search"]').tap();await wait();await page.locator('.bottom-nav [data-tab="settings"]').tap();await wait();await page.locator('[data-section=events]').tap();await wait();await page.locator('[data-action=settings-categories]').tap();await wait();await swipe(325,60);assert.equal((await info()).view,'day');
  await page.waitForTimeout(510);await page.locator('.bottom-nav [data-view="day"]').tap();await wait();await set('2027-01-01','week');assert.match(await page.locator('.week-range').textContent(),/2026.*2027/);
  for(const width of [320,375,430]){await page.setViewportSize({width,height:812});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);}
  // Checklist uses its own scroll container, and event taps still open details.
@@ -97,3 +97,4 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  assert.deepEqual(errors,[]);console.log('PASS: finger-following pages, spring-free snapback, fixed navigation, inert previews, slow network, failure rollback, reduced motion');console.log('PASS: real touch short/long swipes in all views, selection, hint, native vertical scroll, cancelled gesture, tap, search/tab isolation, month/year boundaries, 320/375/430px, EN/dark; no page errors');
  }finally{await browser?.close();server.kill();await new Promise(resolve=>server.once('exit',resolve));rmSync(directory,{recursive:true,force:true})}
 })().catch(e=>{console.error(e);process.exit(1)});
+

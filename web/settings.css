@@ -1,0 +1,20 @@
+/* Layout for settings only; the existing material, colour and type system stays intact. */
+.settings-menu-gap{height:24px}
+.settings-menu .setting-link small,.settings-section .setting-link small{display:block;margin-top:4px;line-height:1.45;white-space:normal}
+.settings-menu .setting-link,.settings-section .setting-link{text-align:left}
+.settings-menu .avatar{object-fit:cover}
+.settings-section .padded label{margin-bottom:14px}
+.settings-pair-avatar{display:block;width:72px;height:72px;object-fit:cover;border-radius:50%;margin:10px 0}
+.settings-consent-details{margin:0 0 18px}
+.settings-consent-details summary{padding:8px 0;color:var(--muted)}
+.settings-view-options .setting-link{gap:14px;width:100%;text-align:left}
+.settings-view-mini{width:76px;min-width:76px;height:56px;display:grid;gap:4px;padding:7px;background:var(--bg);border-radius:10px}
+.settings-view-mini span{background:var(--soft);border-radius:3px}
+.settings-view-mini.list,.settings-view-mini.timeline{grid-template-rows:repeat(3,1fr)}
+.settings-view-mini.timeline span:nth-child(2){margin-left:17px}
+.settings-view-mini.three{grid-template-columns:repeat(3,1fr)}
+.settings-view-mini.seven{grid-template-columns:repeat(7,1fr);gap:2px}
+.settings-view-mini.month{grid-template-columns:repeat(7,1fr);grid-template-rows:repeat(4,1fr);gap:2px}
+.settings-view-mini.weeks{grid-template-columns:repeat(7,1fr);grid-template-rows:repeat(2,1fr);gap:2px}
+/* This user-selected accessibility mode is the only opt-in material change. */
+body.reduce-transparency :is(.form-group,.card,.bottom-nav,.calendar-tools .icon,.today-btn,.fab,.modal){background-color:var(--card)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
