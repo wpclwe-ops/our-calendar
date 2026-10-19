@@ -234,7 +234,7 @@ function render(){
  const active=state.calendar?.active;
  document.body.dataset.page=page;document.body.dataset.tab=tab;document.body.classList.toggle('calendar-screen',Boolean(active&&tab==='calendar'&&page==='main'&&!showSearch));
  const mainNavigation=active&&page==='main'&&!showSearch;
- const content=mainNavigation?`<div class="calendar-motion-viewport"><div class="calendar-motion-page" data-view="${activeNavigation()}">${tab==='calendar'?html:`<div class="navigation-content">${html}</div>`}</div></div>`:html;
+ const content=mainNavigation?`${tab==='calendar'?calendarToolbar():''}<div class="calendar-motion-viewport"><div class="calendar-motion-page" data-view="${activeNavigation()}">${tab==='calendar'?html:`<div class="navigation-content">${html}</div>`}</div></div>`:html;
  $('#app').innerHTML=demo()+`<main class="shell ${page==='main'?'main-screen':'sub-screen'} ${mainNavigation?(tab==='calendar'?'calendar-shell':'navigation-shell'):''}">${header()}${content}</main>`+(active&&page==='main'?navigation():'')+(active&&tab==='calendar'&&page==='main'&&!showSearch?`<div class="calendar-actions">${button('today',t('today'),'today-btn')}${button('new',icon('plus'),'fab','aria-label="'+t('newEvent')+'"')}</div>`:'');
  paint();
  const agenda=$('.month-with-agenda,.day-checklist');if(agendaPosition&&agenda?.dataset.date===agendaPosition.day)agenda.scrollTop=agendaPosition.top;
@@ -254,9 +254,14 @@ function filterDialog(){
  $('form',el).addEventListener('submit',async e=>{e.preventDefault();if(busy)return;busy=true;const previous={...filter};try{const data=new FormData(e.target);filter={owner:data.get('filter-owner'),category:data.get('filter-category'),status:data.get('filter-status')};await loadData();render();close()}catch(error){filter=previous;toast(error.message)}finally{busy=false}});
  document.body.append(el);showFilters=true;$('[data-close]',el).focus();
 }
-function calendarPage(){
+function calendarToolbar(){
  const week=view==='week'?CalendarNavigation.weekHeading(selected,state.me.language):null;
  const heading=week?week.title:view==='day'?dateLabel(selected,{day:'numeric',month:'long'}):dateLabel(selected,{month:'long'});
+ const subtitle=week?`<small class="week-range">${esc(week.range)}</small>`:view==='day'?`<small class="day-weekday">${esc(dateLabel(selected,{weekday:'long'}))}</small>`:`<small class="calendar-year">${esc(dateLabel(selected,{year:'numeric'}))}</small>`;
+ const layoutButton=view==='day'?button('day-layout',icon('list'),`icon layout-toggle ${state.me.day_layout==='list'?'selected':''}`,`data-layout="${state.me.day_layout==='list'?'timeline':'list'}" aria-label="${t('day_layout')}: ${t(state.me.day_layout==='list'?'dayList':'dayTimeline')}" aria-pressed="${state.me.day_layout==='list'}"`):view==='month'?button('month-layout',icon(state.me.month_layout==='scroll'?'scroll':'calendar'),'icon layout-toggle',`aria-label="${t('month_layout')}: ${t(state.me.month_layout==='scroll'?'monthScroll':'monthPaged')}"`):button('week-layout',icon({agenda:'list',three:'weekThree',seven:'weekSeven'}[weekLayout()]),'icon layout-toggle',`aria-label="${t('week_layout')}: ${weekLayoutLabel(weekLayout())}" aria-haspopup="dialog"`);
+ return `<section class="calendar-controls" data-view="${view}"><div class="calendar-heading"><div class="grow"><h1 class="month-title${week?' week-title':''}">${esc(heading)}</h1>${subtitle}</div><div class="calendar-tools">${button('search',icon('search'),'icon',`aria-label="${t('search')}"`)}${button('filters',icon('filters'),`icon ${Object.values(filter).some(Boolean)?'selected':''}`,`aria-label="${t('filters')}" aria-haspopup="dialog"`)}${layoutButton}${button('prev',icon('prev'),'icon period-prev',`aria-label="${t('back')}"`)}${button('next',icon('next'),'icon period-next',`aria-label="${t('next')}"`)}</div></div></section>`;
+}
+function calendarPage(){
  let html='';
  if(showSearch){
   html=`<section class="search-page"><div class="search-box">${icon('search')}<input id="search" type="search" value="${esc(query)}" placeholder="${t('search')}" aria-label="${t('search')}">${button(query?'clear-search':'search',icon('close'),'icon',`aria-label="${t(query?'clearSearch':'close')}"`)}</div>${filterControls()}<div class="search-summary"><span>${events.length} ${t('results')}</span>${button('reset-filters',t('resetFilters'),'text-button')}</div>`;
@@ -265,9 +270,6 @@ function calendarPage(){
   for(const [month,entries] of groups)html+=`<h3 class="section-label">${esc(dateLabel(month+'-01',{month:'long',year:'numeric'}))}</h3><div class="search-event-group">${eventList(entries)}</div>`;
   return html+(events.length?'':empty())+'</section>';
  }
- const subtitle=week?`<small class="week-range">${esc(week.range)}</small>`:view==='day'?`<small class="day-weekday">${esc(dateLabel(selected,{weekday:'long'}))}</small>`:`<small class="calendar-year">${esc(dateLabel(selected,{year:'numeric'}))}</small>`;
- const layoutButton=view==='day'?button('day-layout',icon('list'),`icon layout-toggle ${state.me.day_layout==='list'?'selected':''}`,`data-layout="${state.me.day_layout==='list'?'timeline':'list'}" aria-label="${t('day_layout')}: ${t(state.me.day_layout==='list'?'dayList':'dayTimeline')}" aria-pressed="${state.me.day_layout==='list'}"`):view==='month'?button('month-layout',icon(state.me.month_layout==='scroll'?'scroll':'calendar'),'icon layout-toggle',`aria-label="${t('month_layout')}: ${t(state.me.month_layout==='scroll'?'monthScroll':'monthPaged')}"`):button('week-layout',icon({agenda:'list',three:'weekThree',seven:'weekSeven'}[weekLayout()]),'icon layout-toggle',`aria-label="${t('week_layout')}: ${weekLayoutLabel(weekLayout())}" aria-haspopup="dialog"`);
- html=`<section class="calendar-controls"><div class="calendar-heading"><div class="grow"><h1 class="month-title${week?' week-title':''}">${esc(heading)}</h1>${subtitle}</div><div class="calendar-tools">${button('search',icon('search'),'icon',`aria-label="${t('search')}"`)}${button('filters',icon('filters'),`icon ${Object.values(filter).some(Boolean)?'selected':''}`,`aria-label="${t('filters')}" aria-haspopup="dialog"`)}${layoutButton}${button('prev',icon('prev'),'icon period-prev',`aria-label="${t('back')}"`)}${button('next',icon('next'),'icon period-next',`aria-label="${t('next')}"`)}</div></div></section>`;
  if(view==='month'){
  if(state.me.month_layout==='scroll'){
   ensureMonthWindow();
@@ -635,8 +637,9 @@ function warmNavigation(){
  for(const mode of (i<0?[]:[modes[i-1],modes[i+1]]).filter(mode=>['day','week','month'].includes(mode)))navigationEntry({date:selected,mode});
 }
 function navigationPage(target,rows){
- const node=document.createElement('div');node.className='calendar-motion-page';node.dataset.view=target.tab==='calendar'?target.mode:target.tab;
- node.innerHTML=atCalendarTarget(target,rows||(target.tab==='calendar'?[]:null),()=>tab==='calendar'?calendarPage():`<div class="navigation-content">${tab==='categories'?categoriesPage():settingsPage()}</div>`);paint(node);positionTimeline(node);requestAnimationFrame(()=>{positionTimeline(node);node.dataset.timelineScroll=$('.timeline',node)?.scrollTop||0;const el=$('.month-scroll',node);if(el)positionMonths(el)});
+ const node=document.createElement('div'),fromTab=tab;node.className='calendar-motion-page';node.dataset.view=target.tab==='calendar'?target.mode:target.tab;node.navigationKey=JSON.stringify(target);node.navigationRows=rows;
+ // The toolbar stays outside the moving page, except when arriving from another tab.
+ node.innerHTML=atCalendarTarget(target,rows||(target.tab==='calendar'?[]:null),()=>tab==='calendar'?(fromTab==='calendar'?'':calendarToolbar())+calendarPage():`<div class="navigation-content">${tab==='categories'?categoriesPage():settingsPage()}</div>`);paint(node);positionTimeline(node);requestAnimationFrame(()=>{positionTimeline(node);node.dataset.timelineScroll=$('.timeline',node)?.scrollTop||0;const el=$('.month-scroll',node);if(el)positionMonths(el)});
  if(!rows){const loading=document.createElement('span');loading.className='calendar-preview-loading';loading.textContent=t('loading');node.append(loading)}
  return node;
 }
@@ -644,7 +647,7 @@ function navigationPreview(action){
  const target=navigationTarget(action),entry=navigationEntry(target),node=navigationPage(target,entry.rows);
  if(!entry.rows)entry.promise.then(rows=>{
   if(!node.isConnected)return;
-  node.replaceChildren(...navigationPage(target,rows).childNodes);
+  node.replaceChildren(...navigationPage(target,rows).childNodes);node.navigationRows=rows;
   positionTimeline(node);const months=$('.month-scroll',node);if(months)positionMonths(months);
  }).catch(()=>{});
  return node;
@@ -653,8 +656,19 @@ async function navigateSmoothly(action,motion){
  if(!action.direction&&['view','tab'].includes(action.type)){const items=touchBarItems();action={...action,direction:items.indexOf(action.view||action.tab)>items.indexOf(activeNavigation())?1:-1}}
  const target=navigationTarget(action),rows=await navigationEntry(target).promise;
  const ready=action.type==='view'?api('settings','PATCH',{view:target.mode}):Promise.resolve();
- const commit=()=>{selected=target.date;view=target.mode;tab=target.tab;state.me.view=view;if(tab==='calendar')events=rows;else if(tab==='categories')categories=rows;else systemStatus=rows;render();warmNavigation()};
- if(motion)await motion.finish(action,navigationPage(target,rows),commit,ready);else{await ready;commit()}
+ const keep=tab==='calendar'&&target.tab==='calendar',key=JSON.stringify(target);
+ const commit=live=>{selected=target.date;view=target.mode;tab=target.tab;state.me.view=view;if(tab==='calendar')events=rows;else if(tab==='categories')categories=rows;else systemStatus=rows;if(live)adoptCalendarPage(live);else render();warmNavigation()};
+ // A preview already on screen for this target becomes the live page instead of being rebuilt.
+ const build=preview=>preview?.navigationKey===key&&preview.navigationRows===rows?preview:navigationPage(target,rows);
+ if(motion)await motion.finish(action,build,commit,ready,keep);else{await ready;commit()}
+}
+function adoptCalendarPage(live){
+ monthResize?.disconnect();monthResize=null;
+ const bar=$('.calendar-shell > .calendar-controls'),box=document.createElement('div');box.innerHTML=calendarToolbar()+navigation();
+ const [fresh,nav]=box.children;
+ if(bar){bar.dataset.view=view;$('.calendar-heading .grow',bar).replaceChildren(...$('.calendar-heading .grow',fresh).childNodes);const toggle=$('.layout-toggle',bar),next=$('.layout-toggle',fresh);if(toggle.outerHTML!==next.outerHTML)toggle.replaceWith(next)}
+ $$('.bottom-nav > button').forEach((el,i)=>{const next=nav.children[i];if(!next)return;el.className=next.className;if(next.hasAttribute('aria-current'))el.setAttribute('aria-current','page');else el.removeAttribute('aria-current')});
+ if(!query){positionTimeline(live);mountMonthScroll()}
 }
 async function loadData(poll=false){
  const version=++fetchVersion,print=()=>JSON.stringify([categories,events,systemStatus,providerStatuses]),before=poll?print():'';if(!poll)navigationCache.clear();
