@@ -481,6 +481,7 @@ class ICloudImports:
                 c.execute("UPDATE icloud_sources SET next_at=?,state=?,attempts=0,lease_until=NULL,checked_at=? WHERE id=?",
                           (stamp(now+timedelta(seconds=15 if more else POLL)),state,stamp(),source_id))
                 if created:self.s.notify(c,account['calendar_id'],actor,'icloud_imported',{'title':str(created)})
+            logger.warning('icloud sync_completed state=%s created=%s unsupported=%s',state,created,unsupported)
             return {'state':state,'created':created,'unsupported':unsupported}
         except (ProviderFailure,Problem,ValueError,TypeError,KeyError) as exc:
             logger.warning('icloud sync_failed type=%s status=%s',type(exc).__name__,
@@ -500,6 +501,17 @@ class ICloudImports:
     def run_due(self):
         if not self.configured:return
         with self.s.db.transaction() as c:
+            # Retry previously selected, delayed sources once after this parser
+            # repair. Preserve selection, sharing consent and active leases;
+            # subsequent cycles/restarts still respect normal retry backoff.
+            first=c.execute("INSERT OR IGNORE INTO runtime(key,value) VALUES('icloud_collection_parser_v2_retry',?)",(stamp(),))
+            if first.rowcount:
+                queued=c.execute("""UPDATE icloud_sources SET next_at='' WHERE selected=1 AND state='delayed'
+                             AND account_id IN (SELECT a.id FROM icloud_accounts a
+                             JOIN calendars ca ON ca.id=a.calendar_id
+                             JOIN members m ON m.user_id=a.user_id AND m.calendar_id=ca.id
+                             WHERE a.state='connected' AND ca.state='active' AND m.active=1)""")
+                logger.warning('icloud parser_retry_queued count=%s',queued.rowcount)
             rows=c.execute("""SELECT s.id,a.user_id FROM icloud_sources s
                               JOIN icloud_accounts a ON a.id=s.account_id
                               JOIN calendars ca ON ca.id=a.calendar_id

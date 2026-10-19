@@ -7,6 +7,12 @@ from app.providers.http import ProviderFailure
 CALENDAR='https://p42-caldav.icloud.com/123/calendar/'
 
 
+def collection_metadata(url=CALENDAR):
+    return ('<d:response><d:href>'+escape(url)+'</d:href><d:propstat>'
+            '<d:prop><c:calendar-data/><d:getetag/></d:prop>'
+            '<d:status>HTTP/1.1 404 Not Found</d:status></d:propstat></d:response>')
+
+
 def multistatus(rows):
     return ('<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">'+
             ''.join(rows)+'</d:multistatus>').encode()
@@ -19,6 +25,51 @@ def resource(url, data=True):
     return ('<d:response><d:href>'+escape(url)+'</d:href><d:propstat><d:prop>'
             '<d:getetag>version</d:getetag>'+content+'</d:prop>'
             '<d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>')
+
+
+@pytest.mark.parametrize('kind',['events','previews'])
+def test_icloud_collection_metadata_does_not_hide_real_events(kind):
+    class Apple:
+        def request(self,*args):
+            return 207,{},multistatus([collection_metadata(),resource(CALENDAR+'visit.ics')])
+    result=getattr(ICloudCalDAV('u','p',Apple()),kind)(CALENDAR)
+    assert len(result)==1 and result[0]['url']==CALENDAR+'visit.ics'
+
+
+def test_empty_icloud_calendar_can_contain_only_collection_metadata():
+    class Apple:
+        def request(self,*args):return 207,{},multistatus([collection_metadata(CALENDAR.rstrip('/'))])
+    assert ICloudCalDAV('u','p',Apple()).previews(CALENDAR)==[]
+
+
+def test_optional_failed_property_does_not_discard_successful_event_properties():
+    row=resource(CALENDAR+'visit.ics').replace('</d:response>',
+        '<d:propstat><d:prop><d:displayname/></d:prop>'
+        '<d:status>HTTP/1.1 404 Not Found</d:status></d:propstat></d:response>')
+    class Apple:
+        def request(self,*args):return 207,{},multistatus([row])
+    assert len(ICloudCalDAV('u','p',Apple()).previews(CALENDAR))==1
+
+
+@pytest.mark.parametrize('status',[403,404,500,507])
+def test_failed_event_body_still_aborts_scan(status):
+    row=resource(CALENDAR+'visit.ics').replace('HTTP/1.1 200 OK','HTTP/1.1 '+str(status)+' Error')
+    class Apple:
+        def request(self,*args):return 207,{},multistatus([collection_metadata(),row])
+    with pytest.raises(ProviderFailure):ICloudCalDAV('u','p',Apple()).previews(CALENDAR)
+
+
+def test_collection_query_limit_is_not_ignored_as_harmless_metadata():
+    row=collection_metadata().replace('HTTP/1.1 404 Not Found','HTTP/1.1 507 Limit')
+    class Apple:
+        def request(self,*args):return 207,{},multistatus([row])
+    with pytest.raises(ProviderFailure):ICloudCalDAV('u','p',Apple()).previews(CALENDAR)
+
+
+def test_successful_webdav_status_does_not_require_a_reason_phrase():
+    class Apple:
+        def request(self,*args):return 207,{},multistatus([resource(CALENDAR+'v.ics').replace('200 OK','200')])
+    assert len(ICloudCalDAV('u','p',Apple()).previews(CALENDAR))==1
 
 
 class LimitedServer:
@@ -62,6 +113,16 @@ def test_incomplete_multiget_is_never_accepted_as_complete_scan():
     with pytest.raises(ProviderFailure) as error:
         ICloudCalDAV('u','p',LimitedServer(missing=True)).previews(CALENDAR)
     assert error.value.code==502
+
+
+def test_index_collection_limit_failure_does_not_turn_into_remote_deletions():
+    class LimitedIndex(LimitedServer):
+        def request(self,method,url,headers=None,body=None):
+            status,headers,raw=super().request(method,url,headers,body)
+            if method=='PROPFIND':raw=raw.replace(b'HTTP/1.1 200 OK',b'HTTP/1.1 507 Limit',1)
+            return status,headers,raw
+    with pytest.raises(ProviderFailure):
+        ICloudCalDAV('u','p',LimitedIndex()).previews(CALENDAR)
 
 
 def test_revoked_credentials_are_not_retried_as_calendar_queries():
