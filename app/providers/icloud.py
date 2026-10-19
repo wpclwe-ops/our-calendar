@@ -15,6 +15,28 @@ def failure_code(exc):
             502:'icloud_invalid_response'}.get(exc.code,'icloud_delayed')
 def allowed(host):return re.fullmatch(r'(?:p[0-9]+-)?caldav\.icloud\.com',host) is not None
 
+def dav_status(text):
+    match=re.match(r'^HTTP/\d(?:\.\d)?\s+([1-5]\d{2})(?:\s|$)',(text or '').strip())
+    return int(match[1]) if match else 0
+
+def invalid_response(reason):
+    # Fixed diagnostic labels only: no remote values, paths, event data or secrets.
+    logger.warning('icloud invalid_response stage=%s',reason)
+    raise ProviderFailure(502,reason=reason)
+
+def successful_properties(item):
+    values={}
+    for propstat in item.findall('{DAV:}propstat'):
+        code=dav_status(propstat.findtext('{DAV:}status'))
+        if not code:invalid_response('property_status')
+        prop=propstat.find('{DAV:}prop')
+        if prop is None:invalid_response('missing_properties')
+        if code==200:
+            for value in prop:
+                if value.tag in values:invalid_response('duplicate_property')
+                values[value.tag]=value
+    return values
+
 class ICloudCalDAV:
     def __init__(self,apple_id,app_password,transport=None):
         self.http=transport or HTTPS(allowed)
@@ -33,9 +55,9 @@ class ICloudCalDAV:
             logger.warning('icloud request_failed method=%s status=%s',method,exc.code)
             raise
         if status not in (200,207):raise ProviderFailure(status)
-        if b'<!DOCTYPE' in raw.upper() or b'<!ENTITY' in raw.upper():raise ProviderFailure(502)
+        if b'<!DOCTYPE' in raw.upper() or b'<!ENTITY' in raw.upper():invalid_response('xml_entities')
         try:return ET.fromstring(raw)
-        except ET.ParseError:raise ProviderFailure(502)
+        except ET.ParseError:invalid_response('xml_syntax')
     def discover(self):
         root='https://caldav.icloud.com/'
         response=self.xml('PROPFIND',root,'<d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/></d:prop></d:propfind>')
@@ -69,24 +91,34 @@ class ICloudCalDAV:
         return self._resources(response,calendar_url)
 
     def _resources(self,response,calendar_url):
-        if response.tag!='{DAV:}multistatus':raise ProviderFailure(502)
+        if response.tag!='{DAV:}multistatus':invalid_response('multistatus_root')
         result=[]
+        collection_rows=0
         for item in response.findall('{DAV:}response'):
-            # An incomplete multi-status response must not be interpreted as a remote deletion.
-            for propstat in item.findall('{DAV:}propstat'):
-                status=propstat.find('{DAV:}status')
-                if status is not None and status.text and ' 200 ' not in status.text:
-                    raise ProviderFailure(502)
-            status=item.find('{DAV:}status')
-            if status is not None and status.text and ' 200 ' not in status.text:
-                raise ProviderFailure(502)
             href=item.find('{DAV:}href')
-            data=item.find('.//{'+CALDAV+'}calendar-data')
-            etag=item.find('.//{DAV:}getetag')
-            if href is None or not href.text or data is None:
-                raise ProviderFailure(502)
-            result.append({'url':self.safe_url(calendar_url,href.text),
-                           'etag':etag.text if etag is not None else '', 'ics':data.text or ''})
+            if href is None or not href.text:invalid_response('resource_href')
+            url=self.safe_url(calendar_url,href.text)
+            status=item.find('{DAV:}status')
+            if status is not None and dav_status(status.text)!=200:
+                invalid_response('resource_status')
+            codes=[dav_status(p.findtext('{DAV:}status')) for p in item.findall('{DAV:}propstat')]
+            # Apple includes the requested collection in Depth:1 REPORTs. It is
+            # not a VEVENT resource and has no calendar-data (404 is normal).
+            # Only that exact collection's 200/404 metadata is ignorable; real
+            # failed event resources and 507 query-limit responses stay fatal.
+            if url.rstrip('/')==calendar_url.rstrip('/'):
+                if not codes or any(code not in (200,404) for code in codes) or item.find('.//{DAV:}error') is not None:
+                    invalid_response('collection_status')
+                collection_rows+=1
+                continue
+            props=successful_properties(item)
+            data=props.get('{'+CALDAV+'}calendar-data')
+            etag=props.get('{DAV:}getetag')
+            if data is None or not data.text:invalid_response('event_calendar_data')
+            if etag is None or not etag.text:invalid_response('event_etag')
+            if any(v['url']==url for v in result):invalid_response('duplicate_resource')
+            result.append({'url':url,'etag':etag.text,'ics':data.text})
+        logger.warning('icloud report_read resources=%s collection_rows=%s',len(result),collection_rows)
         return result
 
     def _indexed_query(self,calendar_url,calendar_data):
@@ -98,16 +130,22 @@ class ICloudCalDAV:
             href=item.find('{DAV:}href')
             if href is None or not href.text:raise ProviderFailure(502)
             url=self.safe_url(calendar_url,href.text)
-            if url.rstrip('/')==calendar_url.rstrip('/'):continue
+            if url.rstrip('/')==calendar_url.rstrip('/'):
+                codes=[dav_status(p.findtext('{DAV:}status')) for p in item.findall('{DAV:}propstat')]
+                status=item.find('{DAV:}status')
+                if (status is not None and dav_status(status.text)!=200) or not codes or any(code not in (200,404) for code in codes) or item.find('.//{DAV:}error') is not None:
+                    invalid_response('index_collection_status')
+                continue
             # Only a complete, successful ETag index can authorize deletions.
             status=item.find('{DAV:}status')
-            if status is not None and (not status.text or ' 200 ' not in status.text):
+            if status is not None and dav_status(status.text)!=200:
                 raise ProviderFailure(502)
-            props=[p.find('{DAV:}prop') for p in item.findall('{DAV:}propstat')
-                   if p.findtext('{DAV:}status','').split()[1:2]==['200']]
-            if any(p is not None and p.find('{DAV:}resourcetype/{DAV:}collection') is not None for p in props):
+            props=successful_properties(item)
+            resource_type=props.get('{DAV:}resourcetype')
+            if resource_type is not None and resource_type.find('{DAV:}collection') is not None:
                 continue
-            if not any(p is not None and p.findtext('{DAV:}getetag') for p in props):
+            etag=props.get('{DAV:}getetag')
+            if etag is None or not etag.text:
                 raise ProviderFailure(502)
             if url in urls:raise ProviderFailure(502)
             urls.append(url)
