@@ -72,6 +72,30 @@ def test_successful_webdav_status_does_not_require_a_reason_phrase():
     assert len(ICloudCalDAV('u','p',Apple()).previews(CALENDAR))==1
 
 
+@pytest.mark.parametrize('literal',['<!DOCTYPE html>','<!ENTITY example "plain event text">'])
+def test_calendar_text_in_cdata_is_not_an_xml_declaration(literal):
+    ics=('BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:literal\r\n'
+         'DTSTART;VALUE=DATE:20261024\r\nSUMMARY:'+literal+'\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n')
+    row=('<d:response><d:href>'+CALENDAR+'v.ics</d:href><d:propstat><d:prop>'
+         '<d:getetag>v1</d:getetag><c:calendar-data><![CDATA['+ics+']]></c:calendar-data>'
+         '</d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>')
+    class Apple:
+        def request(self,*args):return 207,{},multistatus([collection_metadata(),row])
+    assert ICloudCalDAV('u','p',Apple()).previews(CALENDAR)[0]['ics']==ics.replace('\r\n','\n')
+
+
+@pytest.mark.parametrize('encoding',['utf-8','utf-16'])
+@pytest.mark.parametrize('declaration',[
+    '<!DOCTYPE root [<!ENTITY x "private-value">]><root>&x;</root>',
+    '<!DOCTYPE root SYSTEM "https://evil.example/external.dtd"><root/>',
+])
+def test_real_dtds_are_rejected_in_every_encoding(encoding,declaration,caplog):
+    class Apple:
+        def request(self,*args):return 207,{},declaration.encode(encoding)
+    with pytest.raises(ProviderFailure):ICloudCalDAV('u','p',Apple()).xml('REPORT',CALENDAR,'<x/>')
+    assert 'private-value' not in caplog.text and 'evil.example' not in caplog.text
+
+
 class LimitedServer:
     def __init__(self, status=403, missing=False):
         self.status=status

@@ -504,7 +504,7 @@ class ICloudImports:
             # Retry previously selected, delayed sources once after this parser
             # repair. Preserve selection, sharing consent and active leases;
             # subsequent cycles/restarts still respect normal retry backoff.
-            first=c.execute("INSERT OR IGNORE INTO runtime(key,value) VALUES('icloud_collection_parser_v2_retry',?)",(stamp(),))
+            first=c.execute("INSERT OR IGNORE INTO runtime(key,value) VALUES('icloud_collection_parser_v3_retry',?)",(stamp(),))
             if first.rowcount:
                 queued=c.execute("""UPDATE icloud_sources SET next_at='' WHERE selected=1 AND state='delayed'
                              AND account_id IN (SELECT a.id FROM icloud_accounts a
