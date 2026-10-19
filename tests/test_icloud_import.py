@@ -93,6 +93,24 @@ def test_remote_update_and_deletion_preserve_shared_event(linked):
         assert link['state']=='remote_deleted'
 
 
+def test_icloud_new_events_use_defaults_but_sync_keeps_existing_notifications(linked):
+    g,f,account,source=linked
+    g.s.settings('1',{'default_notifications':[45,0]})
+    g.s.settings('2',{'default_notifications':[]})
+    g.select('1',account,[source],[source])
+    g.sync_source('1',source,True)
+    event=g.s.events('1','2026-10-01','2026-11-01')[0]
+    assert event['reminders']=={'1':[45],'2':[]}
+    assert event['reminder_at_start']=={'1':True,'2':False}
+    g.s.settings('1',{'default_notifications':[15]})
+    f.remote['ics']=event_ics('Updated source title')
+    f.remote['etag']='v2'
+    g.sync_source('1',source,True)
+    updated=g.s.get_event('1',event['id'])
+    assert updated['reminders']==event['reminders']
+    assert updated['reminder_at_start']==event['reminder_at_start']
+
+
 def test_disconnect_does_not_delete_events_or_reimport(linked):
     g,f,account,source=linked
     g.select('1',account,[source],[source])
@@ -281,3 +299,4 @@ def test_icloud_incomplete_scan_never_marks_link_as_deleted(linked):
     with g.s.db.transaction() as c:
         link=c.execute('SELECT state FROM icloud_links WHERE source_id=?',(source,)).fetchone()
         assert link['state']=='ready'
+

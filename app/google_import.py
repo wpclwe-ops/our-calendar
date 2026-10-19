@@ -386,7 +386,11 @@ class GoogleImports:
         data={**fields,'language':me['language'],'translations':{},'owner':actor,'creator_id':actor,
               'category_id':None,'status':'planned','links':[],'reminders':{}}
         for m in c.execute('SELECT user_id FROM members WHERE calendar_id=?',(calendar_id,)):
-            data['reminders'][m['user_id']]=self.s.user(c,m['user_id'])['default_reminders']
+            person=m['user_id'];prefs=self.s.user(c,person)
+            data['reminders'][person]=prefs['default_reminders']
+            if prefs.get('notifications_template_version')==2:
+                data['reminders'][person]=[v for v in prefs['default_notifications'] if v>0]
+                data.setdefault('reminder_at_start',{})[person]=0 in prefs['default_notifications']
         from .smart_events import capture_source
         capture_source(data,provider=provider,**(original or {}))
         return data
@@ -749,3 +753,4 @@ class GoogleImports:
         for row in watches:
             try:self.ensure_watch(row['user_id'],row['id'])
             except Exception:continue
+
