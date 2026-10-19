@@ -267,7 +267,7 @@ def test_icloud_compact_previews_do_not_download_full_calendar(linked):
     g.select('1',account,[source],[])
     picker=g.browse('1',source)['items']
     assert len(picker)==2
-    assert not picker[0]['supported'] and picker[1]['supported']
+    assert picker[0]['supported'] and not picker[1]['supported']
     assert fake.full_reads==[]
     assert g.import_selected('1',source,[second_url],True)=={'created':1,'existing':0}
     assert fake.full_reads==[second_url]
@@ -371,5 +371,30 @@ def test_manual_picker_and_sync_accept_apple_collection_header(linked):
     assert g.browse('1',source)['items'][0]['title']=='Dentist'
     assert g.sync_source('1',source,True)['created']==1
     assert len(g.s.events('2','2026-10-01','2026-11-01'))==1
+
+
+def test_manual_picker_orders_event_dates_newest_first_across_timezones(linked):
+    g,f,account,source=linked
+    g.select('1',account,[source],[])
+    def item(name,start,duration='PT1H'):
+        ics=event_ics(name).replace('DTSTART;TZID=Europe/Warsaw:20261024T150000',start)
+        ics=ics.replace('DTEND;TZID=Europe/Warsaw:20261024T160000','DURATION:'+duration)
+        return {'url':f.remote['url'].replace('visit.ics',name+'.ics'),'etag':'v1','ics':ics}
+    items=[
+        item('old','DTSTART;TZID=Europe/Warsaw:20250101T120000'),
+        item('warsaw','DTSTART;TZID=Europe/Warsaw:20261024T150000'),
+        item('melbourne','DTSTART;TZID=Australia/Melbourne:20261024T230000'),
+        item('all-day','DTSTART;VALUE=DATE:20261024','P1D'),
+        item('future','DTSTART;TZID=Europe/Warsaw:20270101T120000'),
+        item('utc','DTSTART:20261024T143000Z'),
+        {**f.remote,'url':f.remote['url'].replace('visit.ics','unsupported.ics'),'ics':'invalid'},
+    ]
+    f.events=lambda url:items
+    expected=['future','utc','warsaw','melbourne','all-day','old']
+    first=g.browse('1',source)['items']
+    assert [v['title'] for v in first if v['supported']]==expected
+    assert first[-1]['supported'] is False
+    items.reverse()
+    assert g.browse('1',source)['items']==first
 
 
