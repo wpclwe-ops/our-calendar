@@ -330,3 +330,46 @@ def test_bad_report_does_not_revoke_valid_account(linked):
     assert g.status('1')['accounts'][0]['state']=='connected'
 
 
+def test_parser_fix_retries_delayed_selected_source_once_and_then_respects_backoff(linked):
+    from app.providers.http import ProviderFailure
+    g,f,account,source=linked
+    g.select('1',account,[source],[source])
+    f.fail=ProviderFailure(502)
+    assert g.sync_source('1',source)['state']=='delayed'
+    f.fail=None
+    # The release repair is allowed to retry an existing consented connection.
+    g.run_due()
+    assert len(g.s.events('2','2026-10-01','2026-11-01'))==1
+    with g.s.db.transaction() as c:
+        c.execute("UPDATE icloud_sources SET next_at='' WHERE id=?",(source,))
+    f.fail=ProviderFailure(429,3600)
+    assert g.sync_source('1',source)['state']=='delayed'
+    calls=len(f.calls)
+    g.run_due()
+    assert len(f.calls)==calls  # One-time repair must not defeat Retry-After.
+
+
+def test_manual_picker_and_sync_accept_apple_collection_header(linked):
+    from xml.sax.saxutils import escape
+    from app.providers.icloud import ICloudCalDAV
+    g,f,account,source=linked
+    calendar_url=f.remote['url'].rsplit('/',1)[0]+'/'
+    xml=('<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">'
+         '<d:response><d:href>'+escape(calendar_url)+'</d:href><d:propstat><d:prop>'
+         '<c:calendar-data/></d:prop><d:status>HTTP/1.1 404 Not Found</d:status>'
+         '</d:propstat></d:response><d:response><d:href>'+escape(f.remote['url'])+
+         '</d:href><d:propstat><d:prop><d:getetag>v1</d:getetag><c:calendar-data>'+
+         escape(f.remote['ics'])+'</c:calendar-data></d:prop>'
+         '<d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>')
+    class Apple:
+        def request(self,method,url,headers=None,body=None):
+            if method=='GET':return 200,{},f.remote['ics'].encode()
+            assert method=='REPORT'
+            return 207,{},xml.encode()
+    g.provider=lambda email,password:ICloudCalDAV(email,password,Apple())
+    g.select('1',account,[source],[source])
+    assert g.browse('1',source)['items'][0]['title']=='Dentist'
+    assert g.sync_source('1',source,True)['created']==1
+    assert len(g.s.events('2','2026-10-01','2026-11-01'))==1
+
+

@@ -96,3 +96,8 @@ After merge: observe GitHub Checks, Railway SUCCESS for the exact main commit, /
 Before publication: 288 Python tests, 26 Node tests, compileall and JS syntax passed on synthetic accounts. No provider writes were added. Verify exact deployed commit, /health version 0.10.1, release checkpoint, one replica and existing /data.
 
 Live acceptance remains open: retry the affected calendar's manual picker and synchronization; use sanitized iCloud status logs to identify any remaining refusal. Deployment and synthetic tests do not establish that the user's live iCloud incident is resolved.
+
+
+## iCloud collection response 0.10.2
+
+Before merge: 301 Python tests, compileall and app.js syntax; five regression cases failed before the parser change. Verify CI and exact deployed commit/version, ready checkpoint, original /data and one replica. Observe the one-time retry of selected delayed sources: report_read resources/collection_rows and sync_completed or a fixed invalid_response stage. Do not log account identifiers, paths or ICS. Real manual picker acceptance remains separate from automatic-source logs.
