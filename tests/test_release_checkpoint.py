@@ -50,6 +50,18 @@ def test_checkpoint_reports_pair_mismatch_without_modifying_source(service,event
     with service.db.transaction() as c:assert '\n'.join(c.iterdump())==before
     assert store.objects=={}
 
+def test_production_checkpoint_accepts_original_pair_on_copy(service,event):
+    cfg=replace(config(service),demo=False)
+    store=Storage()
+    assert release_checkpoint(cfg,store)['state']=='ready'
+    with service.db.transaction() as c:
+        # Validation and pinning happen on the copied DB before the app starts.
+        assert c.execute("SELECT 1 FROM runtime WHERE key='telegram_pair'").fetchone() is None
+    key=next(k for k in store.objects if k.startswith(PREFIX))
+    recovered=unpack_snapshot(store.objects[key],cfg.backup_encryption_key)
+    assert recovered['archive-key.pem']==Path(cfg.archive_key_file).read_bytes()
+    assert service.get_event('1',event['id'])['revision']==1
+
 def test_checkpoint_reports_upload_stage_without_secret_exception_text(service,event):
     cfg=config(service);store=Storage();store.fail=True
     with pytest.raises(SnapshotError,match='^release_checkpoint_deletion_ledger_failed$'):
