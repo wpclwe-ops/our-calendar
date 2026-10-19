@@ -101,3 +101,8 @@ Live acceptance remains open: retry the affected calendar's manual picker and sy
 ## iCloud collection response 0.10.2
 
 Before merge: 301 Python tests, compileall and app.js syntax; five regression cases failed before the parser change. Verify CI and exact deployed commit/version, ready checkpoint, original /data and one replica. Observe the one-time retry of selected delayed sources: report_read resources/collection_rows and sync_completed or a fixed invalid_response stage. Do not log account identifiers, paths or ICS. Real manual picker acceptance remains separate from automatic-source logs.
+
+
+## iCloud CDATA 0.10.3
+
+307 Python tests, compileall and app.js syntax; regression evidence recorded before the repair. Verify the remaining source's one-time retry, reject actual DTDs, and confirm /health 0.10.3 with the existing checkpoint and /data. Do not equate successful source reads with support for every individual recurrence format.
