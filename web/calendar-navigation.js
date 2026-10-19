@@ -34,8 +34,11 @@
   return target?(VIEWS.includes(target)?{type:'view',view:target}:{type:'tab',tab:target}):{type:'limit'};
  }
  function motion({preview,haptic=()=>{}}){
-  const viewport=document.querySelector('.calendar-motion-viewport'),current=viewport?.querySelector('.calendar-motion-page');
+  const viewport=document.querySelector('.calendar-motion-viewport');let current=viewport?.querySelector('.calendar-motion-page');
   if(!current)return null;
+  // The calendar toolbar stays still; it travels with the page only when leaving for another tab.
+  const toolbar=viewport.parentElement.querySelector(':scope>.calendar-controls');
+  const carry=type=>{if(!toolbar)return;if(type==='tab'){if(toolbar.parentNode!==current)current.prepend(toolbar)}else if(toolbar.parentNode===current)viewport.before(toolbar)};
   const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches,width=viewport.clientWidth;
   let incoming=null,key='',dx=0,ended=false,frame=0,lastType='',animations=[],retired=[];
   const animate=(el,frames)=>{
@@ -44,12 +47,14 @@
    return a.finished.catch(()=>{});
   };
   function cleanup(){
-   cancelAnimationFrame(frame);animations.forEach(a=>a.cancel());incoming?.remove();retired.forEach(el=>el.remove());
+   cancelAnimationFrame(frame);animations.forEach(a=>a.cancel());incoming?.remove();retired.forEach(el=>el.remove());if(viewport.isConnected)carry('');
    current.style.transform='';current.style.opacity='';current.inert=false;
    viewport.classList.remove('motion-active');viewport.removeAttribute('aria-busy');
   }
+  const keyOf=action=>action.type==='move'?'move'+action.direction:action.type+(action.view||action.tab);
   function ensure(action,node){
-   const nextKey=action.type==='move'?'move'+action.direction:action.type+(action.view||action.tab);
+   const nextKey=keyOf(action);
+   carry(action.type);
    if(node||nextKey!==key){const previous=incoming;incoming=null;key=nextKey;
     if(action.type!=='limit'){
      incoming=node||preview(action);incoming.classList.add('motion-preview');incoming.inert=true;incoming.setAttribute('aria-hidden','true');viewport.append(incoming);
@@ -81,8 +86,9 @@
     if(ended)return;ended=true;cancelAnimationFrame(frame);current.inert=true;
     try{await Promise.all([animate(current,[{transform:current.style.transform||'none'},{transform:'translate3d(0,0,0)'}]),animate(incoming,[{transform:incoming?.style.transform||'none'},{transform:`translate3d(${dx<0?width:-width}px,0,0)`}])])}finally{cleanup()}
    },
-   async finish(action,node,commit,ready=Promise.resolve()){
-    if(ended)return;ended=true;cancelAnimationFrame(frame);ensure(action,node);current.inert=true;viewport.classList.add('motion-active');viewport.setAttribute('aria-busy','true');
+   async finish(action,build,commit,ready=Promise.resolve(),keep=false){
+    if(ended)return;ended=true;cancelAnimationFrame(frame);
+    const node=typeof build==='function'?build(keyOf(action)===key?incoming:null):build;ensure(action,node===incoming?undefined:node);current.inert=true;viewport.classList.add('motion-active');viewport.setAttribute('aria-busy','true');
     const direction=action.direction||(action.type==='move'?action.direction:VIEWS.indexOf(action.view)>VIEWS.indexOf(current.dataset.view)?1:-1);
     const start=current.style.transform||'translate3d(0,0,0)';
     incoming.style.transform=`translate3d(${dx+(direction*width)}px,0,0)`;
@@ -94,14 +100,20 @@
       const shrinking=direction>0;
       effects.push(animate(oldContent,[{transform:'scaleY(1)',opacity:1},{transform:`scaleY(${shrinking?.22:1.12})`,opacity:0}]),animate(newContent,[{transform:`scaleY(${shrinking?1.12:.3})`,opacity:.2},{transform:'scaleY(1)',opacity:1}]));
      }
-     await Promise.all([...effects,ready]);commit();
+     await Promise.all([...effects,ready]);
     }catch(error){
      // Restore the original page smoothly if saving the view preference fails.
      const oldStyle=getComputedStyle(current),newStyle=getComputedStyle(incoming);
      const fromOld={transform:oldStyle.transform,opacity:oldStyle.opacity},fromNew={transform:newStyle.transform,opacity:newStyle.opacity};
      animations.forEach(a=>a.cancel());
      await Promise.all([animate(current,[fromOld,{transform:'translate3d(0,0,0)',opacity:1}]),animate(incoming,[fromNew,{transform:`translate3d(${direction*width}px,0,0)`,opacity:0}])]);
-     throw error;
+     cleanup();throw error;
+    }
+    try{
+     if(!keep){commit();return}
+     // The incoming page becomes the live page; the outgoing one is dropped without a rebuild.
+     const page=incoming;incoming=null;page.classList.remove('motion-preview');page.inert=false;page.removeAttribute('aria-hidden');page.style.transform='';page.style.opacity='';
+     animations.forEach(a=>a.cancel());animations=[];current.remove();current=page;commit(page);
     }finally{cleanup()}
    }
   };
