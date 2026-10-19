@@ -42,9 +42,40 @@ def offsets(values):
 class Service:
     def __init__(self, db, config):
         self.db, self.config = db, config
+        if not config.demo:
+            self.bind_telegram_pair()
+
+    def bind_telegram_pair(self):
+        """Pin the deployment whitelist, never rewrite calendar identities.
+
+        The runtime record survives calendar purging. It protects the original
+        accounts even while no calendar or restore request exists.
+        """
+        expected = self.config.telegram_user_ids
+        with self.db.transaction() as c:
+            bound = c.execute("SELECT value FROM runtime WHERE key='telegram_pair'").fetchone()
+            if bound and load(bound['value']) != sorted(expected):
+                raise ValueError('Telegram configuration does not match the saved pair; access stopped')
+            for table in ('calendars', 'restore_requests'):
+                for row in c.execute(f'SELECT first_id,second_id FROM {table}'):
+                    pair = {row['first_id'], row['second_id']} - {None}
+                    if not pair <= expected or row['first_id'] == row['second_id']:
+                        raise ValueError('Telegram configuration does not match the saved pair; access stopped')
+            if c.execute('SELECT 1 FROM members WHERE user_id NOT IN (?,?) LIMIT 1',
+                         tuple(expected)).fetchone():
+                raise ValueError('Telegram configuration does not match saved membership; access stopped')
+            if not bound:
+                c.execute("INSERT INTO runtime(key,value) VALUES('telegram_pair',?)", (dump(sorted(expected)),))
+
+    def is_allowed_user(self, user_id):
+        return self.config.demo or self.config.is_allowed_user(user_id)
+
+    def require_allowed_user(self, user_id):
+        require(self.is_allowed_user(user_id), 'access_denied', 403)
 
     def ensure_user(self, c, telegram):
         user_id = str(telegram['id'])
+        self.require_allowed_user(user_id)
         row = c.execute('SELECT data FROM users WHERE id=?', (user_id,)).fetchone()
         if not row:
             lang = telegram.get('language_code', 'en').split('-')[0]
@@ -56,6 +87,7 @@ class Service:
         return user_id
 
     def user(self, c, user_id):
+        self.require_allowed_user(user_id)
         row = c.execute('SELECT data FROM users WHERE id=?', (user_id,)).fetchone()
         require(row is not None, 'unauthorized', 401)
         prefs={'id': user_id, 'notify_at_start': True, 'day_layout': 'timeline', 'month_layout': 'paged', 'week_layout': 'agenda', 'touch_bar': ['day','month','settings'], 'default_duration': 60, **load(row['data'])}
@@ -71,6 +103,7 @@ class Service:
         return prefs
 
     def calendar(self, c, user_id, active=True):
+        self.require_allowed_user(user_id)
         row = c.execute('SELECT ca.*,m.active FROM calendars ca JOIN members m ON ca.id=m.calendar_id WHERE m.user_id=?', (user_id,)).fetchone()
         require(row is not None, 'no_calendar', 404)
         require(row['active'] or not active, 'member_left', 403)

@@ -6,15 +6,6 @@ import secrets
 import time
 from urllib.parse import parse_qsl
 
-# These are the only Telegram accounts allowed to use the production bot and Mini App.
-MY_ID = 319946231
-PARTNER_ID = 8454213226
-ALLOWED_USERS = {MY_ID, PARTNER_ID}
-_ALLOWED_USER_IDS = frozenset(str(user_id) for user_id in ALLOWED_USERS)
-
-def is_allowed_user(user_id):
-    return str(user_id) in _ALLOWED_USER_IDS
-
 class Problem(Exception):
     def __init__(self, status, code, detail=None):
         self.status, self.code, self.detail = status, code, detail

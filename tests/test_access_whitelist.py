@@ -9,7 +9,7 @@ from urllib.parse import urlencode
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from app.security import ALLOWED_USERS, session_token
+from app.security import session_token
 
 
 def signed_user(user_id, bot_token):
@@ -23,10 +23,9 @@ def signed_user(user_id, bot_token):
 
 
 def test_only_original_pair_can_authenticate_and_use_api(service):
-    assert ALLOWED_USERS == {319946231, 8454213226}
     app = create_app(replace(service.config, demo=False), start_worker=False)
     with TestClient(app) as client:
-        for user_id in sorted(ALLOWED_USERS):
+        for user_id in (1, 2):
             res = client.post('/api/auth', json={'init_data': signed_user(user_id, service.config.bot_token)})
             assert res.status_code == 200
             token = res.json()['token']
@@ -79,11 +78,13 @@ def test_webhook_replies_plain_denial_without_creating_profile(service):
 
 def test_allowed_start_still_opens_calendar(service):
     app = create_app(replace(service.config, demo=False), start_worker=False)
+    with app.state.service.db.transaction() as cursor:
+        cursor.execute('DELETE FROM outbox')
     telegram = RecordingTelegram()
     app.state.worker.telegram = telegram
     update = {'update_id': 13002, 'message': {
-        'chat': {'id': 319946231, 'type': 'private'},
-        'from': {'id': 319946231, 'first_name': 'Owner', 'language_code': 'ru'},
+        'chat': {'id': 1, 'type': 'private'},
+        'from': {'id': 1, 'first_name': 'Owner', 'language_code': 'ru'},
         'text': '/start',
     }}
     with TestClient(app) as client:
@@ -92,7 +93,7 @@ def test_allowed_start_still_opens_calendar(service):
         assert res.status_code == 200
         app.state.worker.deliver()
         assert len(telegram.sent) == 1
-        assert telegram.sent[0][0] == '319946231'
+        assert telegram.sent[0][0] == '1'
         assert 'ваш общий календарь' in telegram.sent[0][1]
         assert telegram.calls == []
 
