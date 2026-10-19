@@ -855,7 +855,7 @@ async function login(demoUser='1'){
  await loadData();render();if(start==='google'){await openGoogleImports();return}await openLinkedEvent();
 }
 async function boot(){
- try{tg?.ready();tg?.expand();cfg=await(await fetch('/api/config')).json();if(!cfg.demo&&!tg?.initData){$('#app').innerHTML=`<div class="splash"><div class="brand-mark">oc</div><h1>Our Calendar</h1><p>${t('telegramOnly')}</p></div>`;return}await login()}
+ try{tg?.ready();tg?.expand();if(tg?.isVersionAtLeast?.('7.7'))tg.disableVerticalSwipes?.();cfg=await(await fetch('/api/config')).json();if(!cfg.demo&&!tg?.initData){$('#app').innerHTML=`<div class="splash"><div class="brand-mark">oc</div><h1>Our Calendar</h1><p>${t('telegramOnly')}</p></div>`;return}await login()}
  catch(error){$('#app').innerHTML=`<main class="shell"><div class="card"><h1>Our Calendar</h1><p class="error">${esc(error.message)}</p><button id="retry">${t('retry')}</button></div></main>`;$('#retry').onclick=boot}
 }
 matchMedia('(prefers-color-scheme:dark)').addEventListener('change',applyTheme);
