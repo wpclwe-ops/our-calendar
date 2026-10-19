@@ -40,29 +40,29 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
 
  await swipe(250,175);assert.deepEqual(await info(),{selected:'2026-11-16',view:'month',page:'main',query:''});
  await swipe(150,225);assert.equal((await info()).selected,'2026-10-16');
- const h=await swipe(325,60);assert.match(h,/Неделя/);assert.equal((await info()).view,'week');assert.equal((await info()).selected,'2026-10-16');
+ const h=await swipe(370,20);assert.match(h,/Неделя/);assert.equal((await info()).view,'week');assert.equal((await info()).selected,'2026-10-16');
  assert.equal(await page.locator('.month-title').textContent(),'3-я неделя октября');assert.match(await page.locator('.week-range').textContent(),/12–18 октября 2026/);
  if(process.env.CALENDAR_SCREENSHOT_DIR)await page.screenshot({path:join(process.env.CALENDAR_SCREENSHOT_DIR,'calendar-week.png')});
  await swipe(250,175);assert.equal((await info()).selected,'2026-10-23');assert.equal((await info()).view,'week');
  await swipe(150,225);assert.equal((await info()).selected,'2026-10-16');
- await swipe(325,60);assert.equal((await info()).view,'day');assert.equal((await info()).selected,'2026-10-16');
+ await swipe(370,20);assert.equal((await info()).view,'day');assert.equal((await info()).selected,'2026-10-16');
  await swipe(250,175);assert.equal((await info()).selected,'2026-10-17');
  await swipe(150,225);assert.equal((await info()).selected,'2026-10-16');
  await page.locator('.timeline').evaluate(el=>el.scrollTop=400);
  const scrollBefore=await page.locator('.timeline').evaluate(el=>el.scrollTop);
  await swipe(200,205,550,-150);assert.equal((await info()).selected,'2026-10-16');assert.equal((await info()).view,'day');
  assert.ok(await page.locator('.timeline').evaluate(el=>el.scrollTop)>scrollBefore,'native vertical scrolling');
- await swipe(325,60);assert.equal(await page.evaluate(()=>tab),'settings');assert.equal((await info()).selected,'2026-10-16');
- await swipe(60,325);assert.equal(await page.evaluate(()=>tab),'calendar');assert.equal((await info()).view,'day');
- await swipe(60,325);assert.equal((await info()).view,'week');
- await swipe(60,325);assert.equal((await info()).view,'month');
- await swipe(60,325);assert.equal((await info()).view,'month');assert.equal((await info()).selected,'2026-10-16');
+ await swipe(370,20);assert.equal(await page.evaluate(()=>tab),'settings');assert.equal((await info()).selected,'2026-10-16');
+ await swipe(20,370);assert.equal(await page.evaluate(()=>tab),'calendar');assert.equal((await info()).view,'day');
+ await swipe(20,370);assert.equal((await info()).view,'week');
+ await swipe(20,370);assert.equal((await info()).view,'month');
+ await swipe(20,370);assert.equal((await info()).view,'month');assert.equal((await info()).selected,'2026-10-16');
  // A cancelled gesture must not move, and its hint must disappear.
  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:320,y:430}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:80,y:430}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]});await wait();assert.equal((await info()).view,'month');assert.equal(await page.locator('.calendar-swipe-hint').count(),0);
  await page.waitForTimeout(510);await page.locator('[data-action="date"][data-date="2026-10-16"] .day-number').tap();await wait();assert.equal((await info()).view,'month');assert.equal(await page.locator('.month-agenda').count(),1);await page.locator('.bottom-nav [data-view="day"]').tap();await wait();
  // Search stays isolated; a tab absent from Touch Bar has no long-swipe neighbour.
- await page.locator('[data-action="search"]').tap();await wait();await page.locator('#search').blur();await swipe(325,60);assert.equal((await info()).view,'day');assert.equal((await info()).selected,'2026-10-16');
- await page.locator('[data-action="search"]').tap();await wait();await page.locator('.bottom-nav [data-tab="settings"]').tap();await wait();await page.locator('[data-section=events]').tap();await wait();await page.locator('[data-action=settings-categories]').tap();await wait();await swipe(325,60);assert.equal((await info()).view,'day');
+ await page.locator('[data-action="search"]').tap();await wait();await page.locator('#search').blur();await swipe(370,20);assert.equal((await info()).view,'day');assert.equal((await info()).selected,'2026-10-16');
+ await page.locator('[data-action="search"]').tap();await wait();await page.locator('.bottom-nav [data-tab="settings"]').tap();await wait();await page.locator('[data-section=events]').tap();await wait();await page.locator('[data-action=settings-categories]').tap();await wait();await swipe(370,20);assert.equal((await info()).view,'day');
  await page.waitForTimeout(510);await page.locator('.bottom-nav [data-view="day"]').tap();await wait();await set('2027-01-01','week');assert.match(await page.locator('.week-range').textContent(),/2026.*2027/);
  for(const width of [320,375,430]){await page.setViewportSize({width,height:812});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);}
  // Checklist uses its own scroll container, and event taps still open details.
@@ -76,7 +76,7 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  // Failed view persistence rolls back cleanly and leaves the old date/view usable.
  await set('2026-10-16','month');
  await page.route('**/api/settings',route=>route.request().method()==='PATCH'?route.fulfill({status:503,contentType:'application/json',body:'{"error":"error"}'}):route.continue());
- await swipe(325,60);assert.equal((await info()).view,'month');assert.equal((await info()).selected,'2026-10-16');assert.equal(await page.locator('.motion-preview').count(),0);await page.unroute('**/api/settings');
+ await swipe(370,20);assert.equal((await info()).view,'month');assert.equal((await info()).selected,'2026-10-16');assert.equal(await page.locator('.motion-preview').count(),0);await page.unroute('**/api/settings');
  // A slow uncached target keeps the old date until its data is ready.
  await page.evaluate(()=>navigationCache.clear());
  await page.route('**/api/events?*',async route=>{await new Promise(resolve=>setTimeout(resolve,350));await route.continue()});
@@ -84,8 +84,8 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  // Saving a view preference runs in parallel with the animation, not before it.
  await set('2026-10-16','month');
  await page.route('**/api/settings',async route=>{if(route.request().method()==='PATCH')await new Promise(resolve=>setTimeout(resolve,650));await route.continue()});
- await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:325,y:430}]});
- for(let i=1;i<=10;i++)await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:325-26.5*i,y:430}]});
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:370,y:430}]});
+ for(let i=1;i<=10;i++)await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:370-35*i,y:430}]});
  await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await page.waitForTimeout(90);
  assert.ok(await page.locator('.calendar-motion-viewport').evaluate(el=>el.getAnimations({subtree:true}).some(a=>a.playState==='running')),'transition starts while preference save is pending');
  await wait();assert.equal((await info()).view,'week');await page.unroute('**/api/settings');
