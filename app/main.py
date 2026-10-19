@@ -26,7 +26,7 @@ def create_app(config=None,start_worker=True):
         if start_worker:worker.start()
         yield
         worker.stop()
-    app=FastAPI(title='Our Calendar',version='0.10.0',lifespan=lifespan,docs_url=None,redoc_url=None,openapi_url=None)
+    app=FastAPI(title='Our Calendar',version='0.10.1',lifespan=lifespan,docs_url=None,redoc_url=None,openapi_url=None)
     app.state.service=service;app.state.backups=backups;app.state.worker=worker
     google=worker.google
     icloud=worker.icloud
@@ -40,6 +40,11 @@ def create_app(config=None,start_worker=True):
     @app.exception_handler(ProviderFailure)
     async def provider_problem(request,exc):
         prefix='icloud' if request.url.path.startswith('/api/icloud/') else 'google'
+        if prefix=='icloud':
+            from .providers.icloud import failure_code
+            import logging
+            logging.getLogger(__name__).warning('icloud api_failed status=%s',exc.code)
+            return JSONResponse({'error':failure_code(exc)},status_code=503)
         code=prefix+('_reconnect' if exc.code in (400,401) else '_unavailable' if exc.code in (403,404) else '_delayed')
         return JSONResponse({'error':code},status_code=503)
     @app.exception_handler(KeyError)
@@ -101,7 +106,7 @@ def create_app(config=None,start_worker=True):
         result=health_status(service)
         return {k:result[k] for k in ('ready','degraded','translation','backup')}
     @app.get('/api/config')
-    def public_config():return {'demo':config.demo,'bot_username':config.bot_username,'version':'0.10.0',
+    def public_config():return {'demo':config.demo,'bot_username':config.bot_username,'version':'0.10.1',
                               'integrations':{'google':'import_only' if google.configured else 'not_configured','icloud':'import_only' if icloud.configured else 'not_configured','translation':'configured' if config.translation_url or config.openai_api_key else 'not_configured','smart_events':bool(config.openai_api_key)}}
     @app.get('/api/smart-events')
     def smart_status(request:Request):return worker.smart.status(actor(request))
@@ -327,4 +332,5 @@ def create_app(config=None,start_worker=True):
     @app.get('/')
     def home():return FileResponse(ROOT/'web'/'index.html')
     return app
+
 

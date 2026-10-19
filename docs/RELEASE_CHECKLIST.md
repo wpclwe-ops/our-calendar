@@ -88,3 +88,11 @@ not running its old validator against new smart event JSON.
 Before merge: full Python/Node suite, compileall, JS syntax, mobile settings/profile/default-reminder acceptance and existing calendar/import regression scenarios. Confirm personal name/gender and decision-memory ownership, shared-profile revision conflicts, v1/v2 archive compatibility and unchanged existing-event reminder schedules. No live provider writes or notification smoke messages.
 
 After merge: observe GitHub Checks, Railway SUCCESS for the exact main commit, /health version 0.10.0 and ready release checkpoint; retain one replica and /data. A successful deployment does not establish real iPhone WebKit, OpenAI quality/billing or end-to-end Telegram delivery acceptance.
+
+
+
+## iCloud reliability 0.10.1
+
+Before publication: 288 Python tests, 26 Node tests, compileall and JS syntax passed on synthetic accounts. No provider writes were added. Verify exact deployed commit, /health version 0.10.1, release checkpoint, one replica and existing /data.
+
+Live acceptance remains open: retry the affected calendar's manual picker and synchronization; use sanitized iCloud status logs to identify any remaining refusal. Deployment and synthetic tests do not establish that the user's live iCloud incident is resolved.
