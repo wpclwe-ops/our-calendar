@@ -300,3 +300,33 @@ def test_icloud_incomplete_scan_never_marks_link_as_deleted(linked):
         link=c.execute('SELECT state FROM icloud_links WHERE source_id=?',(source,)).fetchone()
         assert link['state']=='ready'
 
+
+def test_validation_rejection_does_not_abort_batch_or_leave_source_leased(linked,monkeypatch):
+    g,f,account,source=linked
+    g.select('1',account,[source],[source])
+    good=dict(f.remote)
+    bad={**good,'url':good['url'].replace('visit.ics','bad.ics'),
+         'ics':event_ics('Rejected')}
+    f.events=lambda url:[bad,good]
+    original=g.s.validate_event
+    def validate(c,cal,data):
+        if data['title']=='Rejected':raise Problem(422,'invalid_event')
+        return original(c,cal,data)
+    monkeypatch.setattr(g.s,'validate_event',validate)
+    result=g.sync_source('1',source,True)
+    assert result=={'state':'unsupported','created':1,'unsupported':1}
+    assert g.s.events('2','2026-10-01','2026-11-01')[0]['title']=='Dentist'
+    with g.s.db.transaction() as c:
+        assert c.execute('SELECT lease_until FROM icloud_sources WHERE id=?',(source,)).fetchone()[0] is None
+
+
+def test_bad_report_does_not_revoke_valid_account(linked):
+    from app.providers.http import ProviderFailure
+    g,f,account,source=linked
+    g.select('1',account,[source],[source])
+    f.fail=ProviderFailure(400)
+    with pytest.raises(Problem) as error:g.sync_source('1',source,True)
+    assert error.value.code=='icloud_delayed'
+    assert g.status('1')['accounts'][0]['state']=='connected'
+
+

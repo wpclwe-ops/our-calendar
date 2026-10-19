@@ -5,6 +5,20 @@ Object.assign(words.ru,{
 Object.assign(words.en,{
  iTitle:'iCloud Calendar',iPrivacy:'Only your Apple Account is connected. Events in calendars with automatic import are shared with both partners. Apple originals are never changed.',iSetup:'iCloud credential encryption is not configured on the server. Set ICLOUD_CREDENTIAL_KEY (Fernet) or reuse GOOGLE_CREDENTIAL_KEY.',iConnect:'Connect iCloud',iEmail:'Apple Account email',iPassword:'App-specific password (not your Apple Account password)',iPasswordGuide:'Create a dedicated password at account.apple.com → Sign-In and Security → App-Specific Passwords.',iSave:'Verify and connect',iSources:'iCloud calendars',iAuto:'Automatically import events',iAutoInfo:'Enable automatic import separately for each calendar. Existing upcoming and new events, including titles and descriptions, will be visible to your partner. Past one-off events are not imported.',iAutoConfirm:'Enable automatic iCloud import?',iAutoWarning:'Existing upcoming and new events in selected iCloud calendars will be shared with your partner. Apple originals remain unchanged.',iSaveSources:'Save calendar selection',iChange:'Choose calendars',iSync:'Check for changes',iDisconnect:'Disconnect iCloud',iDisconnectHelp:'Imported events stay in Our Calendar but stop updating. Original iCloud events are never deleted.',iNoAccounts:'No iCloud accounts connected.',iActive:'Automatic import enabled',iManual:'Automatic import off',iLinked:'Linked events',iUnsupportedCount:'Unsupported events',iChooseEvents:'Choose events manually',iImport:'Import selected events',iSelect:'Choose events from this calendar',iImportConfirm:'Import selected events into the shared calendar? Your partner will see them.',iImported:'Import completed',iReview:'Needs your decision',iRemoteDeleted:'Original was deleted in iCloud',iConflict:'One event changed in two places',iOurVersion:'Our Calendar version',iAppleVersion:'Apple version',iKeepLocal:'Keep local version',iUseApple:'Use iCloud version',iTrash:'Move to Trash',iResolved:'Decision saved',i_ready:'Checked',i_unsupported:'Some events are unsupported',i_delayed:'Temporary problem; will retry automatically',i_needs_reconnect:'Reconnect Apple Account',i_waiting:'Waiting for check',i_running:'Already syncing',icloud_not_configured:'iCloud encryption key is not configured.',icloud_reconnect:'Reconnect iCloud.',icloud_unavailable:'Could not connect to iCloud.',icloud_delayed:'iCloud temporarily unavailable.',icloud_selection_expired:'Connection settings changed. Reload them.',icloud_calendar_too_large:'The calendar is too large for a single scan.',icloud_unsupported_event:'Some events have an unsupported format.'
 });
+Object.assign(words.ru,{
+ icloud_access_denied:'Apple отклонила доступ к этому календарю. Проверьте доступ в iCloud; если календарь общий, его владелец мог изменить разрешения.',
+ icloud_source_missing:'Apple не нашла этот календарь. Откройте «Выбрать календари» и обновите выбор.',
+ icloud_response_too_large:'Ответ Apple слишком большой. События сохранены; чтение этого календаря пока не завершено.',
+ icloud_rate_limited:'Apple временно ограничила частоту запросов. Подождите несколько минут перед повторной проверкой.',
+ icloud_invalid_response:'Apple вернула неполный или некорректный ответ. События сохранены, попробуйте проверить ещё раз.'
+});
+Object.assign(words.en,{
+ icloud_access_denied:'Apple denied access to this calendar. Check access in iCloud; a shared calendar owner may have changed permissions.',
+ icloud_source_missing:'Apple could not find this calendar. Open Choose calendars and refresh your selection.',
+ icloud_response_too_large:'Apple returned too much data. Your events are retained; this calendar has not finished loading.',
+ icloud_rate_limited:'Apple temporarily limited requests. Wait a few minutes before checking again.',
+ icloud_invalid_response:'Apple returned an incomplete or invalid response. Your events are retained; try checking again.'
+});
 let icloudUI={step:'accounts',status:null,account:null,calendars:[],source:null,items:[],conflict:null};
 async function openICloudImports(){icloudUI.step='accounts';icloudUI.status=await api('icloud');tab='settings';page='icloud';render()}
 function icloudImportPage(){
@@ -41,3 +55,4 @@ Object.assign(actions,{
 });
 
 async function icloudResolve(choice){const c=icloudUI.conflict;if(choice==='trash'&&!await confirmDialog(t('iTrash')))return;await api('icloud/links/'+c.id+'/resolve','POST',{choice,revision:c.revision,remote_version:c.remote_version});icloudUI.status=await api('icloud');icloudUI.step='accounts';render();toast(t('iResolved'))}
+

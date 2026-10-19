@@ -3,8 +3,9 @@ Only explicitly selected sources are scanned. Automatic sharing is separate cons
 """
 from datetime import date, datetime, timedelta
 import random
+import logging
 from icalendar import Calendar
-from .providers.icloud import ICloudCalDAV
+from .providers.icloud import ICloudCalDAV, failure_code
 from .providers.http import ProviderFailure
 from .providers.vault import CredentialVault
 from .google_import import GoogleImports, FIELDS, flattened, unflattened, validate_series
@@ -16,6 +17,7 @@ from .service import uid, dump, load
 POLL = 300
 MAX_REMOTE = 2000
 AUTO_BATCH = 20
+logger = logging.getLogger(__name__)
 
 
 def _local(value, timezone):
@@ -444,7 +446,7 @@ class ICloudImports:
                         for patch in remote['overrides'].values():
                             if not patch.get('deleted'):self.s.validate_event(c,self.s.calendar(c,actor),{**data,**patch})
                     except Problem:
-                        failed.add(rid);continue
+                        failed[rid]=etag;continue
                     event_id=uid()
                     c.execute('INSERT INTO events(id,calendar_id,data) VALUES(?,?,?)',(event_id,account['calendar_id'],dump(data)))
                     for key,patch in self.helpers.import_overrides(remote,provider='icloud'):
@@ -481,7 +483,9 @@ class ICloudImports:
                 if created:self.s.notify(c,account['calendar_id'],actor,'icloud_imported',{'title':str(created)})
             return {'state':state,'created':created,'unsupported':unsupported}
         except (ProviderFailure,Problem,ValueError,TypeError,KeyError) as exc:
-            state='needs_reconnect' if isinstance(exc,ProviderFailure) and exc.code in (400,401) else 'delayed'
+            logger.warning('icloud sync_failed type=%s status=%s',type(exc).__name__,
+                           exc.code if isinstance(exc,ProviderFailure) else 0)
+            state='needs_reconnect' if isinstance(exc,ProviderFailure) and exc.code==401 else 'delayed'
             delay=max(getattr(exc,'retry_after',0),min(3600,30*2**min(source['attempts'],7)))+random.randint(0,15)
             with self.s.db.transaction() as c:
                 c.execute('UPDATE icloud_sources SET state=?,attempts=attempts+1,next_at=?,lease_until=NULL WHERE id=? AND generation=? AND lease_until=?',
@@ -490,7 +494,7 @@ class ICloudImports:
                     c.execute("UPDATE icloud_accounts SET state='needs_reconnect' WHERE id=?",(account['id'],))
             if force:
                 if isinstance(exc,Problem):raise
-                raise Problem(503,'icloud_'+state) from None
+                raise Problem(503,failure_code(exc) if isinstance(exc,ProviderFailure) else 'icloud_delayed') from None
             return {'state':state}
 
     def run_due(self):
@@ -505,4 +509,7 @@ class ICloudImports:
                               ORDER BY s.next_at LIMIT 5""",(stamp(),stamp())).fetchall()
         for row in rows:
             try:self.sync_source(row['user_id'],row['id'])
-            except Exception:continue
+            except Exception as exc:
+                logger.error('icloud worker_failed type=%s',type(exc).__name__)
+                continue
+
