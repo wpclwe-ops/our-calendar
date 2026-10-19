@@ -75,7 +75,7 @@ Object.assign(actions,{
 });
 const previousSettingsBack=actions['back-to-settings'],previousBack=actions.back;
 actions['back-to-settings']=async()=>{if(settingsParent){const parent=settingsParent;settingsParent='';return openSettingsSection(parent)}return previousSettingsBack()};
-actions.back=async()=>{if(page==='settings-section')return actions['settings-back']({dataset:{}});if(settingsParent&&['google','icloud','backup','trash','touchbar'].includes(page)){const parent=settingsParent;settingsParent='';return openSettingsSection(parent)}return previousBack()};
+actions.back=async()=>{if(page==='google'&&googleUI.step==='events')return actions['google-events-back']();if(page==='icloud'&&icloudUI.step==='events')return actions['icloud-events-back']();if(page==='settings-section')return actions['settings-back']({dataset:{}});if(settingsParent&&['google','icloud','backup','trash','touchbar'].includes(page)){const parent=settingsParent;settingsParent='';return openSettingsSection(parent)}return previousBack()};
 for(const [action,parent] of [['touchbar','appearance'],['google-open','connections'],['icloud-open','connections'],['trash','data'],['backup','data']]){const old=actions[action];actions[action]=async el=>{if(page==='settings-section')settingsParent=parent;return old(el)}}
 $('#app').addEventListener('change',async e=>{
  const el=e.target,key=el.dataset.personalPref;
@@ -125,3 +125,4 @@ window.addEventListener('focus',async()=>{if(!busy&&!document.activeElement?.mat
 // Legacy links open the same advanced settings window.
 smartSettingsPage=()=>{settingsSection='advanced';return settingsSectionPage()};
 actions['smart-open']=()=>openSettingsSection('advanced');
+

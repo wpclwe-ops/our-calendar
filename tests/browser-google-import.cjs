@@ -24,6 +24,15 @@ const assert=require('node:assert/strict'),{mkdtempSync,rmSync}=require('node:fs
   await page.locator('[data-action="google-events"]').click();await wait();
   assert.equal(await page.locator('.g-event').count(),4);assert.equal(await page.locator('.g-event:disabled').count(),1);
   assert.equal(await page.locator('.g-event:checked').count(),0);
+  // Both Back controls return to this account's calendar selection.
+  for(const selector of ['[data-action="google-events-back"]','.header-back[data-action="back"]']){
+   await page.locator(selector).click();await wait();
+   assert.equal(await page.locator('.g-source').count(),1);
+   assert.equal(await page.locator('.g-event').count(),0);
+   await page.locator('[data-action="google-save-sources"]').click();await wait();
+   await page.locator('[data-action="google-events"]').click();await wait();
+   assert.equal(await page.locator('.g-event').count(),4);
+  }
   if(process.env.GOOGLE_SCREENSHOT)await page.screenshot({path:process.env.GOOGLE_SCREENSHOT,fullPage:true});
   await page.locator('.g-event[value="visit"]').check();await page.locator('[data-action="google-preview"]').click();await wait();
   assert.ok(await page.locator('#app').textContent().then(v=>v.includes('Dentist')));
@@ -70,4 +79,5 @@ const assert=require('node:assert/strict'),{mkdtempSync,rmSync}=require('node:fs
   assert.deepEqual(errors,[]);console.log('Google import mobile acceptance passed: manual privacy, consent-gated auto import, preview, retry, deduplication, RU/EN and mobile viewports.');
  }finally{if(browser)await browser.close();server.kill();rmSync(directory,{recursive:true,force:true})}
 })().catch(e=>{console.error(e);process.exit(1)});
+
 

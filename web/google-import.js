@@ -14,11 +14,11 @@ async function refreshGoogleStatus(){googleUI.status=await api('google');if(page
 const gAttr=id=>`data-id="${esc(id)}"`;
 function googleImportPage(){
  const g=googleUI,s=g.status;
- let html=`${button('back',`‹ ${t('settings')}`,'plain back')}<h1 class="page-title">Google Calendar</h1><p class="privacy">${t('gPrivacy')}</p>`;
+ let html=`${button(g.step==='events'?'google-events-back':'back',`‹ ${t(g.step==='events'?'back':'settings')}`,'plain back')}<h1 class="page-title">Google Calendar</h1><p class="privacy">${t('gPrivacy')}</p>`;
  if(!s)return html+`<p>${t('loading')}</p>`;
  if(!s.configured)return html+`<section class="card"><p>${t('gSetup')}</p></section>`;
  if(s.confirmation)return html+`<section class="card"><h2>${t('gConfirmAccount')}</h2><p>${esc(s.confirmation.email)}</p><p class="privacy">${t('gImportOnly')}</p>${button('google-confirm-account',t('approve'),'primary full')}${button('google-reject-account',t('cancel'),'full')}</section>`;
- if(g.step!=='accounts')html+=button('google-root',`‹ ${t('g_back')}`,'plain back');
+ if(!['accounts','events'].includes(g.step))html+=button('google-root',`‹ ${t('g_back')}`,'plain back');
  if(g.step==='calendars')return html+`<h2>${t('gSources')}</h2><p>${t('gChooseSources')}</p><section class="card"><p class="privacy">${t('gAutoExplanation')}</p>${g.calendars.map(c=>`<div class="g-source-pick"><label class="g-check"><input type="checkbox" class="g-source" value="${esc(c.id)}" ${c.selected?'checked':''}><span>${esc(c.name)}<small>${esc(c.timezone)}</small></span></label><label class="g-check g-auto-choice"><input type="checkbox" class="g-auto" value="${esc(c.id)}" ${c.auto_import?'checked':''}><span>${t('gAutoLabel')}</span></label></div>`).join('')||`<p>${t('gCalendarEmpty')}</p>`}${button('google-save-sources',t('gSaveSources'),'primary full')}</section>`;
  if(g.step==='events'){
   html+=`<h2>${esc(g.source.name)}</h2><div class="card"><div class="g-date-range"><label>${t('gFrom')}<input id="g-from" type="date" value="${esc(g.from)}"></label><label>${t('gTo')}<input id="g-to" type="date" value="${esc(g.to)}"></label></div>${button('google-range',t('gLoad'),'full')}</div>`;
@@ -43,6 +43,11 @@ function googleImportPage(){
  return html+button('google-connect',t('gConnect'),'primary full');
 }
 function googleFindSource(id){for(const a of googleUI.status.accounts){const s=a.sources.find(s=>s.id===id);if(s)return {account:a,source:s}}throw new Error(t('google_selection_expired'))}
+async function googleOpenCalendars(account){
+ const calendars=await api('google/accounts/'+account+'/calendars');
+ Object.assign(googleUI,{account,calendars,step:'calendars',items:[],parent:null,next:null,preview:null});
+ googleUI.selected.clear();render();
+}
 async function googleLoadEvents(append=false){
  const g=googleUI;
  const params=new URLSearchParams({start:g.from+'T00:00:00Z',end:addDays(g.to,1)+'T00:00:00Z'});
@@ -64,7 +69,8 @@ Object.assign(actions,{
  'google-confirm-account':async()=>{googleUI.status=await api('google/confirm','POST',{approved:true});googleUI.step='accounts';render()},
  'google-reject-account':async()=>{googleUI.status=await api('google/confirm','POST',{approved:false});render()},
  'google-disconnect':async el=>{if(await confirmDialog(t('gDisconnect'),t('gDisconnectHelp'))){googleUI.status=await api('google/accounts/'+el.dataset.id,'DELETE');render()}},
- 'google-calendars':async el=>{googleUI.account=el.dataset.id;googleUI.calendars=await api('google/accounts/'+el.dataset.id+'/calendars');googleUI.step='calendars';render()},
+ 'google-calendars':el=>googleOpenCalendars(el.dataset.id),
+ 'google-events-back':()=>googleOpenCalendars(googleUI.account),
  'google-save-sources':async()=>{const ids=Array.from(document.querySelectorAll('.g-source:checked'),e=>e.value);const autoIds=Array.from(document.querySelectorAll('.g-auto:checked'),e=>e.value).filter(id=>ids.includes(id));const activating=autoIds.some(id=>!googleUI.calendars.some(c=>c.id===id&&c.auto_import));if(activating&&!await confirmDialog(t('gAutoConfirmTitle'),t('gAutoConfirmBody')))return;googleUI.status=await api('google/accounts/'+googleUI.account+'/calendars','POST',{ids,auto_ids:autoIds});googleUI.step='accounts';render()},
  'google-events':async el=>{const found=googleFindSource(el.dataset.id);googleUI.account=found.account.id;googleUI.source=found.source;googleUI.parent=null;googleUI.selected.clear();await googleLoadEvents()},
  'google-instances':async el=>{googleUI.selected.clear();googleUI.parent=el.dataset.id;await googleLoadEvents()},
@@ -87,3 +93,4 @@ $('#app').addEventListener('change',e=>{
  if($('#g-count'))$('#g-count').textContent=googleUI.selected.size;
 });
 setInterval(async()=>{if(page==='google'&&googleUI.step==='accounts'&&googleUI.status?.pending&&!busy&&!document.hidden){try{await refreshGoogleStatus()}catch{}}},4000);
+
