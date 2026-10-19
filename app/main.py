@@ -16,6 +16,15 @@ from .backup import Backups,MAX_ARCHIVE
 from .bot import Worker
 
 ROOT=Path(__file__).resolve().parent.parent
+JSON_LIMIT=512*1024
+AUTH_LIMIT=16*1024
+ARCHIVE_PATHS=('/api/backup/preview','/api/backup/apply','/api/backup/restore-deleted')
+PUBLIC_API=('/api/auth','/api/config','/api/telegram/webhook','/api/google/push','/api/google/callback')
+
+def body_limit(path):
+    if path in ARCHIVE_PATHS:return MAX_ARCHIVE*2
+    if path=='/api/auth':return AUTH_LIMIT
+    return JSON_LIMIT
 
 def create_app(config=None,start_worker=True):
     config=config or Config.env()
@@ -57,9 +66,14 @@ def create_app(config=None,start_worker=True):
         origin=request.headers.get('origin')
         if origin and not config.demo and origin!=config.public_url:
             return JSONResponse({'error':'invalid_origin'},status_code=403)
+        path=request.url.path
         length=request.headers.get('content-length','0')
-        if not length.isdigit() or int(length)>MAX_ARCHIVE*2:
+        if not length.isdigit() or int(length)>body_limit(path):
             return JSONResponse({'error':'request_too_large'},status_code=413)
+        # Reject unauthenticated calls to private API routes before any body is read.
+        if path.startswith('/api/') and path not in PUBLIC_API:
+            try:actor(request)
+            except Problem as exc:return JSONResponse({'error':exc.code,'detail':exc.detail},status_code=exc.status)
         if request.url.path.startswith('/api/'):
             key=(request.client.host if request.client else '',request.url.path)
             now=time.monotonic();bucket=buckets[key]
@@ -83,9 +97,9 @@ def create_app(config=None,start_worker=True):
         require(config.demo or is_allowed_user(user_id),'access_denied',403)
         return user_id
     async def body(request):
-        chunks=[];size=0
+        chunks=[];size=0;limit=body_limit(request.url.path)
         async for chunk in request.stream():
-            size+=len(chunk);require(size<=MAX_ARCHIVE*2,'request_too_large',413);chunks.append(chunk)
+            size+=len(chunk);require(size<=limit,'request_too_large',413);chunks.append(chunk)
         data=b''.join(chunks)
         import json
         result=json.loads(data);require(isinstance(result,dict),'invalid_request')
