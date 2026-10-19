@@ -34,7 +34,7 @@
 .now-line{position:absolute;left:54px;right:0;height:2px;background:var(--accent);z-index:5;pointer-events:none}
 .now-line:before{content:attr(data-time);position:absolute;right:100%;top:-8px;padding-right:6px;font-size:11px;font-weight:700;color:var(--accent);background:var(--card)}
 .now-line:after{content:'';position:absolute;left:-4px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--accent)}
-.time-event{touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.time-event{touch-action:pan-y;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .time-owner{font-weight:600;opacity:.85}
 .time-event.event-dragging{z-index:10;box-shadow:0 8px 26px #0004;opacity:.92;scale:1.025;cursor:grabbing;will-change:top}
 .calendar-holding{user-select:none;-webkit-user-select:none}

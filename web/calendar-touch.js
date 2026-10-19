@@ -50,6 +50,8 @@
    if(!press.held){if(Math.hypot(e.clientX-press.x,e.clientY-press.originY)>9)cleanup();return}
    press.y=e.clientY;e.preventDefault();
   },{passive:false});
+  // iOS only honours preventDefault from touchmove listeners registered before the gesture starts, so this one is registered up front and only acts once the hold is armed.
+  document.addEventListener('touchmove',e=>{if(press?.held&&e.cancelable)e.preventDefault()},{passive:false});
   document.addEventListener('pointerup',e=>{
    if(!press||press.id!==e.pointerId)return;
    const p=press;

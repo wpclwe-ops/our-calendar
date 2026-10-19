@@ -126,7 +126,7 @@
   document.addEventListener('pointerdown',e=>{
    if(drag){cancel();return}if(settling)return;
    const surface=e.target.closest?.('.calendar-shell,.navigation-shell');
-   if(!e.isPrimary||e.pointerType==='mouse'||!surface||!enabled()||e.target.closest('header,.calendar-controls,.day-layout-row,.time-event,input,select,textarea'))return;
+   if(!e.isPrimary||e.pointerType==='mouse'||!surface||!enabled()||e.target.closest('header,.calendar-controls,.day-layout-row,input,select,textarea'))return;
    drag={id:e.pointerId,x:e.clientX,y:e.clientY,surface,width:surface.clientWidth,view:getView(),items:[...getItems()],axis:null};
   });
   document.addEventListener('pointermove',e=>{
