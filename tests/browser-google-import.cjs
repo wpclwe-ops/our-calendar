@@ -13,6 +13,7 @@ const assert=require('node:assert/strict'),{mkdtempSync,rmSync}=require('node:fs
   await page.goto('http://127.0.0.1:8001');await page.waitForSelector('.timeline');
   const wait=async()=>{await page.waitForFunction(()=>!busy);await page.waitForTimeout(50)};
   await page.locator('.bottom-nav [data-tab="settings"]').click();await wait();
+  await page.locator('[data-section=connections]').click();await wait();
   await page.locator('[data-action="google-open"]').click();await wait();assert.equal(await page.locator('.g-account').count(),1);
   await page.locator('[data-action="google-calendars"]').click();await wait();assert.equal(await page.locator('.g-source').count(),1);
   await page.locator('.g-source').check();await page.locator('[data-action="google-save-sources"]').click();await wait();
@@ -69,3 +70,4 @@ const assert=require('node:assert/strict'),{mkdtempSync,rmSync}=require('node:fs
   assert.deepEqual(errors,[]);console.log('Google import mobile acceptance passed: manual privacy, consent-gated auto import, preview, retry, deduplication, RU/EN and mobile viewports.');
  }finally{if(browser)await browser.close();server.kill();rmSync(directory,{recursive:true,force:true})}
 })().catch(e=>{console.error(e);process.exit(1)});
+

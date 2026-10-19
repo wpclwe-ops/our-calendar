@@ -24,7 +24,7 @@ def test_custom_defaults_and_events_preserve_partner(service, backup):
     assert service.state('2')['me']['default_reminders'] == [60]
 
 
-@pytest.mark.parametrize('values', [[0], [-1], [525601], [True], [1.5], ['45'], [45, 45], [1, 2, 3, 4], None])
+@pytest.mark.parametrize('values', [[-1], [525601], [True], [1.5], ['45'], [45, 45], [1, 2, 3, 4], None])
 def test_invalid_custom_intervals_are_rejected_atomically(service, event, values):
     with pytest.raises(Problem):service.settings('1', {'default_reminders': values})
     with pytest.raises(Problem):service.save_event('1', {'reminders': values}, event['id'], event['revision'])
@@ -103,3 +103,4 @@ def test_legacy_profile_and_signed_archive_keep_only_one_default(service, event,
     backup.apply('1',blob.getvalue(),[],[],[],preview_id=preview['preview_id'],profile_fields=['default_reminders'])
     assert service.state('1')['me']['default_reminders'] == [90]
     assert service.get_event('1', event['id'])['reminders']['1'] == [60]
+

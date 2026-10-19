@@ -100,29 +100,27 @@ const {mkdtempSync,rmSync,mkdirSync}=require('node:fs');const {tmpdir}=require('
   await page.locator('[data-action=edit-event].header-save').click();await page.waitForSelector('#event-form');
   assert.equal(await page.locator('.advanced-section').count(),0);
   assert.ok(await page.locator('.title-field input').evaluate(el=>parseFloat(getComputedStyle(el).fontSize)>=24));
-  assert.equal(await page.locator('.event-reminders select[data-reminder-preset]').count(),1);
+  assert.equal(await page.locator('.event-reminders select[data-reminder-preset]').count(),2,'legacy start notification is explicitly editable');
   await page.locator('[data-action=back]').first().click();await page.waitForSelector('.detail-title');
  await page.locator('[data-action=back]').first().click();await wait();
  await page.evaluate(async()=>{selected='2026-10-17';await changeView('week')});await wait();assert.equal(await page.locator('[data-action=week-layout]').count(),1);assert.equal(await page.locator('.week-date').count(),7);await screenshot('week-dark');
  await page.evaluate(()=>{state.me.theme='light';render()});await screenshot('week-light');
   await page.locator('.bottom-nav [data-tab=settings]').click();await wait();
-  const settingsOrder=await page.locator('.settings-group > *').evaluateAll(nodes=>nodes.map(el=>el.querySelector('#setting-language')?'language':el.classList.contains('theme-row')?'theme':el.querySelector('[data-action=touchbar]')?'touchbar':el.querySelector('[data-tab=categories]')?'categories':el.querySelector('#setting-timezone')?'timezone':el.querySelector('#setting-day_layout')?'day':el.querySelector('#setting-week_layout')?'week':el.querySelector('#setting-month_layout')?'month':el.classList.contains('default-settings')?'reminders':el.querySelector('#duration-preset')?'duration':el.querySelector('[name=setting-notify_at_start]')?'start':el.querySelector('[name=setting-reminders_enabled]')?'send':'other').filter(x=>x!=='other').slice(0,10));
-  assert.deepEqual(settingsOrder,['language','theme','touchbar','categories','timezone','day','week','month','reminders','duration']);
-  assert.equal(await page.locator('.touchbar-settings-row .svg-icon').count(),1,'Touch Bar setting only has a chevron, no calendar icon');
-  assert.equal(await page.locator('.settings-links [data-tab=categories]').count(),0);
-  await page.locator('.categories-settings-row [data-tab=categories]').click();await wait();
+  assert.deepEqual(await page.locator('.settings-menu [data-action=settings-open]').evaluateAll(nodes=>nodes.map(n=>n.dataset.section)),['pair','appearance','language','views','events','connections','data','service','advanced']);
+  await page.locator('[data-section=appearance]').click();await wait();
+  assert.equal(await page.locator('[data-action=touchbar] .svg-icon').count(),1,'Bottom bar setting only has a chevron');
+  await page.locator('[data-action=settings-back]').click();await page.locator('[data-section=events]').click();await wait();
+  await page.locator('[data-action=settings-categories]').click();await wait();
   assert.equal(await page.locator('[data-action=back-to-settings]').count(),1);
   await page.locator('[data-action=back-to-settings]').click();await wait();assert.equal(await page.evaluate(()=>tab),'settings');
- // Native reminders share one control in Settings and the event form.
- const defaults=page.locator('[data-reminder-editor=default]');
- assert.equal(await defaults.locator('details').count(),0);
- assert.equal(await defaults.locator('[data-reminder-preset] option:checked').textContent(),'За 1 час');
- await defaults.locator('[data-reminder-preset]').selectOption('custom');
- await page.waitForFunction(()=>state.me.default_reminders.includes(45));
- assert.equal(await defaults.locator('[data-reminder-preset]').count(),1);
- assert.equal(await defaults.locator('[data-action=add-reminder]').count(),0);
- assert.deepEqual(await page.evaluate(()=>state.me.default_reminders),[45]);
+ // Defaults are a two-choice menu; event reminders retain their compact editor.
+ await page.locator('[data-action=settings-default-notifications]').click();
+ for(const value of await page.locator('[data-notification-choices] input:checked').evaluateAll(nodes=>nodes.map(n=>n.value)))await page.locator(`[data-notification-choices] input[value="${value}"]`).uncheck();
+ await page.locator('.modal details summary').click();await page.locator('[data-add-custom]').click();
+ await page.locator('.modal button[type=submit]').click();await page.waitForFunction(()=>state.me.default_notifications.includes(45));
+ assert.deepEqual(await page.evaluate(()=>state.me.default_notifications),[45]);
  await screenshot('settings-native-reminders');
+ await page.locator('[data-action=settings-back]').click();await wait();
  await page.locator('.bottom-nav [data-view=day]').click();await wait();
  await page.evaluate(async()=>{selected='2026-10-09';await loadData();render()});
  assert.equal(await page.locator('.month-title').textContent(),'9 октября');
@@ -175,7 +173,7 @@ const {mkdtempSync,rmSync,mkdirSync}=require('node:fs');const {tmpdir}=require('
  await sheet.locator('[type=submit]').click();await page.waitForFunction(()=>!!document.querySelector('.reminder-sheet-error')?.textContent);await wait();
  assert.ok(await sheet.isVisible());assert.deepEqual(await page.evaluate(()=>currentEvent.reminders[state.me.id]),[10080]);
  await page.unroute(endpoint);await sheet.locator('[type=submit]').click();await page.waitForSelector('.reminder-backdrop',{state:'hidden'});await wait();
- assert.deepEqual(Object.keys(reminderRequests.at(-1)).sort(),['reminders','revision']);
+ assert.deepEqual(Object.keys(reminderRequests.at(-1)).sort(),['reminders','reminders_v2','revision']);
  assert.deepEqual(await page.evaluate(()=>currentEvent.reminders[state.me.id]),[120,30,15]);
  assert.deepEqual(await page.evaluate(()=>currentEvent.reminders['2']),[60]);
  for(const field of ['title','start','end','timezone','owner','category_id','status','description'])assert.deepEqual(await page.evaluate(field=>currentEvent[field],field),beforeReminder[field]);
@@ -189,3 +187,4 @@ const {mkdtempSync,rmSync,mkdirSync}=require('node:fs');const {tmpdir}=require('
  assert.deepEqual(errors,[]);console.log('PASS: compact timeline time/owner, gray centered actions, unified month-and-agenda scrolling, settings hierarchy, status dialog and two distinct month modes.');
  }finally{await browser?.close();server.kill();await new Promise(resolve=>server.once('exit',resolve));rmSync(directory,{recursive:true,force:true})}
 })().catch(e=>{console.error(e);process.exit(1)});
+
