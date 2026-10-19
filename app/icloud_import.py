@@ -300,17 +300,27 @@ class ICloudImports:
         with self.s.db.transaction() as c:source,account=self.source(c,actor,source_id)
         _,items=self.previews(account,source)
         result=[]
+        dates={}
         for item in items:
             try:
                 value=parse_resource(item,source['timezone'])
                 if value.get('deleted'):continue
                 fields=value['fields']
+                # Order by event start, not Apple's resource order or creation
+                # time. Compare real instants across TZIDs; all-day dates use
+                # midnight in the source's viewing timezone.
+                timezone=source['timezone'] if fields['all_day'] else fields['timezone']
+                dates[item['url']]=datetime.fromisoformat(fields['start']).replace(
+                    tzinfo=zone(timezone),fold=fields.get('fold',0)).timestamp()
                 result.append({'id':item['url'],'title':fields['title'],'start':fields['start'],
                                'end':fields['end'],'supported':True,'series':bool(fields['rrule'])})
             except Problem:
                 # One malformed VEVENT must not hide the rest of the private picker.
                 result.append({'id':item['url'],'title':'(Unsupported iCloud event)',
                                'start':'','end':'','supported':False,'series':False})
+        # Undated unsupported resources stay available at the bottom. An ID
+        # tie-breaker keeps equal start dates stable across provider responses.
+        result.sort(key=lambda row:(row['id'] not in dates,-dates.get(row['id'],0),row['id']))
         with self.s.db.transaction() as c:
             current,active=self.source(c,actor,source_id)
             require(current['generation']==source['generation'] and active['generation']==account['generation'],
