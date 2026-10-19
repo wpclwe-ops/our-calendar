@@ -76,6 +76,23 @@ def imported(google,id='visit',scope='one'):
     with g.s.db.transaction() as c:return dict(c.execute('SELECT * FROM google_links WHERE source_id=? AND remote_id=?',(source,id)).fetchone())
 
 
+def test_import_uses_personal_two_notification_defaults_only_at_creation(google):
+    g,f,source=google
+    g.s.settings('1',{'default_notifications':[45,0]})
+    g.s.settings('2',{'default_notifications':[]})
+    link=imported(google)
+    event=g.s.get_event('1',link['event_id'])
+    assert event['reminders']=={'1':[45],'2':[]}
+    assert event['reminder_at_start']=={'1':True,'2':False}
+    g.s.settings('1',{'default_notifications':[15]})
+    f.items['visit']['summary']='Updated source title'
+    f.items['visit']['etag']='v2'
+    imported(google)
+    updated=g.s.get_event('1',link['event_id'])
+    assert updated['reminders']==event['reminders']
+    assert updated['reminder_at_start']==event['reminder_at_start']
+
+
 def test_private_selection_and_owner_boundary(google):
     g,f,source=google
     assert len(g.browse('1',source)['items'])==2
@@ -529,3 +546,4 @@ def test_auto_import_cannot_restore_disconnected_records_or_reenable_on_reconnec
     assert g.status('1')['accounts'][0]['sources'][0]['auto_import']==0
     assert g.s.get_event('2',link['event_id'])
     assert g.status('1')['accounts'][0]['sources'][0]['links'][0]['state']=='disconnected'
+

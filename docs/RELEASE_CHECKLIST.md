@@ -72,7 +72,7 @@ PR #5 слит с явного разрешения пользователя. Re
 
 - [ ] Established encrypted operator recovery checkpoint before a production upgrade.
 - [ ] Verify separate OpenAI API billing/model access; set the key only on the backend.
-- [ ] Check the conservative monthly reservation budget and current model tariffs.
+- [ ] Review current model tariffs and the informational monthly reservation ledger (no application spending cap since 0.10.0).
 - [ ] Participant consent/source scope tested; old records require explicit selection.
 - [ ] Review real model quality. Personal mode defaults to suggestions; automatic assignment needs both participants' explicit choice. The operator can pause it with SMART_AUTO_CATEGORIES_ENABLED=false.
 - [ ] Verify actual Telegram/iPhone WebKit, live provider updates and reminders.
@@ -81,3 +81,10 @@ PR #5 слит с явного разрешения пользователя. Re
 A draft PR with synthetic checks does not mark any of these production acceptance
 items complete. Rollback to 0.8.4 requires its compatible recovery checkpoint,
 not running its old validator against new smart event JSON.
+
+
+## Settings 0.10.0
+
+Before merge: full Python/Node suite, compileall, JS syntax, mobile settings/profile/default-reminder acceptance and existing calendar/import regression scenarios. Confirm personal name/gender and decision-memory ownership, shared-profile revision conflicts, v1/v2 archive compatibility and unchanged existing-event reminder schedules. No live provider writes or notification smoke messages.
+
+After merge: observe GitHub Checks, Railway SUCCESS for the exact main commit, /health version 0.10.0 and ready release checkpoint; retain one replica and /data. A successful deployment does not establish real iPhone WebKit, OpenAI quality/billing or end-to-end Telegram delivery acceptance.

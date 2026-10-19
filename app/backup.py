@@ -15,7 +15,7 @@ from .recurrence import stamp,utcnow
 
 MAX_ARCHIVE = 10 * 1024 * 1024
 MAX_EXPANDED = 40 * 1024 * 1024
-PROFILE_FIELDS = {'language','timezone','theme','view','day_layout','month_layout','week_layout','touch_bar','default_duration','default_reminders','reminders_enabled','notify_at_start','name','smart_events'}
+PROFILE_FIELDS = {'language','timezone','timezone_mode','theme','view','day_layout','month_layout','week_layout','touch_bar','default_duration','default_reminders','default_notifications','notifications_template_version','notifications_enabled','reminders_enabled','notify_at_start','name','gender','reduce_transparency','smart_events'}
 
 class Backups:
     def __init__(self, service):
@@ -47,6 +47,7 @@ class Backups:
             if 'smart_events' in prefs:prefs['smart_events']={**prefs['smart_events'],'consent':False}
             return prefs
         return {'schema':2,'calendar':{'id':cal['id'],'first_id':cal['first_id'],'second_id':cal['second_id']},
+                'pair_profile':load(cal['profile']),
                 'created_at':stamp(),
                 'smart_rules':[{'id':r['id'],'data':load(r['data'])} for r in c.execute('SELECT * FROM smart_rules WHERE calendar_id=?',(cal['id'],))],
                 'members':{r['user_id']:archive_profile(r['user_id']) for r in c.execute('SELECT * FROM members WHERE calendar_id=?',(cal['id'],))},
@@ -82,12 +83,20 @@ class Backups:
             public=Ed25519PublicKey.from_public_bytes(base64.b64decode(self.public_keys[manifest['key_id']]))
             public.verify(signature,dump(manifest).encode())
             data=load(payload)
+            from .preferences import validate_pair_profile,notification_offsets
+            validate_pair_profile(data.get('pair_profile',{}))
             require(data['schema'] in (1,2),'unsupported_archive_version')
             cal=data['calendar']; require(cal['first_id'] in data['members'],'invalid_archive')
             require(cal['second_id'] is None or cal['second_id'] in data['members'],'invalid_archive')
             require(len({v['id'] for v in data['events']})==len(data['events']),'invalid_archive')
             for prefs in data['members'].values():
                 if 'default_reminders' in prefs:prefs['default_reminders']=offsets(prefs['default_reminders'])[:1]
+                if 'default_notifications' in prefs:prefs['default_notifications']=notification_offsets(prefs['default_notifications'])
+                if 'gender' in prefs:require(prefs['gender'] in ('female','male','unspecified'),'invalid_settings')
+                if 'name' in prefs:require(isinstance(prefs['name'],str) and len(prefs['name'])<=100,'invalid_text')
+                for key in ('notifications_enabled','reduce_transparency'):
+                    if key in prefs:require(type(prefs[key]) is bool,'invalid_settings')
+                if 'timezone_mode' in prefs:require(prefs['timezone_mode'] in ('auto','manual'),'invalid_settings')
             return data
         except Problem: raise
         except Exception:
@@ -108,6 +117,7 @@ class Backups:
                     if k not in EVENT_FIELDS:continue
                     left,right=before.get(k),v
                     if k=='reminders':left,right=before['reminders'].get(user_id,[]),v.get(user_id,[])
+                    if k=='reminder_at_start':left,right=before.get(k,{}).get(user_id),v.get(user_id)
                     if left!=right:fields[k]={'current':left,'archive':right}
                 if current['deleted_at']!=e['deleted_at']:fields['deleted_at']={'current':current['deleted_at'],'archive':e['deleted_at']}
                 if fields:changes.append({'id':e['id'],'revision':current['revision'],'fields':fields})
@@ -120,32 +130,45 @@ class Backups:
                         if k=='reminders':
                             lv=(lv or {}).get(user_id,before['reminders'].get(user_id,[]))
                             rv=(rv or {}).get(user_id,e['data']['reminders'].get(user_id,[]))
+                        if k=='reminder_at_start':
+                            lv=(lv or before.get(k,{})).get(user_id)
+                            rv=(rv or e['data'].get(k,{})).get(user_id)
                         if lv!=rv:fields[k]={'current':lv,'archive':rv,'archive_present':k in right}
                     if fields:override_changes.append({'id':e['id'],'occurrence':key,'revision':current['revision'],'fields':fields})
             own=self.service.user(c,user_id);old=archive['members'][user_id]
-            profile={k:{'current':own.get(k),'archive':old[k]} for k in ('language','timezone','theme','view','day_layout','month_layout','week_layout','touch_bar','default_duration','default_reminders','reminders_enabled','notify_at_start','smart_events') if k in old and own.get(k)!=old[k]}
+            profile={k:{'current':own.get(k),'archive':old[k]} for k in sorted(PROFILE_FIELDS-{'notifications_template_version'}) if k in old and own.get(k)!=old[k]}
+            current_pair=load(cal['profile'])
+            pair_profile={k:{'current':current_pair.get(k),'archive':v} for k,v in archive.get('pair_profile',{}).items() if current_pair.get(k)!=v}
             categories=[]
             for category in archive['categories']:
                 current=c.execute('SELECT data FROM categories WHERE id=? AND calendar_id=?',(category['id'],cal['id'])).fetchone()
                 categories.append({**category,'current':load(current['data']) if current else None})
             current_rules={r['id']:load(r['data']) for r in c.execute('SELECT * FROM smart_rules WHERE calendar_id=?',(cal['id'],))}
-            rule_changes=[{**r,'current':current_rules.get(r['id'])} for r in archive.get('smart_rules',[]) if current_rules.get(r['id'])!=r['data']]
+            rule_changes=[{**r,'current':current_rules.get(r['id'])} for r in archive.get('smart_rules',[]) if r['data'].get('author')==user_id and current_rules.get(r['id'])!=r['data']]
             result={'smart_rules':rule_changes,'changes':changes,'missing':missing,'override_changes':override_changes,'profile':profile,
+                    'pair_profile':pair_profile,'pair_revision':cal['profile_revision'],
                     'archive_sha256':hashlib.sha256(blob).hexdigest(),'categories':categories}
             preview_id=uid()
             c.execute('DELETE FROM backup_previews WHERE expires_at<=?',(stamp(),))
             c.execute('INSERT INTO backup_previews VALUES(?,?,?,?,?,?)',(preview_id,user_id,cal['id'],result['archive_sha256'],dump(result),stamp(utcnow()+timedelta(minutes=15))))
             return {**result,'preview_id':preview_id}
 
-    def apply(self,user_id,blob,selections,missing_ids,category_ids,preview_id=None,override_selections=None,profile_fields=None,smart_rule_ids=None):
+    def apply(self,user_id,blob,selections,missing_ids,category_ids,preview_id=None,override_selections=None,profile_fields=None,smart_rule_ids=None,pair_profile_fields=None):
         archive=self.verify(blob);override_selections=override_selections or [];profile_fields=profile_fields or [];smart_rule_ids=smart_rule_ids or []
         require(all(isinstance(v,list) for v in (selections,missing_ids,category_ids,override_selections,profile_fields,smart_rule_ids)),'invalid_selection')
+        pair_profile_fields=pair_profile_fields or []
+        require(isinstance(pair_profile_fields,list),'invalid_selection')
         with self.service.db.transaction() as c:
             cal=self.service.calendar(c,user_id)
             require(archive['calendar']=={'id':cal['id'],'first_id':cal['first_id'],'second_id':cal['second_id']},'archive_wrong_calendar',403)
             receipt=c.execute('SELECT * FROM backup_previews WHERE id=? AND user_id=? AND calendar_id=? AND expires_at>?',(preview_id,user_id,cal['id'],stamp())).fetchone()
             require(receipt is not None and receipt['archive_sha']==hashlib.sha256(blob).hexdigest(),'preview_required',409)
             preview=load(receipt['data']);archived={e['id']:e for e in archive['events']};cats={e['id']:e for e in archive['categories']}
+            require(set(pair_profile_fields)<=set(preview.get('pair_profile',{})),'invalid_selection')
+            if pair_profile_fields:
+                require(cal['profile_revision']==preview['pair_revision'],'revision_conflict',409)
+                restored={**load(cal['profile']),**{k:archive['pair_profile'][k] for k in pair_profile_fields}}
+                c.execute('UPDATE calendars SET profile=?,profile_revision=profile_revision+1 WHERE id=?',(dump(restored),cal['id']))
             expected={e['id']:e for e in preview['changes']}
             expected_ov={(e['id'],e['occurrence']):e for e in preview['override_changes']}
             allowed_missing={e['id'] for e in preview['missing']}
@@ -184,6 +207,11 @@ class Backups:
                 for field in choice['fields']:
                     if field=='deleted_at':row['deleted_at']=archived[choice['id']]['deleted_at']
                     elif field=='reminders':data['reminders'][user_id]=old['reminders'].get(user_id,[])
+                    elif field=='reminder_at_start':
+                        starts={**data.get(field,{})}
+                        if user_id in old.get(field,{}):starts[user_id]=old[field][user_id]
+                        else:starts.pop(user_id,None)
+                        data[field]=starts
                     else:data[field]=old[field]
                 from .smart_events import metadata,source_changed
                 if 'translations' in choice['fields']:
@@ -205,6 +233,12 @@ class Backups:
                 for field in choice['fields']:
                     if field=='reminders':
                         patch['reminders']={**patch.get('reminders',master['reminders']),user_id:old.get('reminders',archived[eid]['data']['reminders']).get(user_id,[])}
+                    elif field=='reminder_at_start':
+                        starts={**patch.get(field,master.get(field,{}))}
+                        old_starts=old.get(field,archived[eid]['data'].get(field,{}))
+                        if user_id in old_starts:starts[user_id]=old_starts[user_id]
+                        else:starts.pop(user_id,None)
+                        patch[field]=starts
                     elif field in old:patch[field]=old[field]
                     else:patch.pop(field,None)
                 # Deleted flag, its timestamp and purge marker form one consistent
@@ -243,11 +277,14 @@ class Backups:
                     prefs[field]={**prefs[field],'consent':False}
                     c.execute("UPDATE smart_jobs SET state='cancelled',generation=? WHERE calendar_id=?",(uid(),cal['id']))
             if profile_fields:
+                if 'default_notifications' in profile_fields:prefs['notifications_template_version']=2
+                if 'notifications_enabled' in profile_fields:prefs['reminders_enabled']=prefs['notifications_enabled']
+                elif 'reminders_enabled' in profile_fields:prefs['notifications_enabled']=prefs['reminders_enabled']
                 if 'timezone' in profile_fields:prefs['timezone_initialized']=True
                 prefs.pop('id');c.execute('UPDATE users SET data=? WHERE id=?',(dump(prefs),user_id))
                 c.execute("UPDATE outbox SET status='cancelled' WHERE user_id=? AND kind='reminder' AND status IN ('pending','sending')",(user_id,))
             c.execute('DELETE FROM backup_previews WHERE id=?',(preview_id,))
-            if selections or missing_ids or category_ids or override_selections or profile_fields or smart_rule_ids:self.service.notify(c,cal['id'],user_id,'backup_restored')
+            if selections or missing_ids or category_ids or override_selections or profile_fields or smart_rule_ids or pair_profile_fields:self.service.notify(c,cal['id'],user_id,'backup_restored')
         return {'ok':True}
 
     def request_deleted(self,user_id,blob):
@@ -277,10 +314,11 @@ class Backups:
             require(not c.execute('SELECT 1 FROM members WHERE user_id IN (?,?)',(r['first_id'],r['second_id'])).fetchone(),'pair_has_another_calendar',409)
             require(not c.execute('SELECT 1 FROM calendars WHERE id=?',(cal['id'],)).fetchone(),'calendar_still_exists',409)
             c.execute('INSERT INTO calendars(id,first_id,second_id,created_at) VALUES(?,?,?,?)',(cal['id'],cal['first_id'],cal['second_id'],stamp()))
+            c.execute('UPDATE calendars SET profile=? WHERE id=?',(dump(a.get('pair_profile',{})),cal['id']))
             for person,prefs in a['members'].items():
                 current=c.execute('SELECT data FROM users WHERE id=?',(person,)).fetchone()
                 old=load(current['data']) if current else {'bot_can_message':False,'delivery_error':None}
-                old.update({k:v for k,v in prefs.items() if k in PROFILE_FIELDS}); old['reminders_enabled']=False; old['smart_events']={**old.get('smart_events',{}),'consent':False}
+                old.update({k:v for k,v in prefs.items() if k in PROFILE_FIELDS}); old['reminders_enabled']=False; old['notifications_enabled']=False; old['smart_events']={**old.get('smart_events',{}),'consent':False}
                 c.execute('INSERT INTO users VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data',(person,dump(old)))
                 c.execute('INSERT INTO members VALUES(?,?,1)',(person,cal['id']))
             for cat in a['categories']:
@@ -339,3 +377,4 @@ class Backups:
                 exception.add('recurrence-id',date.fromisoformat(key) if data['all_day'] else begin)
                 fill(exception,data_instance);calendar.add_component(exception)
         return calendar.to_ical()
+
