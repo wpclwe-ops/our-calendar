@@ -21,6 +21,17 @@ from .sync_policy import merge_fields
 FIELDS = ('title', 'description', 'start', 'end', 'all_day', 'timezone',
           'fold', 'end_fold', 'rrule', 'location')
 TEMPORAL = {'start','end','all_day','timezone','fold','end_fold','rrule'}
+
+
+def personal_override(patch):
+    """True when an occurrence patch holds data a person entered, not only importer bookkeeping."""
+    for key,value in patch.items():
+        if key in FIELDS or key=='deleted':continue
+        if key=='smart' and not (any(v.get('manual') for v in value.get('fields',{}).values()) or value.get('category',{}).get('manual')):continue
+        return True
+    return False
+
+
 TTL = 600
 POLL = 300
 MAX_BATCH = 50
@@ -484,6 +495,10 @@ class GoogleImports:
         override_text_change=False
         for key in set(old_patches)|set(value['overrides']):
             personal={k:v for k,v in old_patches.get(key,{}).items() if k not in FIELDS and k!='deleted'}
+            if key not in value['overrides'] and not personal_override(personal):
+                # Google dropped this exception and only importer bookkeeping remains.
+                # A stale row would mask series data and hold back later series changes.
+                c.execute('DELETE FROM overrides WHERE event_id=? AND occurrence=?',(row['id'],key));continue
             patch={**personal,**value['overrides'].get(key,{})}
             before={**previous,**old_patches.get(key,{})};after={**data,**patch}
             changed=any(before.get(k)!=after.get(k) for k in ('title','description'))
@@ -514,7 +529,7 @@ class GoogleImports:
         # needs an explicit identity remap. Retain everything until supported.
         if base['fields'].get('rrule') and any(base['fields'].get(k)!=remote['fields'].get(k) for k in TEMPORAL):
             patches=c.execute('SELECT occurrence,data FROM overrides WHERE event_id=?',(row['id'],)).fetchall()
-            if any(any(k not in FIELDS and k!='deleted' for k in load(p['data'])) for p in patches):
+            if any(personal_override(load(p['data'])) for p in patches):
                 c.execute("UPDATE google_links SET state='unsupported',remote=?,etag=?,checked_at=? WHERE id=?",(dump(remote),etag,stamp(),link['id']));return
         merge=merge_fields(flattened(base),flattened(local),flattened(remote))
         if merge['conflicts']:
