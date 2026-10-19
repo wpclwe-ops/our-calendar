@@ -328,3 +328,5 @@ body.dark .week-date.selected{background:#3b3048}
 .event-category-picker .category-choice .grow{flex:1;min-width:0}
 .event-category-picker .category-choice[aria-pressed=true]{box-shadow:inset 0 0 0 1px var(--accent)}
 .event-category-picker .category-choice>.svg-icon{width:18px;height:18px;flex:none;color:var(--accent)}
+/* Inside Telegram, stop the whole page rubber-banding; inner scrollers already contain their own overscroll. */
+html,body{overscroll-behavior:none}
