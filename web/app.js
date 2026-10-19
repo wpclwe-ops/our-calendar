@@ -97,10 +97,12 @@ let monthWindow=[],monthLoading=false,endManuallySet=false,monthResize=null;
 const t=k=>(words[state?.me?.language||'ru'][k]||words.en[k]||k);
 const locale=()=>state?.me?.language==='en'?'en-GB':'ru-RU';
 const tz=()=>state?.me?.timezone||Intl.DateTimeFormat().resolvedOptions().timeZone;
-const zoned=(value,options={})=>new Intl.DateTimeFormat(locale(),{timeZone:tz(),...options}).format(new Date(value));
-const isoDay=(value=new Date())=>new Intl.DateTimeFormat('en-CA',{timeZone:tz(),year:'numeric',month:'2-digit',day:'2-digit'}).format(value);
+const fmtCache=new Map();
+const fmt=(loc,options)=>{const key=loc+JSON.stringify(Object.entries(options).sort(([a],[b])=>a<b?-1:a>b?1:0));let f=fmtCache.get(key);if(!f){f=new Intl.DateTimeFormat(loc,options);fmtCache.set(key,f)}return f};
+const zoned=(value,options={})=>fmt(locale(),{timeZone:tz(),...options}).format(new Date(value));
+const isoDay=(value=new Date())=>fmt('en-CA',{timeZone:tz(),year:'numeric',month:'2-digit',day:'2-digit'}).format(value);
 const addDays=(s,n)=>{const d=new Date(s+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)};
-const dateLabel=(s,options={})=>new Intl.DateTimeFormat(locale(),{timeZone:'UTC',...options}).format(new Date(s+'T12:00:00Z'));
+const dateLabel=(s,options={})=>fmt(locale(),{timeZone:'UTC',...options}).format(new Date(s+'T12:00:00Z'));
 const monthDays=(day=selected)=>{const d=new Date(day.slice(0,7)+'-01T12:00:00Z');const offset=(d.getUTCDay()+6)%7;const count=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,0)).getUTCDate();const start=addDays(d.toISOString().slice(0,10),-offset);return Array.from({length:Math.ceil((offset+count)/7)*7},(_,i)=>addDays(start,i))};
 const weekDays=()=>{const dow=(new Date(selected+'T12:00:00Z').getUTCDay()+6)%7;const first=addDays(selected,-dow);return Array.from({length:7},(_,i)=>addDays(first,i))};
 const cat=id=>categories.find(c=>c.id===id)||{name:t('noCategory'),color:'#888888'};
@@ -856,7 +858,7 @@ async function login(demoUser='1'){
  await loadData();render();if(start==='google'){await openGoogleImports();return}await openLinkedEvent();
 }
 async function boot(){
- try{tg?.ready();tg?.expand();cfg=await(await fetch('/api/config')).json();if(!cfg.demo&&!tg?.initData){$('#app').innerHTML=`<div class="splash"><div class="brand-mark">oc</div><h1>Our Calendar</h1><p>${t('telegramOnly')}</p></div>`;return}await login()}
+ try{tg?.ready();tg?.expand();if(tg?.isVersionAtLeast?.('7.7'))tg.disableVerticalSwipes?.();cfg=await(await fetch('/api/config')).json();if(!cfg.demo&&!tg?.initData){$('#app').innerHTML=`<div class="splash"><div class="brand-mark">oc</div><h1>Our Calendar</h1><p>${t('telegramOnly')}</p></div>`;return}await login()}
  catch(error){$('#app').innerHTML=`<main class="shell"><div class="card"><h1>Our Calendar</h1><p class="error">${esc(error.message)}</p><button id="retry">${t('retry')}</button></div></main>`;$('#retry').onclick=boot}
 }
 matchMedia('(prefers-color-scheme:dark)').addEventListener('change',applyTheme);

@@ -1,8 +1,10 @@
 /* Wall-clock arithmetic never depends on the browser's own time zone. */
 (function(root){
  'use strict';
+ const formatters=new Map();
+ const formatter=(locale,options)=>{const key=locale+JSON.stringify(Object.entries(options).sort(([a],[b])=>a<b?-1:a>b?1:0));let f=formatters.get(key);if(!f){f=new Intl.DateTimeFormat(locale,options);formatters.set(key,f)}return f};
  function local(value,zone){
-  const p=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(value)).map(p=>[p.type,p.value]));
+  const p=Object.fromEntries(formatter('en-GB',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(value)).map(p=>[p.type,p.value]));
   return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
  }
  const add=(value,minutes)=>new Date(Date.parse(value+'Z')+minutes*60000).toISOString().slice(0,16);

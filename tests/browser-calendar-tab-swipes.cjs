@@ -31,8 +31,8 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  }
  async function toolbar(items){await page.evaluate(async items=>{state=await api('settings','PATCH',{touch_bar:items});render()},items);await wait()}
  await toolbar(['month','day','settings']);await set('2026-10-16','month');
- await swipe(325,60);assert.equal((await info()).view,'day');assert.equal((await info()).selected,'2026-10-16');
- await swipe(325,60);assert.equal((await info()).tab,'settings');assert.equal(await page.locator('.bottom-nav [aria-current="page"]').textContent(),'Настройки');
+ await swipe(370,20);assert.equal((await info()).view,'day');assert.equal((await info()).selected,'2026-10-16');
+ await swipe(370,20);assert.equal((await info()).tab,'settings');assert.equal(await page.locator('.bottom-nav [aria-current="page"]').textContent(),'Настройки');
  // Settings scrolls natively; a short horizontal swipe does not change tabs or dates.
  const before=await info();await swipe(250,175,670);assert.deepEqual(await info(),before);
  await page.locator('.navigation-content').evaluate(el=>el.scrollTop=120);
@@ -41,20 +41,20 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  assert.ok(await page.locator('.navigation-content').evaluate(el=>el.scrollTop)>120);
  await page.waitForTimeout(650);const scrollTop=await page.locator('.navigation-content').evaluate(el=>el.scrollTop);await page.evaluate(()=>render());assert.equal(await page.locator('.navigation-content').evaluate(el=>el.scrollTop),scrollTop);
  await page.locator('.navigation-content').evaluate(el=>el.scrollTop=0);
- await swipe(325,60,670);assert.equal((await info()).tab,'settings');
- await swipe(60,325,670);assert.equal((await info()).tab,'calendar');assert.equal((await info()).view,'day');
- await swipe(60,325);assert.equal((await info()).view,'month');await swipe(60,325);assert.equal((await info()).view,'month');
+ await swipe(370,20,670);assert.equal((await info()).tab,'settings');
+ await swipe(20,370,670);assert.equal((await info()).tab,'calendar');assert.equal((await info()).view,'day');
+ await swipe(20,370);assert.equal((await info()).view,'month');await swipe(20,370);assert.equal((await info()).view,'month');
  // Changing the order immediately changes swipes; categories participate as a tab.
  await toolbar(['day','categories','month','settings']);await set('2026-10-16','day');
- await swipe(325,60);assert.equal((await info()).tab,'categories');assert.ok(await page.locator('.category-card').count()>0);
- await swipe(325,60,650);assert.equal((await info()).tab,'calendar');assert.equal((await info()).view,'month');
- await swipe(60,325);assert.equal((await info()).tab,'categories');await swipe(60,325,650);assert.equal((await info()).view,'day');
+ await swipe(370,20);assert.equal((await info()).tab,'categories');assert.ok(await page.locator('.category-card').count()>0);
+ await swipe(370,20,650);assert.equal((await info()).tab,'calendar');assert.equal((await info()).view,'month');
+ await swipe(20,370);assert.equal((await info()).tab,'categories');await swipe(20,370,650);assert.equal((await info()).view,'day');
  await swipe(250,175);assert.equal((await info()).selected,'2026-10-17');assert.equal((await info()).view,'day');
- await swipe(325,60,430,true);assert.equal((await info()).view,'day');assert.equal(await page.locator('.motion-preview').count(),0);
+ await swipe(370,20,430,true);assert.equal((await info()).view,'day');assert.equal(await page.locator('.motion-preview').count(),0);
  // A failed tab data request cancels the transition and leaves the old view usable.
  await toolbar(['day','settings']);await page.evaluate(()=>navigationCache.clear());
  await page.route('**/api/system-status',r=>r.fulfill({status:503,contentType:'application/json',body:'{"error":"error"}'}));
- await swipe(325,60);assert.equal((await info()).tab,'calendar');assert.equal((await info()).view,'day');assert.equal(await page.locator('.motion-preview').count(),0);await page.unroute('**/api/system-status');
+ await swipe(370,20);assert.equal((await info()).tab,'calendar');assert.equal((await info()).view,'day');assert.equal(await page.locator('.motion-preview').count(),0);await page.unroute('**/api/system-status');
  // Content continues behind the controls; the transparent gap passes touches through.
  await page.evaluate(()=>$('#toast').style.display='none');
  await toolbar(['day','week','month','settings']);
@@ -77,7 +77,7 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  }
  if(process.env.CALENDAR_SCREENSHOT_DIR){await page.evaluate(async()=>{state=await api('settings','PATCH',{day_layout:'timeline',theme:'dark'});view='day';await loadData();render()});await wait();await page.screenshot({path:join(process.env.CALENDAR_SCREENSHOT_DIR,'transparent-timeline-dark.png')});await set('2026-10-16','month');}
  await page.locator('[data-action="today"]').tap();await wait();assert.equal((await info()).selected,'2026-10-16');await page.locator('[data-action="new"]').tap();await wait();assert.equal((await info()).page,'form');await back();
- await page.emulateMedia({reducedMotion:'reduce'});await set('2026-10-16','month');await swipe(325,60);assert.equal((await info()).tab,'settings');await swipe(60,325,650);assert.equal((await info()).view,'month');
+ await page.emulateMedia({reducedMotion:'reduce'});await set('2026-10-16','month');await swipe(370,20);assert.equal((await info()).tab,'settings');await swipe(20,370,650);assert.equal((await info()).view,'month');
  for(const width of [320,390,430]){await page.setViewportSize({width,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));}
  assert.deepEqual(errors,[]);console.log('PASS: personal-order tab swipes, hidden views, categories/settings both ways, native settings scroll, short date swipes, cancellation/failure rollback/reduced motion, transparent action container and unobscured calendar content, neutral working buttons in both themes');
  }finally{await browser?.close();server.kill();await new Promise(resolve=>server.once('exit',resolve));rmSync(directory,{recursive:true,force:true})}
