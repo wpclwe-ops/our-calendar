@@ -56,14 +56,27 @@ class Service:
             bound = c.execute("SELECT value FROM runtime WHERE key='telegram_pair'").fetchone()
             if bound and load(bound['value']) != sorted(expected):
                 raise ValueError('Telegram configuration does not match the saved pair; access stopped')
+            for member in c.execute('SELECT m.user_id,ca.first_id,ca.second_id FROM members m '
+                                    'JOIN calendars ca ON ca.id=m.calendar_id WHERE m.user_id IN (?,?)',tuple(expected)):
+                if member['user_id'] not in (member['first_id'],member['second_id']):
+                    raise ValueError('Telegram configuration does not match saved membership; access stopped')
+            saved=False;related=False
             for table in ('calendars', 'restore_requests'):
-                for row in c.execute(f'SELECT first_id,second_id FROM {table}'):
+                for row in c.execute(f'SELECT id,first_id,second_id FROM {table}').fetchall():
                     pair = {row['first_id'], row['second_id']} - {None}
+                    saved=True
+                    # Other logical calendars are stored data, not permissions.
+                    # Keep them intact and inaccessible to this deployment.
+                    if not pair & expected:continue
+                    related=True
                     if not pair <= expected or row['first_id'] == row['second_id']:
                         raise ValueError('Telegram configuration does not match the saved pair; access stopped')
-            if c.execute('SELECT 1 FROM members WHERE user_id NOT IN (?,?) LIMIT 1',
-                         tuple(expected)).fetchone():
-                raise ValueError('Telegram configuration does not match saved membership; access stopped')
+                    if table=='calendars':
+                        members={r['user_id'] for r in c.execute('SELECT user_id FROM members WHERE calendar_id=?',(row['id'],))}
+                        if not members <= pair:
+                            raise ValueError('Telegram configuration does not match saved membership; access stopped')
+            if not bound and saved and not related:
+                raise ValueError('Telegram configuration does not match the saved pair; access stopped')
             if not bound:
                 c.execute("INSERT INTO runtime(key,value) VALUES('telegram_pair',?)", (dump(sorted(expected)),))
 
