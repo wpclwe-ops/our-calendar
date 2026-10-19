@@ -654,21 +654,24 @@ async function navigateSmoothly(action,motion){
  const commit=()=>{selected=target.date;view=target.mode;tab=target.tab;state.me.view=view;if(tab==='calendar')events=rows;else if(tab==='categories')categories=rows;else systemStatus=rows;render();warmNavigation()};
  if(motion)await motion.finish(action,navigationPage(target,rows),commit,ready);else{await ready;commit()}
 }
-async function loadData(){
- const version=++fetchVersion;navigationCache.clear();
- if(!state.calendar?.active||state.calendar.state!=='active')return;
- if(page==='form'||page==='detail'||(page==='google'||page==='icloud'))return;
+async function loadData(poll=false){
+ const version=++fetchVersion,print=()=>JSON.stringify([categories,events,systemStatus,providerStatuses]),before=poll?print():'';if(!poll)navigationCache.clear();
+ const done=()=>{if(!poll)return true;const changed=print()!==before;if(changed)navigationCache.clear();return changed};
+ if(!state.calendar?.active||state.calendar.state!=='active')return done();
+ if(page==='form'||page==='detail'||(page==='google'||page==='icloud'))return done();
  categories=await api('categories');
- if(page==='trash'){events=await api('events?trash=true');return}
+ if(page==='trash'){events=await api('events?trash=true');return done()}
  if(tab==='settings'&&page==='main'){
   const results=await Promise.allSettled([api('system-status'),api('google'),api('icloud')]);
   systemStatus=results[0].status==='fulfilled'?results[0].value:null;
   for(const [i,key] of ['google','icloud'].entries())providerStatuses[key]=results[i+1].status==='fulfilled'?results[i+1].value:null;
  }
- if(tab!=='calendar'||page==='backup')return;
+ if(tab!=='calendar'||page==='backup')return done();
  const days=calendarRange();
  const params=new URLSearchParams({start:addDays(days[0],-1),end:addDays(days.at(-1),2),q:query,...filter});
- const result=await api('events?'+params);if(version===fetchVersion){events=result;if(!query)navigationCache.set(params.toString(),{rows:result,promise:Promise.resolve(result)});warmNavigation()}
+ const result=await api('events?'+params);if(version!==fetchVersion)return done();events=result;
+ if(poll&&!done())return false;
+ if(!query)navigationCache.set(params.toString(),{rows:result,promise:Promise.resolve(result)});warmNavigation();return true;
 }
 async function changeView(v){view=v;state.me.view=v;await api('settings','PATCH',{view:v});await loadData();render()}
 async function openEvent(id,key){
@@ -860,16 +863,22 @@ matchMedia('(prefers-color-scheme:dark)').addEventListener('change',applyTheme);
 window.addEventListener('focus',async()=>{if(token&&!busy&&!calendarSwipe.active()&&!calendarTouch.active()){try{if(page==='google'){await refreshGoogleStatus()}else if(!await openLinkedEvent()&&page==='main')await refresh()}catch{}}});
 boot();
 
+let touchesDown=0,lastScrollAt=-1e9;
+const pollUserBusy=()=>touchesDown>0||performance.now()-lastScrollAt<600;
+for(const type of ['touchstart','touchend','touchcancel'])document.addEventListener(type,e=>{touchesDown=e.touches.length},{passive:true,capture:true});
+document.addEventListener('scroll',()=>{lastScrollAt=performance.now()},{passive:true,capture:true});
 setInterval(async()=>{
- if(document.hidden||busy||monthLoading||calendarSwipe.active()||calendarTouch.active()||!token||document.querySelector('.modal-backdrop'))return;
+ if(document.hidden||busy||monthLoading||calendarSwipe.active()||calendarTouch.active()||!token||document.querySelector('.modal-backdrop')||pollUserBusy())return;
  try{
   const next=await api('state');if(calendarSwipe.active()||calendarTouch.active()||monthLoading)return;
   if(!next.calendar?.active||next.calendar.state!=='active'){state=next;render();return}
-  state=next;
+  const stateSame=JSON.stringify(next)===JSON.stringify(state);state=next;
   if(page==='main'){
    if(document.activeElement?.matches('input,textarea,select'))return;
    const scroll=window.scrollY,timelineScroll=$('.timeline')?.scrollTop;
-   await loadData();if(calendarSwipe.active()||calendarTouch.active()||monthLoading)return;render();
+   const changed=await loadData(true);if(calendarSwipe.active()||calendarTouch.active()||monthLoading||pollUserBusy())return;
+   if(!changed&&stateSame)return;
+   render();
    if(timelineScroll!==undefined&&$('.timeline'))$('.timeline').scrollTop=timelineScroll;
    window.scrollTo(0,scroll);
   }else if(page==='detail'&&(['pending','failed'].includes(currentEvent?.translation_status?.state)||['pending','running','retry_wait'].includes(currentEvent?.smart_status?.state)))await openEvent(currentEvent.id,currentEvent.occurrence);
