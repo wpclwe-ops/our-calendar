@@ -94,6 +94,41 @@ def test_legacy_database_mismatch_fails_before_binding(service):
         assert cursor.execute("SELECT 1 FROM runtime WHERE key='telegram_pair'").fetchone() is None
 
 
+def test_unrelated_stored_calendar_does_not_replace_or_block_allowed_pair(service, event):
+    # Multiple logical calendars can remain in the same database from earlier use.
+    # The server whitelist grants access to only one original pair.
+    service.create_calendar('3')
+    service.join('4', service.invite('3')['token'])
+    with service.db.transaction() as cursor:
+        unrelated = dict(cursor.execute("SELECT * FROM calendars WHERE first_id='3'").fetchone())
+    config = replace(service.config, demo=False)
+    current = Service(service.db, config)
+    assert current.get_event('1', event['id'])['title'] == 'Together'
+    with pytest.raises(Problem, match='access_denied'):
+        current.state('3')
+    with pytest.raises(ValueError, match='saved pair'):
+        Service(service.db, replace(config, telegram_owner_id=3, telegram_partner_id=4))
+    with current.db.transaction() as cursor:
+        assert dict(cursor.execute('SELECT * FROM calendars WHERE id=?', (unrelated['id'],)).fetchone()) == unrelated
+
+
+def test_unapproved_member_of_allowed_calendar_still_blocks_startup(service):
+    with service.db.transaction() as cursor:
+        cal = service.calendar(cursor, '1')
+        cursor.execute('INSERT INTO members(user_id,calendar_id) VALUES(?,?)', ('3', cal['id']))
+    with pytest.raises(ValueError, match='saved membership'):
+        Service(service.db, replace(service.config, demo=False))
+
+
+def test_allowed_account_cannot_access_an_unrelated_calendar_through_membership(service):
+    service.create_calendar('3')
+    with service.db.transaction() as cursor:
+        unrelated = service.calendar(cursor, '3')
+        cursor.execute('UPDATE members SET calendar_id=? WHERE user_id=?', (unrelated['id'], '1'))
+    with pytest.raises(ValueError, match='saved membership'):
+        Service(service.db, replace(service.config, demo=False))
+
+
 @pytest.mark.parametrize('creator,joiner', [('1', '2'), ('2', '1')])
 def test_production_invitation_preserves_initial_pair(service, tmp_path, creator, joiner):
     config = replace(service.config, demo=False, database=str(tmp_path / 'production-test.db'))

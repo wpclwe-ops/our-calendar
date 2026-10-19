@@ -50,7 +50,11 @@ def test_checkpoint_reports_pair_mismatch_without_modifying_source(service,event
     with service.db.transaction() as c:assert '\n'.join(c.iterdump())==before
     assert store.objects=={}
 
-def test_production_checkpoint_accepts_original_pair_on_copy(service,event):
+@pytest.mark.parametrize('unrelated_calendar',[False,True])
+def test_production_checkpoint_accepts_original_pair_on_copy(service,event,unrelated_calendar):
+    if unrelated_calendar:
+        service.create_calendar('3')
+        service.join('4',service.invite('3')['token'])
     cfg=replace(config(service),demo=False)
     store=Storage()
     assert release_checkpoint(cfg,store)['state']=='ready'
