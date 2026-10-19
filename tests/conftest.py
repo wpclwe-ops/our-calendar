@@ -6,7 +6,8 @@ from app.backup import Backups
 
 @pytest.fixture
 def service(tmp_path):
-    cfg=Config(database=str(tmp_path/'test.db'),bot_username='our_calendar_test_bot',bot_token='test-token',
+    cfg=Config(telegram_owner_id=1,telegram_partner_id=2,
+               database=str(tmp_path/'test.db'),bot_username='our_calendar_test_bot',bot_token='test-token',
                session_secret='s'*40,webhook_secret='w'*40,archive_key_file=str(tmp_path/'key.pem'),
                archive_public_keys=str(tmp_path/'keys.json'),public_url='https://calendar.example',demo=True)
     s=Service(Database(cfg.database),cfg)

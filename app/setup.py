@@ -9,6 +9,9 @@ ROOT=Path(__file__).resolve().parent.parent
 
 def missing_configuration():
     missing=[]
+    from .config import telegram_pair
+    try:telegram_pair(os.getenv('TELEGRAM_OWNER_ID'),os.getenv('TELEGRAM_PARTNER_ID'))
+    except ValueError:missing.extend(('TELEGRAM_OWNER_ID','TELEGRAM_PARTNER_ID'))
     for name in ('BOT_TOKEN','BOT_USERNAME'):
         if not os.getenv(name,'').strip():missing.append(name)
     for name in ('SESSION_SECRET','WEBHOOK_SECRET'):
