@@ -78,7 +78,7 @@ const assert=require('node:assert/strict'),{mkdtempSync,rmSync}=require('node:fs
   };
   await page.locator('.timeline').evaluate(el=>el.scrollTop=0);await swipe(-100);assert.equal(await page.evaluate(()=>selected),'2026-10-25');
   await page.locator('[data-action="today"]').click();await wait();await page.locator('.timeline').evaluate(el=>el.scrollTop=0);
-  await swipe(-280);assert.equal(await page.evaluate(()=>tab),'categories');
+  await swipe(-330);assert.equal(await page.evaluate(()=>tab),'categories');
   await page.locator('.bottom-nav [data-view="week"]').click();await wait();
   // Match the existing palette and fit narrow/short screens, in RU and EN.
   for(const language of ['ru','en'])for(const theme of ['light','dark'])for(const width of [320,390,430]){
