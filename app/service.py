@@ -384,7 +384,7 @@ class Service:
                 c.execute('DELETE FROM overrides WHERE event_id=?',(event_id,))
                 for key,patch in mapped.items():c.execute('INSERT INTO overrides VALUES(?,?,?)',(event_id,key,patch))
             if event_id:
-                schedule_change=any(data.get(k)!=previous.get(k) for k in TIME_FIELDS|{'status','reminders','reminder_at_start'})
+                schedule_change=any(data.get(k)!=previous.get(k) for k in TIME_FIELDS|{'fold','end_fold','status','reminders','reminder_at_start'})
                 c.execute('UPDATE events SET data=?,revision=revision+1,schedule_version=schedule_version+? WHERE id=?',(dump(data),int(schedule_change),event_id))
                 if schedule_change:
                     c.execute("UPDATE outbox SET status='cancelled' WHERE event_id=? AND kind='reminder' AND status IN ('pending','sending')",(event_id,))
