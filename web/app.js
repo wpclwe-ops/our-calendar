@@ -405,6 +405,7 @@ function updateNowLines(root=document){
 function positionTimeline(root=document,previous){
  updateNowLines(root);
  const el=$('.timeline',root);if(!el)return;
+ if(root.dataset?.timelineTop!==undefined){el.scrollTop=+root.dataset.timelineTop;return}
  if(previous?.day===(el.dataset.range||el.dataset.date)){el.scrollTop=previous.top;return}
  const now=CalendarTime.local(new Date(),tz()),minute=Number(now.slice(11,13))*60+Number(now.slice(14,16));
  const days=el.dataset.days?.split(',')||[el.dataset.date];
@@ -636,18 +637,20 @@ function warmNavigation(){
  for(const direction of [-1,1])navigationEntry(navigationTarget({type:'move',direction}));
  for(const mode of (i<0?[]:[modes[i-1],modes[i+1]]).filter(mode=>['day','week','month'].includes(mode)))navigationEntry({date:selected,mode});
 }
-function navigationPage(target,rows){
- const node=document.createElement('div'),fromTab=tab;node.className='calendar-motion-page';node.dataset.view=target.tab==='calendar'?target.mode:target.tab;node.navigationKey=JSON.stringify(target);node.navigationRows=rows;
+// A prev/next move keeps the timeline's time of day: the incoming page takes the current scrollTop once it is attached.
+function carriedTimelineTop(action){return action.type==='move'&&view!=='month'?$('.timeline')?.scrollTop:undefined}
+function navigationPage(target,rows,top){
+ const node=document.createElement('div'),fromTab=tab;node.className='calendar-motion-page';if(top!==undefined)node.dataset.timelineTop=top;node.dataset.view=target.tab==='calendar'?target.mode:target.tab;node.navigationKey=JSON.stringify(target);node.navigationRows=rows;
  // The toolbar stays outside the moving page, except when arriving from another tab.
- node.innerHTML=atCalendarTarget(target,rows||(target.tab==='calendar'?[]:null),()=>tab==='calendar'?(fromTab==='calendar'?'':calendarToolbar())+calendarPage():`<div class="navigation-content">${tab==='categories'?categoriesPage():settingsPage()}</div>`);paint(node);positionTimeline(node);requestAnimationFrame(()=>{positionTimeline(node);node.dataset.timelineScroll=$('.timeline',node)?.scrollTop||0;const el=$('.month-scroll',node);if(el)positionMonths(el)});
+ node.innerHTML=atCalendarTarget(target,rows||(target.tab==='calendar'?[]:null),()=>tab==='calendar'?(fromTab==='calendar'?'':calendarToolbar())+calendarPage():`<div class="navigation-content">${tab==='categories'?categoriesPage():settingsPage()}</div>`);paint(node);positionTimeline(node);if(top!==undefined){const el=$('.timeline',node);if(el)new ResizeObserver((_,observer)=>{if(!el.clientHeight)return;observer.disconnect();positionTimeline(node)}).observe(el)}requestAnimationFrame(()=>{positionTimeline(node);node.dataset.timelineScroll=$('.timeline',node)?.scrollTop||0;const el=$('.month-scroll',node);if(el)positionMonths(el)});
  if(!rows){const loading=document.createElement('span');loading.className='calendar-preview-loading';loading.textContent=t('loading');node.append(loading)}
  return node;
 }
 function navigationPreview(action){
- const target=navigationTarget(action),entry=navigationEntry(target),node=navigationPage(target,entry.rows);
+ const target=navigationTarget(action),entry=navigationEntry(target),top=carriedTimelineTop(action),node=navigationPage(target,entry.rows,top);
  if(!entry.rows)entry.promise.then(rows=>{
   if(!node.isConnected)return;
-  node.replaceChildren(...navigationPage(target,rows).childNodes);node.navigationRows=rows;
+  node.replaceChildren(...navigationPage(target,rows,top).childNodes);node.navigationRows=rows;
   positionTimeline(node);const months=$('.month-scroll',node);if(months)positionMonths(months);
  }).catch(()=>{});
  return node;
@@ -656,10 +659,10 @@ async function navigateSmoothly(action,motion){
  if(!action.direction&&['view','tab'].includes(action.type)){const items=touchBarItems();action={...action,direction:items.indexOf(action.view||action.tab)>items.indexOf(activeNavigation())?1:-1}}
  const target=navigationTarget(action),rows=await navigationEntry(target).promise;
  const ready=action.type==='view'?api('settings','PATCH',{view:target.mode}):Promise.resolve();
- const keep=tab==='calendar'&&target.tab==='calendar',key=JSON.stringify(target);
+ const keep=tab==='calendar'&&target.tab==='calendar',key=JSON.stringify(target),top=carriedTimelineTop(action);
  const commit=live=>{selected=target.date;view=target.mode;tab=target.tab;state.me.view=view;if(tab==='calendar')events=rows;else if(tab==='categories')categories=rows;else systemStatus=rows;if(live)adoptCalendarPage(live);else render();warmNavigation()};
  // A preview already on screen for this target becomes the live page instead of being rebuilt.
- const build=preview=>preview?.navigationKey===key&&preview.navigationRows===rows?preview:navigationPage(target,rows);
+ const build=preview=>preview?.navigationKey===key&&preview.navigationRows===rows?preview:navigationPage(target,rows,top);
  if(motion)await motion.finish(action,build,commit,ready,keep);else{await ready;commit()}
 }
 function adoptCalendarPage(live){
