@@ -288,8 +288,11 @@ class Backups:
         return {'ok':True}
 
     def request_deleted(self,user_id,blob):
+        self.service.require_allowed_user(user_id)
         a=self.verify(blob); cal=a['calendar']; pair=(cal['first_id'],cal['second_id'])
         require(user_id in pair and all(pair),'archive_wrong_pair',403)
+        require(self.service.config.demo or set(pair)==self.service.config.telegram_user_ids,
+                'archive_wrong_pair',403)
         with self.service.db.transaction() as c:
             require(not c.execute('SELECT 1 FROM calendars WHERE id=?',(cal['id'],)).fetchone(),'calendar_still_exists',409)
             require(not c.execute('SELECT 1 FROM members WHERE user_id IN (?,?)',pair).fetchone(),'pair_has_another_calendar',409)
@@ -302,6 +305,7 @@ class Backups:
             return {'id':rid,'waiting_for_partner':True}
 
     def approve_deleted(self,user_id,request_id,approve):
+        self.service.require_allowed_user(user_id)
         with self.service.db.transaction() as c:
             r=c.execute('SELECT * FROM restore_requests WHERE id=?',(request_id,)).fetchone()
             require(r is not None and user_id in (r['first_id'],r['second_id']),'restore_not_found',404)

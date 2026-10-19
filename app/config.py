@@ -1,7 +1,25 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 import os
+import re
 from urllib.parse import urlsplit
+
+MAX_TELEGRAM_USER_ID = (1 << 52) - 1
+
+def telegram_pair(owner, partner, *, demo=False):
+    """Validate without including personal values in exception messages."""
+    if demo and owner is None and partner is None:
+        return None, None
+    result = []
+    for name, value in (('TELEGRAM_OWNER_ID', owner), ('TELEGRAM_PARTNER_ID', partner)):
+        if isinstance(value, str) and re.fullmatch(r'[0-9]{1,16}', value):
+            value = int(value)
+        if type(value) is not int or not 1 <= value <= MAX_TELEGRAM_USER_ID:
+            raise ValueError(f'{name} must be a positive Telegram User ID (at most 52 bits)')
+        result.append(value)
+    if result[0] == result[1]:
+        raise ValueError('TELEGRAM_OWNER_ID and TELEGRAM_PARTNER_ID must differ')
+    return tuple(result)
 
 def valid_translation_url(value):
     if not value:return True
@@ -13,6 +31,8 @@ def valid_translation_url(value):
 
 @dataclass(frozen=True)
 class Config:
+    telegram_owner_id: int | None = field(default=None, repr=False)
+    telegram_partner_id: int | None = field(default=None, repr=False)
     database: str = 'data/calendar.sqlite3'
     bot_token: str = ''
     bot_username: str = ''
@@ -43,9 +63,24 @@ class Config:
     smart_monthly_budget: float = 5.0
     smart_auto_categories: bool = True
 
+    def __post_init__(self):
+        owner, partner = telegram_pair(self.telegram_owner_id, self.telegram_partner_id, demo=self.demo)
+        object.__setattr__(self, 'telegram_owner_id', owner)
+        object.__setattr__(self, 'telegram_partner_id', partner)
+
+    @property
+    def telegram_user_ids(self):
+        return frozenset(str(value) for value in (self.telegram_owner_id, self.telegram_partner_id)
+                         if value is not None)
+
+    def is_allowed_user(self, user_id):
+        return str(user_id) in self.telegram_user_ids
+
     @classmethod
     def env(cls):
-        c = cls(database=os.getenv('DATABASE_PATH', 'data/calendar.sqlite3'),
+        c = cls(telegram_owner_id=os.getenv('TELEGRAM_OWNER_ID'),
+                telegram_partner_id=os.getenv('TELEGRAM_PARTNER_ID'),
+                database=os.getenv('DATABASE_PATH', 'data/calendar.sqlite3'),
                 bot_token=os.getenv('BOT_TOKEN', ''), bot_username=os.getenv('BOT_USERNAME', '').lstrip('@'),
                 public_url=os.getenv('PUBLIC_URL', '').rstrip('/'),
                 webhook_secret=os.getenv('WEBHOOK_SECRET', ''), session_secret=os.getenv('SESSION_SECRET', ''),
