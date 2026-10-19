@@ -24,6 +24,11 @@ def invalid_response(reason):
     logger.warning('icloud invalid_response stage=%s',reason)
     raise ProviderFailure(502,reason=reason)
 
+class NoDeclarations(ET.TreeBuilder):
+    def doctype(self,name,pubid,system):
+        # Called for actual XML declarations, never for literal CDATA content.
+        invalid_response('xml_doctype')
+
 def successful_properties(item):
     values={}
     for propstat in item.findall('{DAV:}propstat'):
@@ -55,8 +60,7 @@ class ICloudCalDAV:
             logger.warning('icloud request_failed method=%s status=%s',method,exc.code)
             raise
         if status not in (200,207):raise ProviderFailure(status)
-        if b'<!DOCTYPE' in raw.upper() or b'<!ENTITY' in raw.upper():invalid_response('xml_entities')
-        try:return ET.fromstring(raw)
+        try:return ET.fromstring(raw,parser=ET.XMLParser(target=NoDeclarations()))
         except ET.ParseError:invalid_response('xml_syntax')
     def discover(self):
         root='https://caldav.icloud.com/'
