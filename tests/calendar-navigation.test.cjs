@@ -35,36 +35,42 @@ test('short swipes move a period in either direction in every view',()=>{
  }
 });
 test('long swipes change only one view, and stop at month/day',()=>{
- assert.deepEqual(N.gesture(-240,0,375,'month'),{type:'view',view:'week'});
- assert.deepEqual(N.gesture(-240,0,375,'week'),{type:'view',view:'day'});
- assert.deepEqual(N.gesture(240,0,375,'day'),{type:'view',view:'week'});
- assert.deepEqual(N.gesture(240,0,375,'week'),{type:'view',view:'month'});
- assert.deepEqual(N.gesture(-240,0,375,'day'),{type:'limit'});
- assert.deepEqual(N.gesture(240,0,375,'month'),{type:'limit'});
+ assert.deepEqual(N.gesture(-300,0,375,'month'),{type:'view',view:'week'});
+ assert.deepEqual(N.gesture(-300,0,375,'week'),{type:'view',view:'day'});
+ assert.deepEqual(N.gesture(300,0,375,'day'),{type:'view',view:'week'});
+ assert.deepEqual(N.gesture(300,0,375,'week'),{type:'view',view:'month'});
+ assert.deepEqual(N.gesture(-300,0,375,'day'),{type:'limit'});
+ assert.deepEqual(N.gesture(300,0,375,'month'),{type:'limit'});
 });
 test('taps, vertical scroll and ambiguous diagonal movements do not navigate',()=>{
  for(const [dx,dy] of [[5,0],[43,0],[30,200],[100,90],[-100,-90]])assert.equal(N.gesture(dx,dy,375,'month'),null);
 });
 test('long swipe remains reachable on small phones and large screens',()=>{
- assert.deepEqual(N.gesture(-180,0,320,'month'),{type:'view',view:'week'});
- assert.deepEqual(N.gesture(-270,0,1200,'month'),{type:'view',view:'week'});
+ assert.deepEqual(N.gesture(-250,0,320,'month'),{type:'view',view:'week'});
+ assert.deepEqual(N.gesture(-350,0,1200,'month'),{type:'view',view:'week'});
+});
+
+test('an ordinary thumb swipe on an iPhone 17 moves the week instead of changing view',()=>{
+ for(const dx of [-221,-260,-290])assert.deepEqual(N.gesture(dx,0,402,'week'),{type:'move',direction:1});
+ for(const dx of [221,260,290])assert.deepEqual(N.gesture(dx,0,402,'week'),{type:'move',direction:-1});
+ assert.deepEqual(N.gesture(-305,0,402,'week'),{type:'view',view:'day'});
 });
 
 test('long swipes follow personal Touch Bar order and skip hidden views',()=>{
  const items=['month','day','settings'];
- assert.deepEqual(N.gesture(-240,0,375,'month',items),{type:'view',view:'day'});
- assert.deepEqual(N.gesture(240,0,375,'day',items),{type:'view',view:'month'});
- assert.deepEqual(N.gesture(-240,0,375,'day',items),{type:'tab',tab:'settings'});
- assert.deepEqual(N.gesture(240,0,375,'settings',items),{type:'view',view:'day'});
- assert.deepEqual(N.gesture(-240,0,375,'settings',items),{type:'limit'});
- assert.deepEqual(N.gesture(240,0,375,'month',items),{type:'limit'});
- assert.deepEqual(N.gesture(-240,0,375,'week',items),{type:'limit'});
+ assert.deepEqual(N.gesture(-300,0,375,'month',items),{type:'view',view:'day'});
+ assert.deepEqual(N.gesture(300,0,375,'day',items),{type:'view',view:'month'});
+ assert.deepEqual(N.gesture(-300,0,375,'day',items),{type:'tab',tab:'settings'});
+ assert.deepEqual(N.gesture(300,0,375,'settings',items),{type:'view',view:'day'});
+ assert.deepEqual(N.gesture(-300,0,375,'settings',items),{type:'limit'});
+ assert.deepEqual(N.gesture(300,0,375,'month',items),{type:'limit'});
+ assert.deepEqual(N.gesture(-300,0,375,'week',items),{type:'limit'});
 });
 test('reordered categories and calendar tabs work in both directions',()=>{
  const items=['categories','week','month','day','settings'];
- assert.deepEqual(N.gesture(-240,0,375,'categories',items),{type:'view',view:'week'});
- assert.deepEqual(N.gesture(240,0,375,'week',items),{type:'tab',tab:'categories'});
- assert.deepEqual(N.gesture(-240,0,375,'week',items),{type:'view',view:'month'});
+ assert.deepEqual(N.gesture(-300,0,375,'categories',items),{type:'view',view:'week'});
+ assert.deepEqual(N.gesture(300,0,375,'week',items),{type:'tab',tab:'categories'});
+ assert.deepEqual(N.gesture(-300,0,375,'week',items),{type:'view',view:'month'});
  assert.deepEqual(N.gesture(70,0,375,'settings',items),null);
  assert.deepEqual(N.gesture(-70,0,375,'categories',items),null);
  assert.deepEqual(N.gesture(-70,0,375,'day',items),{type:'move',direction:1});

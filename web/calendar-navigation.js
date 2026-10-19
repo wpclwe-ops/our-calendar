@@ -29,7 +29,7 @@
  function gesture(dx,dy,width,view,items=VIEWS){
   if(Math.abs(dx)<44||Math.abs(dx)<Math.abs(dy)*1.5)return null;
   const direction=dx<0?1:-1;
-  if(Math.abs(dx)<Math.max(140,Math.min(260,width*.55)))return VIEWS.includes(view)?{type:'move',direction}:null;
+  if(Math.abs(dx)<Math.max(200,Math.min(340,width*.75)))return VIEWS.includes(view)?{type:'move',direction}:null;
   const index=items.indexOf(view),target=index<0?null:items[index+direction];
   return target?(VIEWS.includes(target)?{type:'view',view:target}:{type:'tab',tab:target}):{type:'limit'};
  }
