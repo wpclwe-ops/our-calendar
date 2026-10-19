@@ -43,7 +43,7 @@ python -m app
 1. Создать бота в [@BotFather](https://t.me/BotFather) через `/newbot`. Токен в GitHub не добавлять.
 2. Разместить этот проект на сервере с HTTPS и постоянным диском. Ниже описан Railway.
 3. В секретах сервиса заполнить `BOT_TOKEN`, `BOT_USERNAME` без `@`, `PUBLIC_URL` без завершающего `/`, `SESSION_SECRET`, `WEBHOOK_SECRET`. Два последних значения — разные случайные строки от 32 символов. Для их генерации предусмотрен `python -m scripts.create_secrets`.
-4. Выставить `DEMO_MODE=false`. Для production приложение откажется стартовать без нужных секретов и HTTPS URL.
+4. Выставить `DEMO_MODE=false`. Задать `TELEGRAM_OWNER_ID` и `TELEGRAM_PARTNER_ID` в окружении сервера: два разных исходных Telegram-аккаунта. Для production приложение откажется стартовать без этих ID, нужных секретов и HTTPS URL. Переменные ограничивают доступ, но не заменяют сохранённую пару; порядок переноса описан в [docs/RAILWAY_DEPLOYMENT.md](docs/RAILWAY_DEPLOYMENT.md).
 5. При `AUTO_SETUP_BOT=true` сервер сам сверит имя бота через getMe и настроит защищённый webhook, команды и кнопку меню. При несовпадении имени webhook не меняется. Для ручной настройки остаётся `python -m scripts.setup_bot`. Токен в вывод не попадает.
 6. В BotFather: `/mybots` → выбрать бота → **Bot Settings → Configure Mini App → Enable Mini App**; установить тот же `PUBLIC_URL` как URL основной Mini App. Это нужно для ссылок `?startapp=join_…`.
 7. Оба участника открывают чат и нажимают **Start / Запустить**. Первый создаёт календарь, в настройках формирует приглашение и отправляет второму. Второй открывает приглашение в Telegram.
