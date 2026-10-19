@@ -21,9 +21,13 @@ Object.assign(words.en,{
 });
 let icloudUI={step:'accounts',status:null,account:null,calendars:[],source:null,items:[],conflict:null};
 async function openICloudImports(){icloudUI.step='accounts';icloudUI.status=await api('icloud');tab='settings';page='icloud';render()}
+async function icloudOpenCalendars(account){
+ const calendars=await api('icloud/accounts/'+account+'/calendars');
+ Object.assign(icloudUI,{account,calendars,step:'calendars',items:[]});render();
+}
 function icloudImportPage(){
  const i=icloudUI,s=i.status;
- let h=`${button('back','‹ '+t('settings'),'plain back')}<h1 class="page-title">${t('iTitle')}</h1><p class="privacy">${t('iPrivacy')}</p>`;
+ let h=`${button(i.step==='events'?'icloud-events-back':'back','‹ '+t(i.step==='events'?'back':'settings'),'plain back')}<h1 class="page-title">${t('iTitle')}</h1><p class="privacy">${t('iPrivacy')}</p>`;
  if(!s)return h+`<p>${t('loading')}</p>`;
  if(!s.configured)return h+`<div class="card"><p>${t('iSetup')}</p></div>`;
  if(i.step==='connect')return h+`<section class="card"><h2>${t('iConnect')}</h2><form id="icloud-connect-form"><label class="form-group"><span>${t('iEmail')}</span><input type="email" autocomplete="username" name="email" maxlength="255" required></label><label class="form-group"><span>${t('iPassword')}</span><input type="password" name="password" autocomplete="off" minlength="8" maxlength="128" required></label><p class="privacy">${t('iPasswordGuide')} <a href="https://account.apple.com" target="_blank" rel="noopener noreferrer">account.apple.com</a></p>${button('icloud-submit',t('iSave'),'primary full')}</form></section>`;
@@ -42,9 +46,10 @@ Object.assign(actions,{
  'icloud-open':()=>openICloudImports(),
  'icloud-connect-open':()=>{icloudUI.step='connect';render()},
  'icloud-submit':async()=>{const f=document.querySelector('#icloud-connect-form');if(!f||!f.reportValidity())return;const d=new FormData(f);icloudUI.status=await api('icloud/connect','POST',{email:d.get('email'),password:d.get('password')});f.reset();icloudUI.step='accounts';render();toast(t('saved'))},
- 'icloud-calendars':async el=>{icloudUI.account=el.dataset.id;icloudUI.calendars=await api('icloud/accounts/'+el.dataset.id+'/calendars');icloudUI.step='calendars';render()},
+ 'icloud-calendars':el=>icloudOpenCalendars(el.dataset.id),
+ 'icloud-events-back':()=>icloudOpenCalendars(icloudUI.account),
  'icloud-save-sources':async()=>{const ids=[...document.querySelectorAll('.i-source:checked')].map(e=>e.value);const auto_ids=[...document.querySelectorAll('.i-auto:checked')].map(e=>e.value).filter(id=>ids.includes(id));const activating=auto_ids.some(id=>!icloudUI.calendars.some(c=>c.id===id&&c.auto_import));if(activating&&!await confirmDialog(t('iAutoConfirm'),t('iAutoWarning')))return;icloudUI.status=await api('icloud/accounts/'+icloudUI.account+'/calendars','POST',{ids,auto_ids});icloudUI.step='accounts';render();toast(t('saved'))},
- 'icloud-events':async el=>{icloudUI.source=el.dataset.id;const result=await api('icloud/sources/'+el.dataset.id+'/events');icloudUI.items=result.items;icloudUI.step='events';render()},
+ 'icloud-events':async el=>{const account=icloudUI.status.accounts.find(a=>a.sources.some(s=>s.id===el.dataset.id));if(!account)throw new Error(t('icloud_selection_expired'));const result=await api('icloud/sources/'+el.dataset.id+'/events');Object.assign(icloudUI,{account:account.id,source:el.dataset.id,items:result.items,step:'events'});render()},
  'icloud-import':async()=>{const ids=[...document.querySelectorAll('.i-event:checked')].map(e=>e.value);if(!ids.length||ids.length>50){toast(t('google_select_events'));return}if(!await confirmDialog(t('iImport'),t('iImportConfirm')))return;await api('icloud/sources/'+icloudUI.source+'/import','POST',{ids,confirmed:true});icloudUI.status=await api('icloud');icloudUI.step='accounts';render();toast(t('iImported'))},
  'icloud-conflict':async el=>{icloudUI.conflict=await api('icloud/links/'+el.dataset.id);icloudUI.step='conflict';render()},
  'icloud-resolve-local':()=>icloudResolve('local'),
