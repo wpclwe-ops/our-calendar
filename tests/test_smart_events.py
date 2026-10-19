@@ -86,15 +86,15 @@ def test_auto_category_requires_both_modes(service):
     smart.request('1',e['id']);smart.process()
     assert service.get_event('1',e['id'])['category_id']==category['id']
 
-def test_failures_bounded_and_budget_never_calls(service):
+def test_failures_bounded_and_spending_is_informational(service):
     smart,fake=configured(service);e=create(service);fake.fail='smart_unavailable'
     for _ in range(5):force_due(service);smart.process()
     assert len(fake.calls)==3
     with service.db.transaction() as c:assert c.execute('SELECT state FROM smart_jobs').fetchone()[0]=='failed'
     service.config=replace(service.config,smart_monthly_budget=0)
     smart=SmartEvents(service,fake);smart.request('1',e['id']);smart.process()
-    assert len(fake.calls)==3
-    with service.db.transaction() as c:assert c.execute('SELECT state FROM smart_jobs').fetchone()[0]=='budget_paused'
+    assert len(fake.calls)==4
+    with service.db.transaction() as c:assert c.execute('SELECT state FROM smart_jobs').fetchone()[0]=='retry_wait'
 
 def test_unknown_category_and_manual_metadata_injection_rejected(service):
     smart,fake=configured(service);fake.category='foreign-id';e=create(service);smart.process()
@@ -261,7 +261,8 @@ def test_rule_edit_does_not_change_existing_events(service):
     smart,fake=configured(service);e=create(service)
     smart.edit('1',e['id'],e['revision'],short_titles={'ru':'Saved'},remember=True)
     rule=smart.status('1')['rules'][0]
-    smart.rule('2',rule['id'],changes={'match':'Another title','short_titles':{'ru':'Next'}})
+    with pytest.raises(Problem):smart.rule('2',rule['id'],changes={'match':'Another title'})
+    smart.rule('1',rule['id'],changes={'match':'Another title','short_titles':{'ru':'Next'}})
     assert service.get_event('1',e['id'])['smart']['short_titles']['ru']=='Saved'
     assert smart.status('1')['rules'][0]['match']=='Another title'
 
@@ -310,3 +311,4 @@ def test_changed_background_suggestion_requires_reconfirmation(service):
     assert service.get_event('1',e['id'])['category_id'] is None
     smart.edit('1',e['id'],e['revision'],category_action='accept',expected_suggestion=b['id'])
     assert service.get_event('1',e['id'])['category_id']==b['id']
+

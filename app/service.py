@@ -11,7 +11,7 @@ from .recurrence import (UTC, utcnow, stamp, zone, validate_timing, occurrences,
 PALETTE = ['#9B77D1','#D47AAE','#D77777','#E0A34B','#D0BD55','#55A77B','#4DA5A8','#598DD4','#7778C9','#888888','#333333','#F3B6D4']
 MAX_REMINDER_MINUTES = 525600
 EVENT_FIELDS = {'title','description','language','translations','start','end','all_day','timezone','fold','end_fold',
-                'owner','category_id','status','location','links','rrule','reminders','smart'}
+                'owner','category_id','status','location','links','rrule','reminders','reminder_at_start','smart'}
 IMPORTANT = {'start','end','all_day','timezone','status','location','rrule'}
 
 def uid():
@@ -62,6 +62,12 @@ class Service:
         # Older profiles could contain three defaults. Existing event reminders
         # remain untouched; only the template for newly created events is singular.
         prefs['default_reminders']=offsets(prefs.get('default_reminders',[60]))[:1]
+        if prefs.get('notifications_template_version')!=2:
+            prefs['default_notifications']=sorted(set(prefs['default_reminders'] + ([0] if prefs['notify_at_start'] else [])), reverse=True)
+        prefs.setdefault('notifications_enabled', prefs.get('reminders_enabled', True))
+        prefs.setdefault('timezone_mode', 'manual' if prefs.get('timezone_initialized') else 'auto')
+        prefs.setdefault('reduce_transparency', False)
+        prefs.setdefault('gender', 'unspecified')
         return prefs
 
     def calendar(self, c, user_id, active=True):
@@ -81,6 +87,7 @@ class Service:
                 return {'me':me, 'calendar':None,'restores':restores}
             cal = dict(r)
             cal['votes'] = load(cal['votes'])
+            cal['profile'] = load(cal['profile'])
             members = [{'id':m['user_id'],'active':bool(m['active']),'name':self.user(c,m['user_id'])['name']} for m in c.execute('SELECT * FROM members WHERE calendar_id=?',(cal['id'],))]
             return {'me':me,'calendar':cal,'members':members,'restores':restores}
 
@@ -115,7 +122,11 @@ class Service:
             c.execute('DELETE FROM invites WHERE calendar_id=?',(row['id'],))
             # Existing events receive this participant's defaults only once on joining.
             for ev in c.execute('SELECT * FROM events WHERE calendar_id=?',(row['id'],)).fetchall():
-                data = load(ev['data']); data['reminders'][user_id] = self.user(c,user_id)['default_reminders']
+                data = load(ev['data']); pref=self.user(c,user_id)
+                data['reminders'][user_id] = pref['default_reminders']
+                if pref.get('notifications_template_version')==2:
+                    data['reminders'][user_id]=[v for v in pref['default_notifications'] if v>0]
+                    data.setdefault('reminder_at_start',{})[user_id]=0 in pref['default_notifications']
                 c.execute('UPDATE events SET data=?,schedule_version=schedule_version+1 WHERE id=?',(dump(data),ev['id']))
             self.notify(c,row['id'],user_id,'joined')
         return self.state(user_id)
@@ -145,7 +156,21 @@ class Service:
             if member:
                 self.calendar(c,user_id)
             me = self.user(c,user_id)
-            require(set(changes) <= {'language','timezone','theme','view','day_layout','month_layout','week_layout','touch_bar','default_duration','default_reminders','reminders_enabled','notify_at_start','smart_events'},'invalid_settings')
+            require(set(changes) <= {'language','timezone','timezone_mode','theme','view','day_layout','month_layout','week_layout','touch_bar','default_duration','default_reminders','default_notifications','notifications_enabled','reminders_enabled','notify_at_start','smart_events','name','gender','reduce_transparency'},'invalid_settings')
+            if 'name' in changes:
+                require(isinstance(changes['name'], str) and 0 < len(changes['name'].strip()) <= 100, 'invalid_text')
+                changes['name'] = changes['name'].strip()
+            if 'gender' in changes: require(changes['gender'] in ('female','male','unspecified'), 'invalid_settings')
+            if 'timezone_mode' in changes: require(changes['timezone_mode'] in ('auto','manual'), 'invalid_settings')
+            if 'timezone' in changes and 'timezone_mode' not in changes: changes['timezone_mode']='manual'
+            if 'default_notifications' in changes:
+                from .preferences import notification_offsets
+                changes['default_notifications'] = notification_offsets(changes['default_notifications'])
+                changes['notifications_template_version'] = 2
+            if 'notifications_enabled' in changes:
+                require(type(changes['notifications_enabled']) is bool, 'invalid_settings')
+                changes['reminders_enabled'] = changes['notifications_enabled']
+            if 'reduce_transparency' in changes: require(type(changes['reduce_transparency']) is bool, 'invalid_settings')
             if 'language' in changes: require(changes['language'] in ('ru','en'),'invalid_language')
             if 'timezone' in changes: zone(changes['timezone'])
             if 'theme' in changes: require(changes['theme'] in ('light','dark','system'),'invalid_theme')
@@ -176,6 +201,19 @@ class Service:
             c.execute('UPDATE users SET data=? WHERE id=?',(dump(me),user_id))
             if set(changes) & {'timezone','reminders_enabled','notify_at_start'}:
                 c.execute("UPDATE outbox SET status='cancelled' WHERE user_id=? AND kind='reminder' AND status IN ('pending','sending')",(user_id,))
+            if changes.get('notifications_enabled') is False:
+                c.execute("UPDATE outbox SET status='cancelled' WHERE user_id=? AND kind IN ('reminder','action') AND status IN ('pending','sending')", (user_id,))
+        return self.state(user_id)
+
+    def pair_profile(self, user_id, changes, revision):
+        from .preferences import validate_pair_profile
+        validate_pair_profile(changes)
+        with self.db.transaction() as c:
+            cal = self.calendar(c, user_id)
+            require(type(revision) is int and revision == cal['profile_revision'], 'revision_conflict', 409)
+            profile = {**load(cal['profile']), **changes}
+            validate_pair_profile(profile)
+            c.execute('UPDATE calendars SET profile=?,profile_revision=profile_revision+1 WHERE id=?', (dump(profile), cal['id']))
         return self.state(user_id)
 
     def categories(self,user_id):
@@ -289,6 +327,8 @@ class Service:
         for person,values in data['reminders'].items():
             require(person in (cal['first_id'],cal['second_id']),'invalid_reminders')
             offsets(values)
+        starts=data.get('reminder_at_start',{})
+        require(isinstance(starts,dict) and all(k in (cal['first_id'],cal['second_id']) and type(v) is bool for k,v in starts.items()),'invalid_reminders')
         tr=data.get('translations',{})
         require(isinstance(tr,dict) and set(tr)<={'ru','en'},'invalid_translation')
         for v in tr.values():
@@ -302,7 +342,9 @@ class Service:
     def save_event(self,user_id,changes,event_id=None,revision=None):
         with self.db.transaction() as c:
             cal=self.calendar(c,user_id)
-            require(set(changes)<=EVENT_FIELDS-{'smart'},'invalid_event_fields')
+            require(set(changes)<=(EVENT_FIELDS-{'smart','reminder_at_start'})|{'reminders_v2'},'invalid_event_fields')
+            changes=dict(changes);explicit=changes.pop('reminders_v2',False)
+            require(type(explicit) is bool and (not explicit or 'reminders' in changes),'invalid_reminders')
             if event_id:
                 row=self.event_row(c,user_id,event_id)
                 require(revision==row['revision'],'revision_conflict',409, self.event_data(row))
@@ -314,11 +356,21 @@ class Service:
                       'all_day':False,'timezone':me['timezone'],'owner':user_id,'creator_id':user_id,
                       'category_id':None,'status':'planned','location':'','links':[],'rrule':'','reminders':{}}
                 for person in (cal['first_id'],cal['second_id']):
-                    if person: data['reminders'][person]=self.user(c,person)['default_reminders']
+                    if person:
+                        pref=self.user(c,person)
+                        data['reminders'][person]=pref['default_reminders']
+                        if pref.get('notifications_template_version')==2:
+                            data['reminders'][person]=[v for v in pref['default_notifications'] if v>0]
+                            data.setdefault('reminder_at_start',{})[person]=0 in pref['default_notifications']
             changes=merge_translation_changes(data,dict(changes))
             if 'reminders' in changes:
                 require(isinstance(changes['reminders'],list),'own_reminders_only')
-                data['reminders']=dict(data['reminders']); data['reminders'][user_id]=offsets(changes.pop('reminders'))
+                from .preferences import event_notifications
+                incoming=changes.pop('reminders');values,at_start=event_notifications(incoming)
+                data['reminders']=dict(data['reminders']); data['reminders'][user_id]=values
+                # Old clients retain their legacy start policy until the new settings are used.
+                if explicit or 0 in incoming or self.user(c,user_id).get('notifications_template_version')==2 or user_id in data.get('reminder_at_start',{}):
+                    data['reminder_at_start']={**data.get('reminder_at_start',{}),user_id:at_start}
             data.update(changes)
             if previous and any(k in changes and changes[k]!=previous[k] for k in ('title','description')):
                 data['translations']={k:{**v,'stale':True} for k,v in data['translations'].items()}
@@ -332,7 +384,7 @@ class Service:
                 c.execute('DELETE FROM overrides WHERE event_id=?',(event_id,))
                 for key,patch in mapped.items():c.execute('INSERT INTO overrides VALUES(?,?,?)',(event_id,key,patch))
             if event_id:
-                schedule_change=any(data.get(k)!=previous.get(k) for k in TIME_FIELDS|{'status','reminders'})
+                schedule_change=any(data.get(k)!=previous.get(k) for k in TIME_FIELDS|{'status','reminders','reminder_at_start'})
                 c.execute('UPDATE events SET data=?,revision=revision+1,schedule_version=schedule_version+? WHERE id=?',(dump(data),int(schedule_change),event_id))
                 if schedule_change:
                     c.execute("UPDATE outbox SET status='cancelled' WHERE event_id=? AND kind='reminder' AND status IN ('pending','sending')",(event_id,))
@@ -479,13 +531,20 @@ class Service:
             found=[(k,a,b) for k,a,b in occurrences(data,target-timedelta(days=2),target+timedelta(days=2)) if k==key]
             require(bool(found),'invalid_occurrence')
             k,a,b=found[0]
-            require(set(changes)<=EVENT_FIELDS-{'smart'},'invalid_occurrence_fields')
+            require(set(changes)<=(EVENT_FIELDS-{'smart','reminder_at_start'})|{'reminders_v2'},'invalid_occurrence_fields')
+            changes=dict(changes);explicit=changes.pop('reminders_v2',False)
+            require(type(explicit) is bool and (not explicit or 'reminders' in changes),'invalid_reminders')
             prior=c.execute('SELECT data FROM overrides WHERE event_id=? AND occurrence=?',(event_id,key)).fetchone()
             prior=load(prior['data']) if prior else {}
             changes=merge_translation_changes({**data,**prior},changes)
             if 'reminders' in changes:
                 require(isinstance(changes['reminders'],list),'own_reminders_only')
-                changes={**changes,'reminders':{**prior.get('reminders',data['reminders']),user_id:offsets(changes['reminders'])}}
+                from .preferences import event_notifications
+                incoming=changes['reminders'];values,at_start=event_notifications(incoming)
+                changes={**changes,'reminders':{**prior.get('reminders',data['reminders']),user_id:values}}
+                starts=prior.get('reminder_at_start',data.get('reminder_at_start',{}))
+                if explicit or 0 in incoming or self.user(c,user_id).get('notifications_template_version')==2 or user_id in starts:
+                    changes['reminder_at_start']={**starts,user_id:at_start}
             if any(k in changes and changes[k]!=prior.get(k,data.get(k)) for k in ('title','description')) and changes.get('translations',prior.get('translations',{})):
                 changes={**changes,'translations':{k:{**v,'stale':True} for k,v in changes.get('translations',prior.get('translations',{})).items()}}
             single=instance(data,key,a,b,prior)
@@ -610,9 +669,10 @@ class Service:
         for member in c.execute('SELECT user_id,active FROM members WHERE calendar_id=?',(calendar_id,)).fetchall():
             if member['user_id']==actor or not member['active']: continue
             self.enqueue(c,calendar_id,member['user_id'],'admin' if admin else 'action',
-                         {'action':action,'title':(data or {}).get('title',''),'data':data or {},'event_id':event_id},event_id=event_id)
+                         {'action':action,'actor':actor,'title':(data or {}).get('title',''),'data':data or {},'event_id':event_id},event_id=event_id)
 
     def enqueue(self,c,calendar_id,user_id,kind,payload,due=None,key=None,event_id=None):
+        if kind in ('action','reminder') and not self.user(c,user_id).get('notifications_enabled',True):return
         c.execute("INSERT INTO outbox(id,calendar_id,user_id,event_id,kind,payload,due,created_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload,status=CASE WHEN outbox.status='cancelled' THEN 'pending' ELSE outbox.status END WHERE outbox.kind='reminder' AND outbox.status IN ('pending','cancelled')",
                   (key or uid(),calendar_id,user_id,event_id,kind,dump(payload),due or stamp(),stamp()))
 
@@ -645,3 +705,4 @@ class Service:
             c.execute("DELETE FROM translation_jobs WHERE (kind='event' AND NOT EXISTS (SELECT 1 FROM events e WHERE e.id=translation_jobs.resource_id)) OR (kind='category' AND NOT EXISTS (SELECT 1 FROM categories ca WHERE ca.id=translation_jobs.resource_id))")
             c.execute("DELETE FROM outbox WHERE status IN ('sent','cancelled','expired','failed') AND created_at<?",(cutoff,))
             c.execute('DELETE FROM restore_requests WHERE created_at<?',(cutoff,))
+

@@ -247,11 +247,11 @@ class SmartEvents:
         with self.s.db.transaction() as c:
             cal = self.s.calendar(c,actor)
             jobs = {r['state']:r['n'] for r in c.execute('SELECT state,count(*) n FROM smart_jobs WHERE calendar_id=? GROUP BY state', (cal['id'],))}
-            spent = c.execute("SELECT coalesce(sum(reserved),0) FROM smart_usage WHERE month=?", (stamp()[:7],)).fetchone()[0]
+            spent = c.execute("SELECT coalesce(sum(reserved),0) FROM smart_usage WHERE month=? AND calendar_id=?", (stamp()[:7],cal['id'])).fetchone()[0]
             last=c.execute("SELECT value FROM runtime WHERE key='smart_last_result'").fetchone()
             return {'last_result':load(last['value']) if last else None,'configured':bool(self.config.openai_api_key), 'automatic_available':self.config.smart_auto_categories, 'preferences':preferences(self.s.user(c,actor)),
-                    'jobs':jobs, 'month_reserved_usd':round(spent,5), 'monthly_limit_usd':self.config.smart_monthly_budget,
-                    'rules':[{'id':r['id'],**load(r['data'])} for r in c.execute('SELECT * FROM smart_rules WHERE calendar_id=?', (cal['id'],))]}
+                    'jobs':jobs,'processed':jobs.get('ready',0),'selected':sum(jobs.values()), 'month_reserved_usd':round(spent,5), 'monthly_limit_usd':None,
+                    'rules':[{'id':r['id'],**load(r['data'])} for r in c.execute('SELECT * FROM smart_rules WHERE calendar_id=?', (cal['id'],)) if load(r['data']).get('author')==actor]}
 
     def preview(self,actor,offset=0):
         require(type(offset) is int and 0<=offset<=100000,'invalid_request')
@@ -350,6 +350,7 @@ class SmartEvents:
             cal=self.s.calendar(c,actor)
             row=c.execute('SELECT * FROM smart_rules WHERE id=? AND calendar_id=?',(rule_id,cal['id'])).fetchone()
             require(row is not None,'resource_not_found',404)
+            require(load(row['data']).get('author')==actor,'resource_not_found',404)
             if delete:c.execute('DELETE FROM smart_rules WHERE id=?',(rule_id,))
             else:
                 changes=changes or {}
@@ -366,6 +367,14 @@ class SmartEvents:
                 data.update(changes)
                 c.execute('UPDATE smart_rules SET data=? WHERE id=?',(dump(data),rule_id))
         return {'ok':True}
+
+    def clear_rules(self,actor):
+        with self.s.db.transaction() as c:
+            cal=self.s.calendar(c,actor)
+            ids=[r['id'] for r in c.execute('SELECT * FROM smart_rules WHERE calendar_id=?',(cal['id'],)) if load(r['data']).get('author')==actor]
+            for rid in ids:c.execute('DELETE FROM smart_rules WHERE id=?',(rid,))
+        # No event mutations or reprocessing: only future decisions lose these hints.
+        return {'deleted':len(ids)}
 
     def _store(self,c,row,occurrence,data,patch,background=False):
         # Derived text is not a user edit. It must not invalidate an open form.
@@ -390,7 +399,7 @@ class SmartEvents:
         with self.s.db.transaction() as c:
             blocked=c.execute("SELECT value FROM runtime WHERE key='smart_blocked_config'").fetchone()
             if blocked and blocked['value']==digest(self.config.openai_api_key+self.config.openai_model):return
-            c.execute("UPDATE smart_jobs SET state='pending' WHERE state='budget_paused' AND next_at<=?",(stamp(),))
+            c.execute("UPDATE smart_jobs SET state='pending',next_at=? WHERE state='budget_paused'",(stamp(),))
             c.execute("DELETE FROM smart_cache WHERE expires_at<?",(stamp(),))
             c.execute("UPDATE smart_jobs SET state=CASE WHEN attempts>=3 THEN 'failed' ELSE 'retry_wait' END,lease_until=NULL WHERE state='running' AND lease_until<=?",(stamp(),))
             job=c.execute("""SELECT j.* FROM smart_jobs j JOIN calendars ca ON ca.id=j.calendar_id
@@ -412,11 +421,8 @@ class SmartEvents:
                 rate_in,rate_out=PRICES[self.config.openai_model]
                 reserved=((len(dump(payload).encode())+len(INSTRUCTIONS.encode())+6000)*rate_in*1.25+self.config.openai_max_output_tokens*rate_out)/1000000
                 month=stamp()[:7]
-                spent=c.execute('SELECT coalesce(sum(reserved),0) FROM smart_usage WHERE month=?',(month,)).fetchone()[0]
-                if spent+reserved>self.config.smart_monthly_budget:
-                    c.execute("UPDATE smart_jobs SET state='budget_paused',error='smart_budget_limit',next_at=? WHERE event_id=? AND occurrence=?",(stamp((utcnow().replace(day=28)+timedelta(days=4)).replace(day=1,hour=0,minute=0,second=0,microsecond=0)),row['id'],job['occurrence']));return
                 reservation=uid()
-                c.execute('INSERT INTO smart_usage(id,month,reserved,model,state) VALUES(?,?,?,?,?)',(reservation,month,reserved,self.config.openai_model,'reserved'))
+                c.execute('INSERT INTO smart_usage(id,month,reserved,model,state,calendar_id) VALUES(?,?,?,?,?,?)',(reservation,month,reserved,self.config.openai_model,'reserved',row['calendar_id']))
             c.execute("UPDATE smart_jobs SET state='running',attempts=attempts+1,lease_until=? WHERE event_id=? AND occurrence=?",(stamp(utcnow()+timedelta(minutes=2)),row['id'],job['occurrence']))
         try:
             if cached:result=load(cached['result']);usage={}
@@ -424,7 +430,7 @@ class SmartEvents:
             result=validate_result(result,payload)
             with self.s.db.transaction() as c:
                 if reservation:
-                    # Keep the conservative reservation as the hard spend accounting bound.
+                    # Informational conservative estimate; it never gates processing.
                     c.execute("UPDATE smart_usage SET state='completed',usage=? WHERE id=?",(dump({k:v for k,v in usage.items() if k in ('input_tokens','output_tokens','total_tokens') and type(v) is int}),reservation))
                 fresh=c.execute('SELECT * FROM smart_jobs WHERE event_id=? AND occurrence=?',(job['event_id'],job['occurrence'])).fetchone()
                 scoped=_scope(c,job['event_id'],job['occurrence'])
@@ -485,3 +491,4 @@ class SmartEvents:
                     c.execute("INSERT INTO runtime VALUES('smart_blocked_config',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(digest(self.config.openai_api_key+self.config.openai_model),))
                 c.execute('UPDATE smart_jobs SET state=?,error=?,lease_until=NULL,next_at=? WHERE event_id=? AND occurrence=? AND generation=?',
                     ('retry_wait' if retry else 'failed',code,stamp(utcnow()+timedelta(seconds=30*2**job['attempts']+random.randint(0,10))),job['event_id'],job['occurrence'],job['generation']))
+

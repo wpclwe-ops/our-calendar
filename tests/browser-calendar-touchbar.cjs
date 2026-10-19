@@ -24,6 +24,7 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  const back=async()=>{await page.locator('[data-action="back"]').first().click();await wait()};
  // Personal toolbar: add/remove, fixed Settings, buttons and real-touch reorder.
  await page.locator('.bottom-nav [data-tab="settings"]').click();await wait();
+ await page.locator('[data-section=appearance]').click();await wait();
  await page.locator('[data-action="touchbar"]').click();await wait();
  assert.ok(await page.locator('[name="touchbar-item"][value="settings"]').isDisabled());
  await page.locator('[name="touchbar-item"][value="week"]').check();await wait();
@@ -36,9 +37,9 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:handle.x+15,y:target.y+5}]});
  await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await wait();
  assert.deepEqual(await page.evaluate(()=>state.me.touch_bar),['month','day','week','categories','settings']);
- await page.locator('[name="touchbar-item"][value="categories"]').uncheck();await wait();await back();
+ await page.locator('[name="touchbar-item"][value="categories"]').uncheck();await wait();await back();await page.locator('[data-action=settings-back]').click();await wait();
  assert.deepEqual(await page.locator('.bottom-nav button').allTextContents(),['Месяц','День','Неделя','Настройки']);
- await page.locator('[data-tab="categories"]').click();await wait();assert.equal(await page.evaluate(()=>tab),'categories');
+ await page.locator('[data-section=events]').click();await page.locator('[data-action=settings-categories]').click();await wait();assert.equal(await page.evaluate(()=>tab),'categories');
  await page.locator('.bottom-nav [data-view="week"]').click();await wait();assert.equal(await page.evaluate(()=>view),'week');
  await page.locator('.bottom-nav [data-view="day"]').click();await wait();
  await set('2026-11-20','day');await page.locator('[data-action="today"]').click();await wait();assert.equal(await page.evaluate(()=>selected),'2026-10-16');assert.equal(await page.evaluate(()=>view),'day');
@@ -47,7 +48,7 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  assert.equal(await page.locator('.day[data-date="2026-10-16"]').evaluate(el=>getComputedStyle(el).borderRightWidth),'0px');
  await page.locator('.bottom-nav [data-view="day"]').click();await wait();
  await page.locator('.bottom-nav [data-tab="settings"]').click();await wait();
- await page.selectOption('[name="setting-month_layout"]','scroll');await wait();
+ await page.locator('[data-section=views]').click();await page.locator('[data-action=settings-view][data-key=month_layout]').click();await page.locator('[data-action=settings-view-choose][data-value=scroll]').click();await wait();await page.locator('[data-action=settings-back]').click();await wait();
  await page.locator('.bottom-nav [data-view="month"]').click();await wait();
  // Today in scrolling month returns to its week and does not switch views.
  await set('2027-01-20','month');await page.locator('[data-action="today"]').click();await wait();await page.waitForTimeout(200);
@@ -62,3 +63,4 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  assert.deepEqual(errors,[]);console.log('PASS: personal toolbar add/remove, fixed Settings, arrow and real-touch reorder, categories in settings, persisted user-specific order, Today retains day/week/month, two continuous week rows in light/dark at 320/390/430px');
  }finally{await browser?.close();server.kill();await new Promise(resolve=>server.once('exit',resolve));rmSync(directory,{recursive:true,force:true})}
 })().catch(e=>{console.error(e);process.exit(1)});
+

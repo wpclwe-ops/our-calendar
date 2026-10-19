@@ -46,7 +46,7 @@ def test_notifications_language_and_bot_consent(service,event):
     e=service.get_event('1',event['id']);service.save_event('1',{'location':'Home'},event['id'],e['revision'])
     worker.deliver()
     assert fake.sent[0][0]=='2'
-    assert fake.sent[0][1].startswith('Event updated:')
+    assert fake.sent[0][1].startswith('User 1 updated an event:')
 
 def test_webhook_idempotence(service):
     fake=FakeTelegram();worker=Worker(service,fake)
@@ -186,3 +186,4 @@ def test_language_and_timezone_are_selected_at_actual_delivery(service,event):
     worker.schedule(begin-timedelta(minutes=1));worker.deliver(begin)
     message=next(m[1] for m in worker.telegram.sent if m[0]=='2')
     assert message.startswith('Событие начинается:') and '21:00' in message and 'Australia/Melbourne' in message
+
