@@ -2,9 +2,10 @@
 const {chromium}=require('playwright');
 const {spawn,spawnSync}=require('node:child_process');
 const assert=require('node:assert/strict');
-const {mkdtempSync,rmSync}=require('node:fs');
+const {mkdtempSync,rmSync,readFileSync}=require('node:fs');
 const {tmpdir}=require('node:os');
 const {join}=require('node:path');
+const expectedVersion=readFileSync(join(__dirname,'../pyproject.toml'),'utf8').match(/^version\s*=\s*"([^"]+)"/m)[1];
 (async()=>{
  const dir=mkdtempSync(join(tmpdir(),'calendar-settings-'));
  const env={...process.env,DEMO_MODE:'true',OPENAI_API_KEY:'',AUTO_SETUP_BOT:'false',DATABASE_PATH:join(dir,'db.sqlite3'),ARCHIVE_KEY_FILE:join(dir,'key.pem'),ARCHIVE_PUBLIC_KEYS:join(dir,'keys.json'),PORT:'8022'};
@@ -56,7 +57,7 @@ const {join}=require('node:path');
   await back();await open('advanced');assert.equal(await page.locator('[data-personal-pref=budget]').count(),0);assert.ok((await page.locator('.settings-section').textContent()).includes('не ограничивает'));
   await page.locator('[data-action=settings-open][data-section=memory]').click();await page.waitForSelector('.smart-rule');
   await page.locator('[data-action=settings-clear-memory]').click();await page.locator('[data-choice=yes]').click();await page.waitForSelector('.smart-rule',{state:'detached'});
-  await page.locator('[data-action=settings-back]').click();await page.locator('[data-action=settings-back]').click();await open('service');assert.ok((await page.locator('.settings-section').textContent()).includes('0.10.0'));
+  await page.locator('[data-action=settings-back]').click();await page.locator('[data-action=settings-back]').click();await open('service');assert.ok((await page.locator('.settings-section').textContent()).includes(expectedVersion));
   for(const [width,language] of [[320,'ru'],[390,'en'],[430,'ru']]){
    await page.setViewportSize({width,height:844});await page.evaluate(async language=>{state=await api('settings','PATCH',{language});tab='settings';page='main';render()},language);
    for(const section of order){await open(section);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'settings overflow '+section+' '+width);await back();}
@@ -64,3 +65,4 @@ const {join}=require('node:path');
   assert.deepEqual(errors,[]);console.log('PASS: settings navigation, descriptions, own identity isolation, shared avatar/date, two/custom/start defaults, view previews, personal toggles, memory clear, RU/EN widths, unchanged default navigation style');
  }finally{await browser?.close();server.kill('SIGTERM');await new Promise(r=>server.once('exit',r));rmSync(dir,{recursive:true,force:true})}
 })().catch(e=>{console.error(e);process.exitCode=1});
+

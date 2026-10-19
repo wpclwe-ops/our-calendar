@@ -1,11 +1,18 @@
 """Strictly read-only iCloud CalDAV pilot; write support requires a real test."""
 import base64
 import re
+import logging
 from urllib.parse import urljoin,urlparse
 from xml.etree import ElementTree as ET
+from xml.sax.saxutils import escape
 from .http import HTTPS,ProviderFailure
 
 DAV='DAV:';CALDAV='urn:ietf:params:xml:ns:caldav'
+logger=logging.getLogger(__name__)
+def failure_code(exc):
+    return {401:'icloud_reconnect',403:'icloud_access_denied',404:'icloud_source_missing',
+            413:'icloud_response_too_large',429:'icloud_rate_limited',
+            502:'icloud_invalid_response'}.get(exc.code,'icloud_delayed')
 def allowed(host):return re.fullmatch(r'(?:p[0-9]+-)?caldav\.icloud\.com',host) is not None
 
 class ICloudCalDAV:
@@ -19,7 +26,12 @@ class ICloudCalDAV:
         return url
     def xml(self,method,url,body,depth='0'):
         url=self.safe_url(url,'')
-        status,_,raw=self.http.request(method,url,{'Authorization':self.authorization,'Depth':depth,'Content-Type':'application/xml; charset=utf-8'},body.encode())
+        try:
+            status,_,raw=self.http.request(method,url,{'Authorization':self.authorization,'Depth':depth,'Content-Type':'application/xml; charset=utf-8'},body.encode())
+        except ProviderFailure as exc:
+            # Never log URLs, response bodies, credentials or exception messages.
+            logger.warning('icloud request_failed method=%s status=%s',method,exc.code)
+            raise
         if status not in (200,207):raise ProviderFailure(status)
         if b'<!DOCTYPE' in raw.upper() or b'<!ENTITY' in raw.upper():raise ProviderFailure(502)
         try:return ET.fromstring(raw)
@@ -46,7 +58,18 @@ class ICloudCalDAV:
               '<d:prop><d:getetag/>'+calendar_data+'</d:prop>'
               '<c:filter><c:comp-filter name="VCALENDAR">'
               '<c:comp-filter name="VEVENT"/></c:comp-filter></c:filter></c:calendar-query>')
-        response=self.xml('REPORT',calendar_url,body,depth='1')
+        try:
+            response=self.xml('REPORT',calendar_url,body,depth='1')
+        except ProviderFailure as exc:
+            # Some CalDAV servers reject broad queries or property projection.
+            # Discover exact resource URLs first, then request bounded batches.
+            if exc.code not in (400,403,413,500,501,507):raise
+            logger.warning('icloud query_fallback status=%s',exc.code)
+            return self._indexed_query(calendar_url,calendar_data)
+        return self._resources(response,calendar_url)
+
+    def _resources(self,response,calendar_url):
+        if response.tag!='{DAV:}multistatus':raise ProviderFailure(502)
         result=[]
         for item in response.findall('{DAV:}response'):
             # An incomplete multi-status response must not be interpreted as a remote deletion.
@@ -64,6 +87,42 @@ class ICloudCalDAV:
                 raise ProviderFailure(502)
             result.append({'url':self.safe_url(calendar_url,href.text),
                            'etag':etag.text if etag is not None else '', 'ics':data.text or ''})
+        return result
+
+    def _indexed_query(self,calendar_url,calendar_data):
+        response=self.xml('PROPFIND',calendar_url,
+            '<d:propfind xmlns:d="DAV:"><d:prop><d:getetag/><d:resourcetype/></d:prop></d:propfind>',depth='1')
+        if response.tag!='{DAV:}multistatus':raise ProviderFailure(502)
+        urls=[]
+        for item in response.findall('{DAV:}response'):
+            href=item.find('{DAV:}href')
+            if href is None or not href.text:raise ProviderFailure(502)
+            url=self.safe_url(calendar_url,href.text)
+            if url.rstrip('/')==calendar_url.rstrip('/'):continue
+            # Only a complete, successful ETag index can authorize deletions.
+            status=item.find('{DAV:}status')
+            if status is not None and (not status.text or ' 200 ' not in status.text):
+                raise ProviderFailure(502)
+            props=[p.find('{DAV:}prop') for p in item.findall('{DAV:}propstat')
+                   if p.findtext('{DAV:}status','').split()[1:2]==['200']]
+            if any(p is not None and p.find('{DAV:}resourcetype/{DAV:}collection') is not None for p in props):
+                continue
+            if not any(p is not None and p.findtext('{DAV:}getetag') for p in props):
+                raise ProviderFailure(502)
+            if url in urls:raise ProviderFailure(502)
+            urls.append(url)
+            if len(urls)>2000:raise ProviderFailure(413)
+        result=[]
+        for offset in range(0,len(urls),30):
+            batch=urls[offset:offset+30]
+            hrefs=''.join('<d:href>'+escape(u)+'</d:href>' for u in batch)
+            body=('<c:calendar-multiget xmlns:d="DAV:" xmlns:c="'+CALDAV+'">'
+                  '<d:prop><d:getetag/>'+calendar_data+'</d:prop>'+hrefs+'</c:calendar-multiget>')
+            response=self.xml('REPORT',calendar_url,body)
+            items=self._resources(response,calendar_url)
+            if len(items)!=len(batch) or {i['url'] for i in items}!=set(batch):
+                raise ProviderFailure(502)
+            result.extend(items)
         return result
 
     def events(self,calendar_url):
@@ -93,3 +152,4 @@ class ICloudCalDAV:
         try:ics=raw.decode('utf-8')
         except UnicodeDecodeError:raise ProviderFailure(502) from None
         return {'url':url,'ics':ics}
+
