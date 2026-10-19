@@ -38,6 +38,17 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  // Changed data still renders.
  await page.evaluate(async id=>{const e=await api('events/'+id);return api('events/'+id,'PATCH',{title:'Poll renamed',revision:e.revision})},id);await poll();
  assert.equal(await has('Poll renamed'),true);
+ // User becomes busy while the poll's fetch is in flight: the render is deferred, not lost.
+ await page.evaluate(()=>api('events','POST',{title:'Poll raced',start:'2026-10-16T14:00',end:'2026-10-16T15:00',timezone:'Europe/Warsaw',owner:'both'}));
+ let held;await page.route('**/api/events?*',r=>{held=r});
+ await page.clock.runFor(15500);for(let i=0;i<30&&!held;i++)await page.waitForTimeout(100);
+ assert.ok(held,'poll fetched events');
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:200,y:500}]});await page.waitForTimeout(100);
+ await page.unroute('**/api/events?*');await held.continue();await page.waitForTimeout(700);
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]});await page.waitForTimeout(700);
+ assert.equal(await has('Poll raced'),false);
+ await poll();
+ assert.equal(await has('Poll raced'),true);
  assert.deepEqual(errors,[]);
  }finally{if(browser)await browser.close();server.kill();rmSync(directory,{recursive:true,force:true})}
 })().catch(e=>{console.error(e);process.exit(1)});

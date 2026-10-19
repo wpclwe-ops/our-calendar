@@ -863,7 +863,7 @@ matchMedia('(prefers-color-scheme:dark)').addEventListener('change',applyTheme);
 window.addEventListener('focus',async()=>{if(token&&!busy&&!calendarSwipe.active()&&!calendarTouch.active()){try{if(page==='google'){await refreshGoogleStatus()}else if(!await openLinkedEvent()&&page==='main')await refresh()}catch{}}});
 boot();
 
-let touchesDown=0,lastScrollAt=-1e9;
+let touchesDown=0,lastScrollAt=-1e9,pollRenderPending=false;
 const pollUserBusy=()=>touchesDown>0||performance.now()-lastScrollAt<600;
 for(const type of ['touchstart','touchend','touchcancel'])document.addEventListener(type,e=>{touchesDown=e.touches.length},{passive:true,capture:true});
 document.addEventListener('scroll',()=>{lastScrollAt=performance.now()},{passive:true,capture:true});
@@ -872,13 +872,13 @@ setInterval(async()=>{
  try{
   const next=await api('state');if(calendarSwipe.active()||calendarTouch.active()||monthLoading)return;
   if(!next.calendar?.active||next.calendar.state!=='active'){state=next;render();return}
-  const stateSame=JSON.stringify(next)===JSON.stringify(state);state=next;
+  const stateSame=JSON.stringify(next)===JSON.stringify(state);state=next;if(!stateSame)pollRenderPending=true;
   if(page==='main'){
    if(document.activeElement?.matches('input,textarea,select'))return;
    const scroll=window.scrollY,timelineScroll=$('.timeline')?.scrollTop;
-   const changed=await loadData(true);if(calendarSwipe.active()||calendarTouch.active()||monthLoading||pollUserBusy())return;
-   if(!changed&&stateSame)return;
-   render();
+   const changed=await loadData(true);if(changed)pollRenderPending=true;if(calendarSwipe.active()||calendarTouch.active()||monthLoading||pollUserBusy())return;
+   if(!pollRenderPending)return;
+   pollRenderPending=false;render();
    if(timelineScroll!==undefined&&$('.timeline'))$('.timeline').scrollTop=timelineScroll;
    window.scrollTo(0,scroll);
   }else if(page==='detail'&&(['pending','failed'].includes(currentEvent?.translation_status?.state)||['pending','running','retry_wait'].includes(currentEvent?.smart_status?.state)))await openEvent(currentEvent.id,currentEvent.occurrence);
