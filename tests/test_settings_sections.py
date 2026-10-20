@@ -109,7 +109,7 @@ def test_master_notification_switch_cancels_actions_not_admin(service,event):
 def test_gender_uses_actor_profile_in_recipient_language(service,event,gender,verb):
     service.settings('1',{'name':'Test','gender':gender})
     worker=Worker(service)
-    text=worker.text({'payload':dump({'actor':'1','action':'created','data':event})},{'language':'ru','timezone':'UTC'})
+    text=worker.text({'payload':dump({'actor':'1','action':'created','data':event})},{'id':'2','language':'ru','timezone':'UTC'})
     assert 'Test' in text and verb in text
 
 
