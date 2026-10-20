@@ -346,7 +346,7 @@ class ICloudImports:
             current,active=self.source(c,actor,source_id)
             require(current['generation']==source['generation'] and active['generation']==account['generation'],
                     'icloud_selection_expired',409)
-            created=existing=0
+            created=existing=0;created_events=[]
             for item,value in values:
                 old=c.execute('SELECT id FROM icloud_links WHERE source_id=? AND remote_id=?',
                               (source_id,item['url'])).fetchone()
@@ -368,8 +368,8 @@ class ICloudImports:
                           (uid(),source_id,item['url'],event_id,dump(value),dump(value),'ready',item['etag'],stamp()))
                 from .translation import enqueue_translation
                 enqueue_translation(c,self.s.config,'event',event_id,account['calendar_id'],data,1)
-                created+=1
-            if created:self.s.notify(c,account['calendar_id'],actor,'icloud_imported',{'title':str(created)})
+                created+=1;created_events.append((event_id,data))
+            if created:self.s.notify_import(c,account['calendar_id'],'icloud',created_events)
             c.execute("UPDATE icloud_sources SET next_at='' WHERE id=?",(source_id,))
         return {'created':created,'existing':existing}
 
@@ -420,7 +420,7 @@ class ICloudImports:
                 current,active=self.source(c,actor,source_id)
                 require(current['generation']==source['generation'] and active['generation']==account['generation']
                         and current['lease_until']==lease,'icloud_selection_expired',409)
-                created=0
+                created=0;created_events=[]
                 for item,remote,old in parsed:
                     rid=item['url'];etag=item['etag']
                     if old and not old['event_id'] and old['state'] in ('unsupported','remote_deleted'):
@@ -466,7 +466,7 @@ class ICloudImports:
                               (uid(),source_id,rid,event_id,dump(remote),dump(remote),'ready',etag,stamp()))
                     from .translation import enqueue_translation
                     enqueue_translation(c,self.s.config,'event',event_id,account['calendar_id'],data,1)
-                    created+=1
+                    created+=1;created_events.append((event_id,data))
                 for old in links:
                     if old['remote_id'] not in present and old['state'] not in ('remote_deleted','disconnected'):
                         row=c.execute('SELECT * FROM events WHERE id=?',(old['event_id'],)).fetchone()
@@ -490,7 +490,7 @@ class ICloudImports:
                 state='unsupported' if unsupported else 'ready'
                 c.execute("UPDATE icloud_sources SET next_at=?,state=?,attempts=0,lease_until=NULL,checked_at=? WHERE id=?",
                           (stamp(now+timedelta(seconds=15 if more else POLL)),state,stamp(),source_id))
-                if created:self.s.notify(c,account['calendar_id'],actor,'icloud_imported',{'title':str(created)})
+                if created:self.s.notify_import(c,account['calendar_id'],'icloud',created_events)
             logger.warning('icloud sync_completed state=%s created=%s unsupported=%s',state,created,unsupported)
             return {'state':state,'created':created,'unsupported':unsupported}
         except (ProviderFailure,Problem,ValueError,TypeError,KeyError) as exc:

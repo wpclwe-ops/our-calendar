@@ -113,8 +113,8 @@ def test_existing_event_start_delivery_both_languages_and_deduplication(service,
     worker.deliver(begin-timedelta(seconds=1));assert not fake.sent
     worker.deliver(begin+timedelta(seconds=14));worker.deliver(begin+timedelta(seconds=30))
     assert len(fake.sent)==2
-    assert fake.sent[0][1].startswith('Событие начинается: Together')
-    assert fake.sent[1][1].startswith('Event starting now: Together')
+    assert fake.sent[0][1].startswith('Твоё событие «Together» начинается')
+    assert fake.sent[1][1].startswith('User 1’s event «Together» is starting now')
 
 
 def test_start_preference_is_personal_and_master_switch_still_applies(service,event):
@@ -164,7 +164,7 @@ def test_start_queue_invalidated_when_event_changes(service,event,change):
     elif change=='done':service.save_event('1',{'status':'done'},event['id'],1)
     else:service.save_event('1',{'start':'2026-10-24T14:00','end':'2026-10-24T15:00'},event['id'],1)
     worker.schedule(begin-timedelta(seconds=30));worker.deliver(begin)
-    assert not any('Событие начинается:' in m[1] or 'Event starting now:' in m[1] for m in fake.sent)
+    assert not any(' начинается' in m[1] or ' is starting now' in m[1] for m in fake.sent)
 
 
 def test_changed_instance_stops_only_its_own_reminders(service):
@@ -185,5 +185,5 @@ def test_language_and_timezone_are_selected_at_actual_delivery(service,event):
     service.settings('2',{'language':'ru','timezone':'Australia/Melbourne'})
     worker.schedule(begin-timedelta(minutes=1));worker.deliver(begin)
     message=next(m[1] for m in worker.telegram.sent if m[0]=='2')
-    assert message.startswith('Событие начинается:') and '21:00' in message and 'Australia/Melbourne' in message
+    assert message.startswith('Событие партнёра (User 1) «Together» начинается') and '21:00' in message and 'Australia/Melbourne' in message
 

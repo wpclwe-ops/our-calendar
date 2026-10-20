@@ -431,7 +431,7 @@ class GoogleImports:
             self.check_source(c,actor,source,account)
             valid=c.execute('DELETE FROM google_previews WHERE id=? AND user_id=? AND expires_at>?',(preview_id,actor,stamp()))
             require(valid.rowcount==1,'google_selection_expired',409)
-            created=reconnected=existing=0
+            created=reconnected=existing=0;created_events=[]
             for value in values:
                 self.check_overlap(c,source['id'],value,values)
                 old=c.execute('SELECT * FROM google_links WHERE source_id=? AND remote_id=?',(source['id'],value['id'])).fetchone()
@@ -454,9 +454,9 @@ class GoogleImports:
                           (link_id,source['id'],value['id'],event_id,value['scope'],dump(value['snapshot']),dump(value['snapshot']),'ready',value['etag'],stamp(),value['parent_id']))
                 from .translation import enqueue_translation
                 enqueue_translation(c,self.s.config,'event',event_id,account['calendar_id'],data,1)
-                created+=1
+                created+=1;created_events.append((event_id,data))
             if created:
-                self.s.notify(c,account['calendar_id'],actor,'google_imported',{'title':str(created)})
+                self.s.notify_import(c,account['calendar_id'],'google',created_events)
             c.execute("UPDATE google_sources SET next_at='' WHERE id=?",(source['id'],))
         return {'created':created,'reconnected':reconnected,'existing':existing}
 
@@ -665,7 +665,7 @@ class GoogleImports:
                             c.execute("UPDATE google_links SET state='unsupported',checked_at=? WHERE id=?",(stamp(),old['id']))
                         finally:c.execute('RELEASE google_event')
 
-                created=0
+                created=0;created_events=[]
                 if source['auto_import']:
                     for value in auto_values:
                         # A manual import or an earlier batch always wins.
@@ -691,7 +691,7 @@ class GoogleImports:
                                        'ready',value['etag'],stamp(),value['parent_id']))
                             from .translation import enqueue_translation
                             enqueue_translation(c,self.s.config,'event',event_id,account['calendar_id'],data,1)
-                            created+=1
+                            created+=1;created_events.append((event_id,data))
                         except (Problem,KeyError,ValueError,TypeError):
                             c.execute('ROLLBACK TO google_auto_event')
                             new_skips.append((value['id'],value.get('etag') or ''))
@@ -700,7 +700,7 @@ class GoogleImports:
                         c.execute("INSERT INTO google_auto_skips(source_id,remote_id,etag) VALUES(?,?,?) ON CONFLICT(source_id,remote_id) DO UPDATE SET etag=excluded.etag",
                                   (source_id,remote_id,etag))
                     if created:
-                        self.s.notify(c,account['calendar_id'],actor,'google_imported',{'title':str(created)})
+                        self.s.notify_import(c,account['calendar_id'],'google',created_events)
 
                 cursor=(None if delta['reset'] else source['sync_token']) if more_auto else delta['sync_token']
                 delay=15 if more_auto else POLL

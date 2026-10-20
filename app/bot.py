@@ -173,9 +173,32 @@ class Worker:
                             self.service.enqueue(c,row['calendar_id'],person['id'],'reminder',{'action':'event_started' if minutes==0 else 'reminder','data':event,
                                 'schedule_version':row['schedule_version'],'minutes':minutes,'scheduled_due':stamp(due)},due=stamp(due),key=unique,event_id=row['id'])
 
+    def ownership(self,data,person):
+        owner=data.get('owner');ru=person['language']=='ru'
+        if owner=='both':return 'ваше общее' if ru else 'both of you'
+        if owner==person['id']:return 'твоё' if ru else 'yours'
+        if owner:
+            with self.service.db.transaction() as c:
+                row=c.execute('SELECT data FROM users WHERE id=?',(owner,)).fetchone()
+            name=(load(row['data']).get('name') or '') if row else ''
+            return name or ('партнёра' if ru else 'your partner')
+        return ''
+
+    def event_subject(self,data,person):
+        owner=self.ownership(data,person);ru=person['language']=='ru'
+        if data.get('owner')=='both':return 'Ваше общее событие' if ru else 'Your shared event'
+        if data.get('owner')==person['id']:return 'Твоё событие' if ru else 'Your event'
+        if owner:
+            return ('Событие партнёра'+(' ('+owner+')' if owner!='партнёра' else '')) if ru else owner+"’s event"
+        return 'Событие' if ru else 'Event'
+
+    @staticmethod
+    def event_title(data,lang):
+        return data.get('translations',{}).get(lang,{}).get('title') or data.get('title') or ''
+
     def text(self,job,person):
         p=load(job['payload']); data=p.get('data',{}); lang=person['language']; strings=TEXT[lang]
-        title=data.get('translations',{}).get(lang,{}).get('title') or data.get('title') or p.get('title','')
+        title=self.event_title(data,lang) or p.get('title','')
         text=strings.get(p['action'],p['action'])+(': '+title if title else '')
         if p.get('actor') and p['action'] in ('created','updated','deleted','restored'):
             with self.service.db.transaction() as c:
@@ -189,6 +212,27 @@ class Worker:
                     prefix=name+' '+verbs[p['action']][gender=='female']+' событие' if gender in ('male','female') else name+' — '+strings[p['action']].lower()
                 else:prefix=name+' '+{'created':'created','updated':'updated','deleted':'deleted','restored':'restored'}[p['action']]+' an event'
                 text=prefix+(': '+title if title else '')
+        imported=p['action'] in ('google_imported','icloud_imported')
+        if imported and (data.get('owner') or data.get('import_events')):
+            provider='Apple Calendar (iCloud)' if p['action']=='icloud_imported' else 'Google Calendar'
+            if data.get('import_events'):
+                count=data['import_count']
+                text=(f'Добавлено событий из {provider}: {count}' if lang=='ru' else f'Events added from {provider}: {count}')
+                for event in data['import_events']:
+                    label=self.event_title(event,lang)[:200]
+                    text+='\n• '+label+' — '+self.ownership(event,person)
+                remaining=count-len(data['import_events'])
+                if remaining:text+='\n'+(f'И ещё: {remaining}' if lang=='ru' else f'And {remaining} more')
+            else:
+                subject=self.event_subject(data,person)
+                text=subject+' «'+title+'» '+('добавлено из ' if lang=='ru' else 'was added from ')+provider
+        elif p['action'] in ('event_started','reminder'):
+            subject=self.event_subject(data,person)
+            label=subject+' «'+title+'»'
+            if p['action']=='event_started':text=label+(' начинается' if lang=='ru' else ' is starting now')
+            else:text=('Напоминание: '+label[0].lower()+label[1:]) if lang=='ru' else 'Reminder: '+label
+        elif data.get('owner'):
+            text+='\n'+('Чьё событие: ' if lang=='ru' else 'Event for: ')+self.ownership(data,person)
         if data.get('start'):
             if data['all_day']:when=data['start']+' · '+strings['all_day']
             else:

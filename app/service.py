@@ -717,6 +717,19 @@ class Service:
             self.enqueue(c,calendar_id,member['user_id'],'admin' if admin else 'action',
                          {'action':action,'actor':actor,'title':(data or {}).get('title',''),'data':data or {},'event_id':event_id},event_id=event_id)
 
+    def notify_import(self,c,calendar_id,provider,events):
+        # Called inside the import transaction, after successful inserts only.
+        # None as actor includes the connection owner in the confirmation.
+        if not events:return
+        if len(events)==1:
+            event_id,data=events[0]
+        else:
+            event_id=None
+            data={'import_count':len(events),'import_events':[
+                {k:value.get(k) for k in ('title','translations','owner')}
+                for _,value in events[:8]]}
+        self.notify(c,calendar_id,None,provider+'_imported',data,event_id)
+
     def enqueue(self,c,calendar_id,user_id,kind,payload,due=None,key=None,event_id=None):
         if kind in ('action','reminder') and not self.user(c,user_id).get('notifications_enabled',True):return
         c.execute("INSERT INTO outbox(id,calendar_id,user_id,event_id,kind,payload,due,created_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload,status=CASE WHEN outbox.status='cancelled' THEN 'pending' ELSE outbox.status END WHERE outbox.kind='reminder' AND outbox.status IN ('pending','cancelled')",
