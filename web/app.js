@@ -171,9 +171,11 @@ async function api(path,method='GET',body=null,raw=false){
 function applyTheme(){const theme=state?.me.theme||'system';document.body.classList.toggle('dark',theme==='dark'||(theme==='system'&&matchMedia('(prefers-color-scheme:dark)').matches));document.body.classList.toggle('reduce-transparency',Boolean(state?.me.reduce_transparency));document.documentElement.lang=state?.me.language||'ru'}
 function paint(root=document){
  const dark=document.body.classList.contains('dark');
- $$('[data-bg]',root).forEach(el=>{el.style.backgroundColor=el.dataset.bg;if(el.classList.contains('event-bar')||el.classList.contains('time-event')||el.classList.contains('category-chip')||el.classList.contains('week-all-event')){el.style.backgroundColor=`color-mix(in srgb, ${el.dataset.bg} ${dark?'22':'16'}%, var(--card))`;el.style.color=`color-mix(in srgb, ${el.dataset.bg} ${dark?'45':'65'}%, ${dark?'white':'black'})`}});
+ $$('[data-bg]',root).forEach(el=>{el.style.backgroundColor=el.dataset.bg;if(el.classList.contains('event-bar')||el.classList.contains('time-event')||el.classList.contains('category-chip')||el.classList.contains('week-all-event')){el.style.backgroundColor=`color-mix(in srgb, ${el.dataset.bg} ${dark?'22':'16'}%, var(--card))`;el.style.color=`color-mix(in srgb, ${el.dataset.bg} ${dark?'45':el.closest('.month-scroll')?'40':'65'}%, ${dark?'white':'black'})`}});
  $$('[data-fg]',root).forEach(el=>el.style.color=el.dataset.fg);
  $$('[data-top]',root).forEach(el=>{el.style.top=el.dataset.top+'px';el.style.height=el.dataset.height+'px';const gutter=el.closest('.timeline-day')?0:54;el.style.left=`calc(${gutter}px + (100% - ${gutter}px) * ${el.dataset.lane} / ${el.dataset.lanes})`;el.style.width=`calc((100% - ${gutter}px) / ${el.dataset.lanes})`});$$('.hour',root).forEach(el=>el.style.top=el.dataset.hour*70+'px');
+ $$('[data-span-lanes]',root).forEach(el=>el.style.setProperty('--span-space',Number(el.dataset.spanLanes)*25+'px'));
+ $$('.month-span',root).forEach(el=>{el.style.gridColumn=`${el.dataset.column} / span ${el.dataset.columns}`;el.style.gridRow=el.dataset.row});
  $$('.days',root).forEach(days=>days.style.gridTemplateRows=`repeat(${days.children.length/7},minmax(0,1fr))`);
 }
 function header(){
@@ -344,18 +346,51 @@ function weekIndicator(day){
  return `<span class="week-marker-slot">${first?`<span class="week-marker" data-bg="${color(first.category_id)}" role="img" aria-label="${esc(t('planned')+': '+catName(first.category_id))}"></span>`:''}</span>`;
 }
 function weekdayLabels(){return Array.from({length:7},(_,i)=>`<div>${esc(dateLabel(addDays('2026-10-12',i),{weekday:'short'}))}</div>`).join('')}
-function monthCell(d,day,scroll=false){
+function monthCell(d,day){
  const entries=events.filter(e=>onDay(e,d)).sort((a,b)=>Number(b.all_day)-Number(a.all_day)||(a.start_utc||a.start).localeCompare(b.start_utc||b.start));
- const marks=scroll?entries.slice(0,5).map(e=>{
-  const first=eventDay(e)===d,last=e.all_day?addDays(e.end,-1)===d:isoDay(new Date(Date.parse(e.end_utc)-1))===d;
-  return `<button class="event-bar ${e.status!=='planned'?'faded':''} ${e.status==='cancelled'?'struck':''} ${!first?'continues-left':''} ${!last?'continues-right':''}" data-bg="${color(e.category_id)}" data-action="event" data-id="${esc(e.id)}" data-occ="${esc(e.occurrence||'')}" aria-label="${esc(title(e)+' · '+time(e))}"><span class="month-event-title">${e.status==='done'?'✓ ':''}${esc(title(e))}</span><span class="month-event-time">${esc(time(e))}</span></button>`;
- }).join('')+(entries.length>5?button('month-day-list','+'+(entries.length-5),'more',`data-date="${d}" aria-label="${esc(dateLabel(d,{day:'numeric',month:'long'}))}: ${entries.length} ${t('more')}"`):''):`<span class="month-markers">${entries.slice(0,3).map(e=>`<span data-bg="${color(e.category_id)}"></span>`).join('')}</span>`;
- return `<div class="day ${!scroll&&d.slice(0,7)!==day.slice(0,7)?'outside':''} ${d===isoDay()?'today':''} ${d===selected?'chosen-date':''}" data-action="date" data-date="${d}" role="button" tabindex="0" aria-label="${esc(dateLabel(d,{day:'numeric',month:'long'}))}"><div class="date-caption">${scroll&&d.endsWith('-01')?`<small class="month-caption">${esc(dateLabel(d,{month:'short'}))}</small>`:''}<div class="day-number">${Number(d.slice(-2))}</div></div>${marks}</div>`;
+ const marks=`<span class="month-markers">${entries.slice(0,3).map(e=>`<span data-bg="${color(e.category_id)}"></span>`).join('')}</span>`;
+ return `<div class="day ${d.slice(0,7)!==day.slice(0,7)?'outside':''} ${d===isoDay()?'today':''} ${d===selected?'chosen-date':''}" data-action="date" data-date="${d}" role="button" tabindex="0" aria-label="${esc(dateLabel(d,{day:'numeric',month:'long'}))}"><div class="date-caption"><div class="day-number">${Number(d.slice(-2))}</div></div>${marks}</div>`;
 }
 function monthGrid(day){return `<div class="month"><div class="weekdays">${weekdayLabels()}</div><div class="days">${monthDays(day).map(d=>monthCell(d,day)).join('')}</div></div>`}
+function scrollMonthDay(d,body){
+ return `<div class="day ${d===isoDay()?'today':''} ${d===selected?'chosen-date':''}" data-action="date" data-date="${d}" role="button" tabindex="0" aria-label="${esc(dateLabel(d,{day:'numeric',month:'long'}))}"><div class="date-caption">${d.endsWith('-01')?`<small class="month-caption">${esc(dateLabel(d,{month:'short'}))}</small>`:''}<div class="day-number">${Number(d.slice(-2))}</div></div><div class="month-day-events">${body}</div></div>`;
+}
+function monthEvent(e,classes='',attrs=''){
+ return `<button class="event-bar ${e.all_day?'month-all-day':''} ${e.status!=='planned'?'faded':''} ${e.status==='cancelled'?'struck':''} ${classes}" data-bg="${color(e.category_id)}" data-action="event" data-id="${esc(e.id)}" data-occ="${esc(e.occurrence||'')}" ${attrs} aria-label="${esc(title(e)+' · '+time(e)+' · '+t(e.status))}"><span class="month-event-title">${e.status==='done'?'✓ ':e.status==='cancelled'?'⊘ ':''}${esc(title(e))}</span>${!e.all_day&&!classes.includes('month-span')?`<span class="month-event-time">${esc(time(e))}</span>`:''}</button>`;
+}
+function scrollingWeek(first){
+ const days=Array.from({length:7},(_,i)=>addDays(first,i));
+ // Use the same five-event budget for both ribbons and cards. The remaining
+ // events are always available through the day's existing +N action.
+ const sorted=[...events].sort((a,b)=>Number(b.all_day)-Number(a.all_day)||(a.start_utc||a.start).localeCompare(b.start_utc||b.start)||a.id.localeCompare(b.id)||(a.occurrence||'').localeCompare(b.occurrence||''));
+ const entries=days.map(d=>sorted.filter(e=>onDay(e,d))),visible=entries.map(es=>es.slice(0,5));
+ const spans=[];
+ for(const e of sorted){
+  const end=e.all_day?addDays(e.end,-1):isoDay(new Date(Date.parse(e.end_utc)-1));
+  if(eventDay(e)===end)continue;
+  // A hidden day can split a ribbon; never paint over the five-event limit.
+  for(let i=0;i<7;i++)if(visible[i].includes(e)){
+   const start=i;while(i<6&&visible[i+1].includes(e))i++;
+   spans.push({event:e,start,end:i,left:eventDay(e)<days[start],right:end>days[i]});
+  }
+ }
+ spans.sort((a,b)=>a.start-b.start||b.end-a.end);
+ const lanes=[];
+ for(const span of spans){
+  let lane=lanes.findIndex(end=>end<span.start);if(lane<0)lane=lanes.length;
+  lanes[lane]=span.end;span.lane=lane;
+ }
+ const ribbons=spans.map(s=>monthEvent(s.event,`month-span ${s.left?'continues-left':''} ${s.right?'continues-right':''}`,`data-column="${s.start+1}" data-columns="${s.end-s.start+1}" data-row="${s.lane+1}"`)).join('');
+ const cells=days.map((d,i)=>{
+  const cards=visible[i].filter(e=>!spans.some(s=>s.event===e&&s.start<=i&&s.end>=i)).map(e=>monthEvent(e)).join('');
+  const more=entries[i].length>5?button('month-day-list','+'+(entries[i].length-5),'more',`data-date="${d}" aria-label="${esc(dateLabel(d,{day:'numeric',month:'long'}))}: ${entries[i].length} ${t('more')}"`):'';
+  return scrollMonthDay(d,cards+more);
+ }).join('');
+ return `<div class="scroll-week" data-week="${first}" data-span-lanes="${lanes.length}">${cells}${ribbons?`<div class="month-week-spans">${ribbons}</div>`:''}</div>`;
+}
 function scrollingWeeks(){
  const first=monthDays(monthWindow[0])[0],last=monthDays(monthWindow.at(-1)).at(-1),rows=[];
- for(let day=first;day<=last;day=addDays(day,7))rows.push(`<div class="scroll-week" data-week="${day}">${Array.from({length:7},(_,i)=>monthCell(addDays(day,i),selected,true)).join('')}</div>`);
+ for(let day=first;day<=last;day=addDays(day,7))rows.push(scrollingWeek(day));
  return rows.join('');
 }
 function ensureMonthWindow(){
@@ -373,14 +408,19 @@ function monthAnchor(el){
  return item?{week:item.dataset.week,offset:el.scrollTop-item.offsetTop}:null;
 }
 function positionMonths(el,anchor){
- el.style.setProperty('--week-height',el.clientHeight/2+'px');
+ // Only the week's minimum breathing room follows the viewport. Cards and
+ // content-driven row heights never change density when Telegram resizes.
+ const height=Math.max(260,Math.round(el.clientHeight/2));
+ el.style.setProperty('--week-height',height+'px');
+ el.dataset.viewportHeight=String(el.clientHeight);
  const week=anchor?.week||addDays(el.dataset.selected,-(new Date(el.dataset.selected+'T12:00:00Z').getUTCDay()+6)%7);
  const item=$(`[data-week="${week}"]`,el);
- if(item)el.scrollTop=item.offsetTop+(anchor?.offset||0);
+ // A refreshed dense week may have become shorter; keep that week visible.
+ if(item)el.scrollTop=item.offsetTop+Math.min(anchor?.offset||0,Math.max(0,item.offsetHeight-2));
 }
 function mountMonthScroll(anchor){
  const el=$('.month-scroll');if(!el)return;positionMonths(el,anchor);let timer;
- monthResize=new ResizeObserver(()=>{if(el.isConnected){const saved=monthAnchor(el);positionMonths(el,saved)}});monthResize.observe(el);
+ monthResize=new ResizeObserver(()=>{if(el.isConnected&&Number(el.dataset.viewportHeight)!==el.clientHeight){const saved=monthAnchor(el);positionMonths(el,saved)}});monthResize.observe(el);
  el.addEventListener('scroll',()=>{
   if(!el.isConnected||view!=='month'||tab!=='calendar'||page!=='main')return;
   const current=monthAnchor(el);

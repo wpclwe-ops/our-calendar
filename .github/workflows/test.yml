@@ -36,6 +36,7 @@ jobs:
       - run: node tests/browser-settings.cjs
       - run: node tests/browser-calendar-week.cjs
       - run: node tests/browser-calendar-design.cjs
+      - run: node tests/browser-calendar-month-scroll.cjs
       - run: node tests/browser-calendar-tab-swipes.cjs
       - run: node tests/browser-calendar-touchbar.cjs
       - run: node tests/browser-calendar-interactions.cjs
