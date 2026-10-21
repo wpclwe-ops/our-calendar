@@ -65,7 +65,7 @@ const {mkdtempSync,rmSync,mkdirSync}=require('node:fs');const {tmpdir}=require('
   assert.ok(await page.locator('.month-scroll .day[data-date="2026-10-17"]').evaluate(el=>{const cell=el.getBoundingClientRect(),last=el.querySelector('.more').getBoundingClientRect();return last.bottom<=cell.bottom&&last.height>0}),'five tasks and overflow remain reachable in a short WebView: '+height);
   await screenshot('month-scroll-short-'+height);
  }
- for(const width of [320,390,430]){await page.setViewportSize({width,height:844});await page.waitForTimeout(80);assert.ok(await page.locator('.month-scroll').evaluate(el=>Math.abs(el.clientHeight/2-el.querySelector('.scroll-week').offsetHeight)<2));assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));const fit=await page.locator('.month-scroll .day[data-date="2026-10-17"]').evaluate(el=>{const chip=el.querySelectorAll('.event-bar')[4],last=el.querySelector('.more'),cell=el.getBoundingClientRect();return {ok:chip.getBoundingClientRect().bottom<=cell.bottom&&last.getBoundingClientRect().bottom<=cell.bottom,cell:cell.height,chip:Math.round(chip.getBoundingClientRect().bottom-cell.top),more:Math.round(last.getBoundingClientRect().bottom-cell.top),scroll:el.closest('.month-scroll').clientHeight,width:innerWidth}});assert.ok(fit.ok,'five tasks and overflow fit within date: '+JSON.stringify(fit));await screenshot('month-scroll-dark-'+width)}
+ for(const width of [320,390,430]){await page.setViewportSize({width,height:844});await page.waitForTimeout(80);assert.ok(await page.locator('.month-scroll').evaluate(el=>el.querySelector('.scroll-week').offsetHeight>=Math.max(260,Math.round(el.clientHeight/2))));assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));const fit=await page.locator('.month-scroll .day[data-date="2026-10-17"]').evaluate(el=>{const chip=el.querySelectorAll('.event-bar')[4],last=el.querySelector('.more'),cell=el.getBoundingClientRect();return {ok:chip.getBoundingClientRect().bottom<=cell.bottom&&last.getBoundingClientRect().bottom<=cell.bottom,cell:cell.height,chip:Math.round(chip.getBoundingClientRect().bottom-cell.top),more:Math.round(last.getBoundingClientRect().bottom-cell.top),scroll:el.closest('.month-scroll').clientHeight,width:innerWidth}});assert.ok(fit.ok,'five tasks and overflow fit within date: '+JSON.stringify(fit));await screenshot('month-scroll-dark-'+width)}
  // Both month layouts must paint behind the floating actions, including while scrolling.
  for(const theme of ['light','dark'])for(const width of [320,390,430])for(const layout of ['paged','scroll']){
   await page.setViewportSize({width,height:width===320?568:844});
@@ -86,7 +86,8 @@ const {mkdtempSync,rmSync,mkdirSync}=require('node:fs');const {tmpdir}=require('
   }else{
    const before=await page.locator(selector).evaluate(el=>monthAnchor(el));await page.evaluate(()=>render());
    const after=await page.locator(selector).evaluate(el=>monthAnchor(el));assert.equal(after.week,before.week);assert.ok(Math.abs(after.offset-before.offset)<2);
-   await page.locator('.month-scroll .day[data-date="2026-10-17"]').evaluate(el=>el.scrollIntoView({block:'start'}));
+   // Dense weeks keep readable cards; scroll the overflow control itself above the floating actions.
+   await page.locator('.month-scroll .day[data-date="2026-10-17"] .more').evaluate(el=>el.scrollIntoView({block:'center'}));
    const more=await page.locator('.month-scroll .day[data-date="2026-10-17"] .more').boundingBox(),actions=await page.locator('.calendar-actions').boundingBox();
    assert.ok(more.y+more.height<=actions.y,'month overflow button can scroll above actions');
   }
