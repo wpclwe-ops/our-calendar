@@ -155,7 +155,19 @@ const ink=hex=>{const v=hex.slice(1).match(/../g).map(x=>parseInt(x,16)/255).map
 const opt=(value,text,chosen)=>`<option value="${esc(value)}" ${value===chosen?'selected':''}>${esc(text)}</option>`;
 const button=(action,text,cls='',attrs='')=>`<button type="button" data-action="${action}" class="${cls}" ${attrs}>${text}</button>`;
 const field=(label,content)=>{const name=content.match(/name="([^"]+)"/)?.[1];return `<div class="field"><label ${name?'for="field-'+name+'"':''}>${t(label)}</label>${name?content.replace('name="'+name+'"','id="field-'+name+'" name="'+name+'"'):content}</div>`};
-const input=(name,value='',type='text',attrs='')=>`<input name="${name}" type="${type}" value="${esc(value)}" ${attrs}>`;
+const input=(name,value='',type='text',attrs='')=>type==='datetime-local'&&['start','end'].includes(name)?eventDateTimeInput(name,value):`<input name="${name}" type="${type}" value="${esc(value)}" ${attrs}>`;
+function eventDateTimeInput(name,value){
+ const label=dateLabel(value.slice(0,10),{day:'numeric',month:'short',year:'numeric'})+' · '+value.slice(11,16);
+ return `<input type="hidden" name="${name}" value="${esc(value)}">${button('event-datetime',`<span>${esc(label)}</span>${icon('next')}`,'event-datetime-trigger',`data-field="${name}" aria-label="${esc(t(name)+': '+label)}" aria-haspopup="dialog"`)}`;
+}
+function openFormDateTime(el){
+ captureForm();const scroll=window.scrollY;
+ EventDateTime.open({...formEvent,language:state.me.language,field:el.dataset.field,manualEnd:endManuallySet,onApply:next=>{
+  if(page!=='form')return;
+  formEvent={...formEvent,start:next.start,end:next.end,fold:next.fold,end_fold:next.end_fold};endManuallySet=next.manualEnd;render();
+  window.scrollTo(0,scroll);$(`[data-action="event-datetime"][data-field="${el.dataset.field}"]`)?.focus({preventScroll:true});
+ }});
+}
 const select=(name,items,value)=>`<select name="${name}" aria-label="${esc(t(({category_id:'category','filter-category':'category','filter-owner':'owner','filter-status':'status','event-status':'status'}[name]||name)))}">${items.map(([v,l])=>opt(v,l,value)).join('')}</select>`;
 const empty=()=>`<div class="empty"><div class="empty-symbol">◌</div><h3>${t('empty')}</h3><p>${t('emptyHelp')}</p></div>`;
 const time=e=>e.all_day?t('allDay'):zoned(e.start_utc||e.start,{hour:'2-digit',minute:'2-digit'});
@@ -172,6 +184,7 @@ async function api(path,method='GET',body=null,raw=false){
 }
 function applyTheme(){const theme=state?.me.theme||'system';document.body.classList.toggle('dark',theme==='dark'||(theme==='system'&&matchMedia('(prefers-color-scheme:dark)').matches));document.body.classList.toggle('reduce-transparency',Boolean(state?.me.reduce_transparency));document.documentElement.lang=state?.me.language||'ru'}
 function paint(root=document){
+ $$('.event-datetime-trigger',root).forEach(el=>{const value=el.previousElementSibling;if(value?.type==='hidden'&&value.id){el.id=value.id;value.removeAttribute('id')}});
  const dark=document.body.classList.contains('dark');
  $$('[data-bg]',root).forEach(el=>{el.style.backgroundColor=el.dataset.bg;if(el.classList.contains('event-bar')||el.classList.contains('time-event')||el.classList.contains('category-chip')||el.classList.contains('week-all-event')){el.style.backgroundColor=`color-mix(in srgb, ${el.dataset.bg} ${dark?'22':'16'}%, var(--card))`;el.style.color=`color-mix(in srgb, ${el.dataset.bg} ${dark?'45':'65'}%, ${dark?'white':'black'})`}});
  $$('[data-fg]',root).forEach(el=>el.style.color=el.dataset.fg);
@@ -777,6 +790,7 @@ async function saveForm(){
 async function fileBase64(selector){const file=$(selector)?.files?.[0];if(!file)throw new Error(t('chooseFile'));if(file.size>10*1024*1024)throw new Error('ZIP > 10 MB');return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result.split(',')[1]);r.onerror=reject;r.readAsDataURL(file)})}
 async function download(path,name){const blob=await api(path,'GET',null,true);const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000)}
 const actions={
+ 'event-datetime':openFormDateTime,
  'choose-language':async el=>{state=await api('settings','PATCH',{language:el.dataset.lang});await loadData();render()},
  'translate-event':async()=>{await api('events/'+currentEvent.id+'/translate','POST',{});currentEvent.translation_status={state:'pending'};render();toast(t('translationQueued'))},
  'replace-translations':async()=>{if(await confirmDialog(t('replaceManual'),t('replaceManualHelp'))){await api('events/'+currentEvent.id+'/translate','POST',{overwrite_manual:true});currentEvent.translation_status={state:'pending'};render();toast(t('translationQueued'))}},

@@ -141,7 +141,7 @@ const {mkdtempSync,rmSync,mkdirSync}=require('node:fs');const {tmpdir}=require('
   await page.setViewportSize({width,height:844});
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   assert.ok(await page.locator('.all-day-switch').evaluate(row=>{const input=row.querySelector('input'),a=input.getBoundingClientRect(),b=row.getBoundingClientRect();return a.width===46&&a.height===28&&Math.abs(a.y+a.height/2-b.y-b.height/2)<2}));
-  assert.equal(await page.locator('[name=start]').evaluate(el=>getComputedStyle(el).textAlign),'center');
+  assert.equal(await page.locator('[data-action=event-datetime][data-field=start]').evaluate(el=>getComputedStyle(el).textAlign),'center');
   await screenshot('event-native-reminders-'+width);
  }
  await page.locator('[name=all_day]').check();await wait();

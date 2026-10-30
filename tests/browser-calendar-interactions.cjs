@@ -31,9 +31,15 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  // New defaults and end tracking across midnight, plus explicit end preservation.
  await page.locator('[data-action="new"]').click();await wait();
  assert.equal(await page.inputValue('[name="start"]'),'2026-10-16T22:30');assert.equal(await page.inputValue('[name="end"]'),'2026-10-16T23:30');
- await page.locator('[name="start"]').fill('2026-10-16T23:30');await page.locator('[name="start"]').dispatchEvent('change');assert.equal(await page.inputValue('[name="end"]'),'2026-10-17T00:30');
- await page.locator('[name="end"]').fill('2026-10-17T02:00');await page.locator('[name="end"]').dispatchEvent('change');
- await page.locator('[name="start"]').fill('2026-10-17T00:00');await page.locator('[name="start"]').dispatchEvent('change');assert.equal(await page.inputValue('[name="end"]'),'2026-10-17T02:00');await back();
+ const timeWheel=async(field,h,m,date)=>{
+  await page.locator(`[data-action=event-datetime][data-field=${field}]`).click();
+  if(date){await page.locator('[data-ed-date-toggle]').click();await page.locator(`[data-ed-day-choice="${date}"]`).click()}
+  for(const [part,n] of [['hour',h],['minute',m]]){await page.locator(`[data-ed-wheel=${part}]`).focus();await page.keyboard.press('Home');for(let i=0;i<n;i++)await page.keyboard.press('ArrowDown')}
+  await page.locator('[data-ed-done]').click();await wait();
+ };
+ await timeWheel('start',23,30);assert.equal(await page.inputValue('[name="end"]'),'2026-10-17T00:30');
+ await timeWheel('end',2,0);
+ await timeWheel('start',0,0,'2026-10-17');assert.equal(await page.inputValue('[name="end"]'),'2026-10-17T02:00');await back();
  // Personal settings, Today preserves the current view, and settings survive a fresh login.
  await page.locator('[data-tab="settings"]').last().click();await wait();
  await page.locator('[data-section=views]').click();await page.locator('[data-action=settings-view][data-key=day_layout]').click();await page.locator('[data-action=settings-view-choose][data-value=list]').click();await wait();await page.locator('[data-action=settings-view][data-key=month_layout]').click();await page.locator('[data-action=settings-view-choose][data-value=scroll]').click();await wait();await page.locator('[data-action=settings-back]').click();await page.locator('[data-section=events]').click();await wait();

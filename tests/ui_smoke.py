@@ -27,7 +27,19 @@ async def check(output):
         await page.route('https://telegram.org/**',lambda route:route.fulfill(status=200,body=''))
         await page.goto('http://127.0.0.1:8123');await page.wait_for_selector('.fab')
         await page.locator('.fab').click();await page.locator('[name=title]').fill('QA второй вторник')
-        await page.locator('[name=start]').fill('2026-10-13T12:00');await page.locator('[name=end]').fill('2026-10-13T13:00')
+        await page.locator('[data-action=event-datetime][data-field=start]').click()
+        await page.locator('[data-ed-date-toggle]').click()
+        for _ in range(240):
+            dates=await page.locator('[data-ed-day-choice]').evaluate_all('(nodes) => nodes.map(n => n.dataset.edDayChoice)')
+            if '2026-10-13' in dates:
+                await page.locator('[data-ed-day-choice="2026-10-13"]').click()
+                break
+            direction='-1' if '2026-10-13'<dates[0] else '1'
+            await page.locator(f'[data-ed-month="{direction}"]').click()
+        for part,value in [('hour',12),('minute',0)]:
+            await page.locator(f'[data-ed-wheel={part}]').focus();await page.keyboard.press('Home')
+            for _ in range(value):await page.keyboard.press('ArrowDown')
+        await page.locator('[data-ed-duration="60"]').click();await page.locator('[data-ed-done]').click()
         await page.locator('[name=repeat]').select_option('MONTHLY')
         await page.locator('[name=repeat-month-mode]').select_option('ordinal')
         await page.locator('[name=repeat-ordinal]').select_option('2');await page.locator('[name=repeat-weekday]').select_option('TU')

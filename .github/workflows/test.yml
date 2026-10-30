@@ -28,6 +28,7 @@ jobs:
       - run: node --check web/calendar-week.js
       - run: node --check web/calendar-time.js
       - run: node --check web/calendar-touch.js
+      - run: node --check web/event-datetime.js
       - run: node --test tests/*.test.cjs
       - run: npm install --no-save playwright@1.56.0
       - run: npx playwright install --with-deps chromium
@@ -43,4 +44,5 @@ jobs:
       - run: node tests/browser-calendar-date-navigation.cjs
       - run: node tests/browser-list-swipe-actions.cjs
       - run: node tests/browser-event-touch-scroll.cjs
+      - run: node tests/browser-event-datetime.cjs
 
