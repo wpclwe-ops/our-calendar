@@ -330,3 +330,19 @@ body.dark .week-date.selected{background:#3b3048}
 .event-category-picker .category-choice>.svg-icon{width:18px;height:18px;flex:none;color:var(--accent)}
 /* Inside Telegram, stop the whole page rubber-banding; inner scrollers already contain their own overscroll. */
 html,body{overscroll-behavior:none}
+
+/* Every main scrollport reaches behind the floating controls, in every view. */
+.calendar-shell,.navigation-shell{height:100dvh}
+.demo+.calendar-shell,.demo+.navigation-shell{height:calc(100dvh - 34px)}
+.calendar-shell .calendar-motion-page>.agenda,.calendar-shell .day-checklist{padding-bottom:calc(var(--nav-height) + 104px);scroll-padding-bottom:calc(var(--nav-height) + 104px)}
+.navigation-content{padding-bottom:calc(var(--nav-height) + 24px);scroll-padding-bottom:calc(var(--nav-height) + 24px)}
+
+/* Hold-and-swipe actions exist only on list cards; timeline dragging is separate. */
+.day-task,.search-page .event{touch-action:pan-y pinch-zoom;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.list-holding{user-select:none;-webkit-user-select:none}
+.list-swipe-armed{box-shadow:0 0 0 1px var(--accent);will-change:transform}
+.list-swipe-ready{box-shadow:0 0 0 2px var(--accent)}
+.list-swipe-hint{position:fixed;left:50%;transform:translateX(-50%);z-index:70;max-width:calc(100vw - 24px);padding:8px 14px;border-radius:14px;background:var(--card);color:var(--accent);box-shadow:var(--shadow);font-size:13px;pointer-events:none}
+.list-swipe-hint[data-action=delete]{color:var(--danger)}
+.centered-confirmation{align-items:center;padding:24px}
+.centered-confirmation .modal{max-width:360px;border-radius:22px;padding:24px;max-height:calc(100dvh - 48px)}
