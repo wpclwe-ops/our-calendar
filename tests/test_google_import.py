@@ -59,7 +59,7 @@ class FakeOAuth:
 
 
 @pytest.fixture
-def google(service):
+def google(service,provider_clock):
     service.config=replace(service.config,google_client_id='test-client',google_client_secret='test-secret',google_credential_key=Fernet.generate_key().decode())
     fake=FakeGoogle();g=GoogleImports(service,FakeOAuth(),fake)
     with service.db.transaction() as c:

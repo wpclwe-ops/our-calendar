@@ -36,7 +36,7 @@ class FakeICloud:
 
 
 @pytest.fixture
-def linked(service):
+def linked(service,provider_clock):
     service.config=replace(service.config,icloud_credential_key=Fernet.generate_key().decode())
     fake=FakeICloud()
     importer=ICloudImports(service,provider=fake)
