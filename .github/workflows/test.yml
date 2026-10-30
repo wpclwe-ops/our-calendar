@@ -40,4 +40,5 @@ jobs:
       - run: node tests/browser-calendar-touchbar.cjs
       - run: node tests/browser-calendar-interactions.cjs
       - run: node tests/browser-calendar-navigation.cjs
+      - run: node tests/browser-calendar-date-navigation.cjs
 
