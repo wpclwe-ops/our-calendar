@@ -16,7 +16,7 @@ const assert=require('node:assert/strict'),{mkdtempSync,rmSync,mkdirSync}=requir
   await page.evaluate(async()=>{warmNavigation=()=>{};state=await api('settings','PATCH',{timezone:'Europe/Warsaw',theme:'dark',day_layout:'list'});selected='2026-10-30';await loadData();render()});
   const idle=async()=>{for(let i=0;i<120;i++){if(await page.evaluate(()=>!busy&&!calendarSwipe.active()&&!calendarTouch.active()))return;await page.waitForTimeout(25)}throw Error('not idle')};
   const dialog=()=>page.locator('.event-datetime-picker'),wheel=name=>dialog().locator(`[data-ed-wheel=${name}]`);
-  const open=async(field='start')=>{await page.locator(`[data-action=event-datetime][data-field=${field}]`).click();await dialog().waitFor();await idle();await page.waitForTimeout(300)};
+  const open=async(field='start')=>{await page.locator(`[data-action=event-datetime]`).click();await dialog().waitFor();if(field==='end')await dialog().locator('[data-ed-tab=end]').click();await idle();await page.waitForTimeout(300)};
   const setClock=async(name,n)=>{await wheel(name).focus();await page.keyboard.press('Home');for(let i=0;i<n;i++)await page.keyboard.press('ArrowDown')};
   const chooseDate=async(date)=>{await dialog().locator('[data-ed-date-toggle]').click();
    for(let i=0;i<36;i++){
@@ -34,7 +34,7 @@ const assert=require('node:assert/strict'),{mkdtempSync,rmSync,mkdirSync}=requir
   await open();assert.equal(await page.locator('#app').evaluate(el=>el.inert),true);await screenshot('datetime-wheels-dark');
   await setClock('hour',21);assert.equal(await dialog().locator('[data-ed-time=start]').textContent(),'21:30');
   await dialog().locator('[data-ed-cancel]').click();assert.equal(await page.inputValue('[name=start]'),'2026-10-30T19:30');assert.equal(await page.locator('#app').evaluate(el=>el.inert),false);
-  await page.locator('label[for="field-start"]').click();await dialog().waitFor();await dialog().locator('[data-ed-cancel]').click();
+  await page.locator('[data-action=event-datetime]').click();await dialog().waitFor();await dialog().locator('[data-ed-cancel]').click();
   await open();await setClock('hour',23);await setClock('minute',55);assert.equal(await dialog().locator('[data-ed-time=end]').textContent(),'00:55');assert.match(await dialog().locator('[data-ed-day=end]').textContent(),/31/);
   await chooseDate('2026-11-01');await done();assert.equal(await page.inputValue('[name=start]'),'2026-11-01T23:55');assert.equal(await page.inputValue('[name=end]'),'2026-11-02T00:55');
   assert.equal(await page.inputValue('[name=title]'),'Wheel specimen');assert.equal(mutations.length,0,'choosing time does not save an event');
@@ -81,7 +81,7 @@ const assert=require('node:assert/strict'),{mkdtempSync,rmSync,mkdirSync}=requir
    await page.keyboard.press('Escape');assert.equal(await dialog().count(),1,'Escape first closes the calendar');await page.keyboard.press('Escape');assert.equal(await dialog().count(),0);
    assert.equal(await page.locator('[data-action=event-datetime][data-field=start]').evaluate(el=>el===document.activeElement),true);
   }
-  await page.locator('[name=all_day]').check();assert.equal(await page.locator('[data-action=event-datetime]').count(),0);assert.equal(await page.locator('[name=start]').getAttribute('type'),'date');await page.locator('[name=all_day]').uncheck();assert.equal(await page.locator('[data-action=event-datetime]').count(),2);
+  await open();await dialog().locator('[data-ed-all-day]').check();await done();assert.equal(await page.locator('[name=start]').getAttribute('type'),'hidden');assert.equal(await page.evaluate(()=>formEvent.all_day),true);await open();await dialog().locator('[data-ed-all-day]').uncheck();await done();assert.equal(await page.locator('[data-action=event-datetime]').count(),1);
   assert.deepEqual(errors,[]);console.log('PASS: create/edit, real touch, exact minute, date/duration, cancel/apply, DST/folds, recurrence, all-day, RU/EN themes and responsive dialog');
  }finally{await browser?.close();const exited=new Promise(resolve=>server.once('exit',resolve));server.kill();await exited;rmSync(dir,{recursive:true,force:true})}
 })().catch(e=>{console.error(e);process.exitCode=1});

@@ -6,6 +6,8 @@
  const foldKey=field=>field==='start'?'fold':'end_fold';
  const wallNumber=value=>Date.parse(value+'Z');
  const minute=value=>value.slice(0,16);
+ const dayAdd=(day,n)=>T.add(day+'T00:00',n*1440).slice(0,10);
+ const validDay=day=>/^\d{4}-\d\d-\d\d$/.test(day)&&validWall(day+'T00:00');
  function validWall(value){
   return /^\d{4}-\d\d-\d\dT\d\d:\d\d(?::\d\d(?:\.\d{1,6})?)?$/.test(value)&&Number(value.slice(0,4))>=1&&Number.isFinite(wallNumber(value))&&new Date(wallNumber(value)).toISOString().slice(0,16)===minute(value);
  }
@@ -26,11 +28,12 @@
   }catch{return {end:T.add(minute(data.start),minutes),end_fold:undefined}}
  }
  function model(options){
-  let data={start:options.start,end:options.end,timezone:options.timezone,fold:options.fold,end_fold:options.end_fold,manualEnd:Boolean(options.manualEnd)};
+  let data={start:options.start,end:options.end,all_day:Boolean(options.all_day),timezone:options.timezone,fold:options.fold,end_fold:options.end_fold,manualEnd:Boolean(options.manualEnd)},timed=null;
   // A draft changes date/hour/minute separately. Intermediate invalid positions must not replace the user's end anchor.
   let anchor={...data},generated=null;
   const value=()=>({...data});
   function status(){
+   if(data.all_day){const errors=[];for(const field of ['start','end'])if(!validDay(data[field]))errors.push({field,code:'invalid_datetime'});if(!errors.length&&data.end<=data.start)errors.push({field:'end',code:'end_must_follow_start'});return {valid:!errors.length,errors,ambiguous:{},minutes:errors.length?null:(Date.parse(data.end)-Date.parse(data.start))/60000}}
    const errors=[],ambiguous={};let start,end;
    for(const field of ['start','end'])try{
     const a=resolve(data[field],data.timezone,0),b=resolve(data[field],data.timezone,1);ambiguous[field]=a!==b;
@@ -55,7 +58,21 @@
    }
   }
   return {value,status,checkpoint:()=>({data:{...data},anchor:{...anchor},generated:generated?{...generated}:null}),restore:checkpoint=>{data={...(checkpoint.data||checkpoint)};anchor={...(checkpoint.anchor||data)};generated=checkpoint.generated?{...checkpoint.generated}:null},
-   setDate(field,date){change(field,date+data[field].slice(10),'date')},
+   setDate(field,date){
+    if(!validDay(date))throw Error('invalid_datetime');
+    if(data.all_day){if(field==='start'){const days=Math.max(1,(Date.parse(data.end)-Date.parse(data.start))/86400000);data.start=date;data.end=dayAdd(date,days)}else data.end=dayAdd(date,1);return}
+    change(field,date+data[field].slice(10),'date');
+   },
+   setAllDay(all){
+    if(Boolean(all)===data.all_day)return;
+    if(all){timed={...data};data.start=data.start.slice(0,10);data.end=timed.end.slice(11,16)==='00:00'?timed.end.slice(0,10):dayAdd(timed.end.slice(0,10),1);if(data.end<=data.start)data.end=dayAdd(data.start,1);data.fold=undefined;data.end_fold=undefined}
+    else{const first=data.start,last=dayAdd(data.end,-1),base=timed||options.timedDefaults||{start:first+'T09:00',end:first+'T10:00'};
+     data.start=first+base.start.slice(10);data.end=(base.end.slice(11,16)==='00:00'?data.end:last)+base.end.slice(10);
+     data.fold=data.start===base.start?base.fold:undefined;data.end_fold=data.end===base.end?base.end_fold:undefined;
+     if(data.end<=data.start)Object.assign(data,ending(data,Math.max(1,elapsed(base)||60)));
+    }
+    data.all_day=Boolean(all);anchor={...data};generated=null;
+   },
    setClock(field,part,n){
     const wall=minute(data[field]),h=part==='hour'?pad(mod(n,24)):wall.slice(11,13),m=part==='minute'?pad(mod(n,60)):wall.slice(14,16),next=wall.slice(0,10)+'T'+h+':'+m;
     if(next!==wall)change(field,next,'time');
@@ -68,6 +85,8 @@
   ru:{dateTime:'Дата и время',start:'Начало',end:'Конец',startDate:'Дата начала',endDate:'Дата окончания',hours:'Часы',minutes:'Минуты',duration:'Длительность',cancel:'Отмена',done:'Готово',close:'Закрыть',previous:'Предыдущий месяц',next:'Следующий месяц',first:'Первый',second:'Второй',repeated:'Этот час повторяется. Выберите вариант.',invalid_datetime:'Проверьте дату и время.',invalid_timezone:'Проверьте часовой пояс события.',nonexistent_local_time:'Такого времени нет из-за перехода на летнее время.',ambiguous_local_time_choose_fold:'Выберите первый или второй вариант повторяющегося часа.',end_must_follow_start:'Окончание должно быть позже начала.',invalid_duration:'Проверьте длительность.',startLabel:'Начало',endLabel:'Конец'},
   en:{dateTime:'Date & time',start:'Start',end:'End',startDate:'Start date',endDate:'End date',hours:'Hours',minutes:'Minutes',duration:'Duration',cancel:'Cancel',done:'Done',close:'Close',previous:'Previous month',next:'Next month',first:'First',second:'Second',repeated:'This hour occurs twice. Choose an occurrence.',invalid_datetime:'Check the date and time.',invalid_timezone:'Check the event time zone.',nonexistent_local_time:'This local time does not exist because of daylight saving time.',ambiguous_local_time_choose_fold:'Choose the first or second occurrence of this hour.',end_must_follow_start:'End must be after start.',invalid_duration:'Check the duration.',startLabel:'Start',endLabel:'End'}
  };
+ Object.assign(words.ru,{allDay:'Весь день',end:'Окончание',endDate:'Последний день (включён)'});
+ Object.assign(words.en,{allDay:'All day',endDate:'Last day (included)'});
  const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  function dateText(value,language,options){return new Intl.DateTimeFormat(language==='en'?'en-GB':'ru-RU',{timeZone:'UTC',...options}).format(new Date(value.slice(0,10)+'T12:00:00Z'))}
  function durationText(n,language){
@@ -87,7 +106,11 @@
   const scroll=document.documentElement.style.overflow;document.documentElement.style.overflow='hidden';if(app)app.inert=true;
   el.innerHTML=`<section class="modal event-datetime-picker" role="dialog" aria-modal="true" aria-labelledby="event-datetime-title"><div class="ed-header"><h2 id="event-datetime-title">${t('dateTime')}</h2><button type="button" data-ed-close aria-label="${t('close')}">×</button></div><div class="ed-tabs" role="group" aria-label="${t('dateTime')}">${['start','end'].map(key=>`<button type="button" data-ed-tab="${key}"><span>${t(key)}</span><strong data-ed-time="${key}"></strong><small data-ed-day="${key}"></small></button>`).join('')}</div><button type="button" class="ed-date" data-ed-date-toggle aria-expanded="false"><span><small data-ed-date-caption></small><strong data-ed-date-label></strong></span><span class="ed-chevron" aria-hidden="true">⌄</span></button><section class="ed-calendar" aria-label="${t('dateTime')}" hidden><div class="ed-month-header"><button type="button" data-ed-month="-1" aria-label="${t('previous')}">‹</button><strong data-ed-month-label></strong><button type="button" data-ed-month="1" aria-label="${t('next')}">›</button></div><div class="ed-weekdays" aria-hidden="true"></div><div class="ed-days"></div></section><section class="ed-time" aria-label="${t('dateTime')}"><div class="ed-wheel-labels"><span>${t('hours')}</span><span></span><span>${t('minutes')}</span></div><div class="ed-drums"><div class="ed-selection" aria-hidden="true"></div>${['hour','minute'].map((name,i)=>`${i?'<span class="ed-colon" aria-hidden="true">:</span>':''}<button type="button" class="ed-wheel" data-ed-wheel="${name}" role="spinbutton" aria-label="${t(i?'minutes':'hours')}" aria-valuemin="0" aria-valuemax="${i?59:23}"><span class="ed-track" aria-hidden="true"></span></button>`).join('')}</div></section><div class="ed-folds"></div><section class="ed-duration"><div class="ed-duration-caption"><span>${t('duration')}</span><strong data-ed-duration-label></strong></div><div class="ed-presets" role="group" aria-label="${t('duration')}">${[30,60,90,120].map(n=>`<button type="button" data-ed-duration="${n}">${esc(n===90?(language==='ru'?'1,5 ч':'1.5 h'):durationText(n,language))}</button>`).join('')}</div></section><div class="ed-zone">${esc(options.timezone)}</div><div class="ed-error" role="alert" hidden></div><footer class="ed-footer"><button type="button" data-ed-cancel>${t('cancel')}</button><button type="button" class="primary" data-ed-done>${t('done')}</button></footer></section>`;
   document.body.append(el);
-  const activeValue=name=>Number(data.value()[field].slice(name==='hour'?11:14,name==='hour'?13:16));
+  const allDayLabel=document.createElement('label');allDayLabel.className='ed-all-day';
+  allDayLabel.innerHTML=`<input type="checkbox" name="all_day" data-ed-all-day>${t('allDay')}`;
+  $('.ed-tabs').before(allDayLabel);
+  const displayDate=key=>data.value().all_day&&key==='end'?dayAdd(data.value().end,-1):data.value()[key].slice(0,10);
+  const activeValue=name=>data.value().all_day?0:Number(data.value()[field].slice(name==='hour'?11:14,name==='hour'?13:16));
   function drawWheel(name,offset=0){
    const wheel=$('[data-ed-wheel='+name+']'),value=activeValue(name),count=name==='hour'?24:60,track=wheel.querySelector('.ed-track');
    track.innerHTML=Array.from({length:9},(_,i)=>{const k=i-4;return `<span class="ed-number ${k===0?'selected':''}" data-ed-offset="${k}">${pad(mod(value+k,count))}</span>`}).join('');
@@ -97,8 +120,9 @@
   function summary(){
    const v=data.value(),status=data.status();
    $$('[data-ed-tab]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.edTab===field)));
-   for(const key of ['start','end']){$('[data-ed-time='+key+']').textContent=v[key].slice(11,16);$('[data-ed-day='+key+']').textContent=dateText(v[key],language,{day:'numeric',month:'long',year:'numeric'})}
-   $('[data-ed-date-caption]').textContent=t(field==='start'?'startDate':'endDate');$('[data-ed-date-label]').textContent=dateText(v[field],language,{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+   $('[data-ed-all-day]').checked=v.all_day;$('.ed-time').hidden=v.all_day||calendarOpen;$('.ed-duration').hidden=v.all_day;$('.ed-zone').hidden=v.all_day;
+   for(const key of ['start','end']){$('[data-ed-time='+key+']').textContent=v.all_day?t('allDay'):v[key].slice(11,16);$('[data-ed-day='+key+']').textContent=dateText(displayDate(key),language,{day:'numeric',month:'long',year:'numeric'})}
+   $('[data-ed-date-caption]').textContent=t(field==='start'?'startDate':'endDate');$('[data-ed-date-label]').textContent=dateText(displayDate(field),language,{weekday:'long',day:'numeric',month:'long',year:'numeric'});
    $('[data-ed-duration-label]').textContent=durationText(status.minutes,language);$$('[data-ed-duration]').forEach(b=>b.setAttribute('aria-pressed',String(Number(b.dataset.edDuration)===status.minutes)));
    $('.ed-error').hidden=status.valid;$('.ed-error').textContent=status.errors.map(e=>t(e.field)+': '+t(e.code)).join(' ');$('[data-ed-done]').disabled=!status.valid;
    $('.ed-folds').innerHTML=['start','end'].filter(key=>status.ambiguous[key]).map(key=>`<fieldset class="ed-fold"><legend>${t(key)} · ${t('repeated')}</legend>${[0,1].map(n=>`<label><input type="radio" name="ed-fold-${key}" data-ed-fold="${key}" value="${n}" ${v[foldKey(key)]===n?'checked':''}>${t(n?'second':'first')}</label>`).join('')}</fieldset>`).join('');
@@ -110,9 +134,9 @@
    $('[data-ed-month-label]').textContent=dateText(month,language,{month:'long',year:'numeric'});
    $('[data-ed-month="-1"]').disabled=month==='0001-01-01';$('[data-ed-month="1"]').disabled=month==='9999-12-01';
    $('.ed-weekdays').innerHTML=Array.from({length:7},(_,i)=>{const d=new Date('2026-10-12T12:00:00Z');d.setUTCDate(d.getUTCDate()+i);return `<span>${esc(dateText(d.toISOString(),language,{weekday:'short'}))}</span>`}).join('');
-   $('.ed-days').innerHTML=Array.from({length:count},(_,i)=>{const d=new Date(start);d.setUTCDate(d.getUTCDate()+i);const date=d.toISOString().slice(0,10),invalid=d.getUTCFullYear()<1||d.getUTCFullYear()>9999;return `<button type="button" data-ed-day-choice="${esc(date)}" class="${date.slice(0,7)!==month.slice(0,7)?'outside':''}" aria-pressed="${date===data.value()[field].slice(0,10)}" aria-label="${invalid?'—':esc(dateText(date,language,{day:'numeric',month:'long',year:'numeric'}))}" ${invalid?'disabled':''}>${d.getUTCDate()}</button>`}).join('');
+   $('.ed-days').innerHTML=Array.from({length:count},(_,i)=>{const d=new Date(start);d.setUTCDate(d.getUTCDate()+i);const date=d.toISOString().slice(0,10),invalid=d.getUTCFullYear()<1||d.getUTCFullYear()>9999;return `<button type="button" data-ed-day-choice="${esc(date)}" class="${date.slice(0,7)!==month.slice(0,7)?'outside':''}" aria-pressed="${date===displayDate(field)}" aria-label="${invalid?'—':esc(dateText(date,language,{day:'numeric',month:'long',year:'numeric'}))}" ${invalid?'disabled':''}>${d.getUTCDate()}</button>`}).join('');
   }
-  function toggleDate(open){calendarOpen=open;$('.ed-calendar').hidden=!open;$('.ed-time').hidden=open;$('[data-ed-date-toggle]').setAttribute('aria-expanded',String(open));if(open){month=data.value()[field].slice(0,7)+'-01';calendar()}}
+  function toggleDate(open){calendarOpen=open;$('.ed-calendar').hidden=!open;$('.ed-time').hidden=open||data.value().all_day;$('[data-ed-date-toggle]').setAttribute('aria-expanded',String(open));if(open){month=displayDate(field).slice(0,7)+'-01';calendar()}}
   function stopWheels(restore=false){for(const [name,s] of wheels){clearTimeout(s.timer);cancelAnimationFrame(s.frame);if(restore&&s.drag)data.restore(s.drag.checkpoint);s.drag=null;s.offset=0;s.acc=0;s.node.classList.remove('dragging');if(!closed)drawWheel(name)}}
   function close(){if(closed)return;stopWheels();closed=true;controller.abort();el.remove();document.documentElement.style.overflow=scroll;if(app)app.inert=wasInert;if(previous?.isConnected)previous.focus({preventScroll:true});live=null;options.onClose?.()}
   live={close};
@@ -126,7 +150,7 @@
    else if(b.hasAttribute('data-ed-duration')){stopWheels();data.setDuration(Number(b.dataset.edDuration));refresh()}
    else if(b.hasAttribute('data-ed-done')){stopWheels();if(!data.status().valid)return;const result=data.value();close();options.onApply(result)}
   });
-  listen(el,'change',e=>{if(e.target.hasAttribute('data-ed-fold')){const key=e.target.dataset.edFold,n=e.target.value;data.setFold(key,n);refresh();$(`[data-ed-fold="${key}"][value="${n}"]`).focus()}});
+  listen(el,'change',e=>{if(e.target.hasAttribute('data-ed-all-day')){stopWheels();data.setAllDay(e.target.checked);toggleDate(false);refresh()}if(e.target.hasAttribute('data-ed-fold')){const key=e.target.dataset.edFold,n=e.target.value;data.setFold(key,n);refresh();$(`[data-ed-fold="${key}"][value="${n}"]`).focus()}});
   for(const name of ['hour','minute']){
    const node=$('[data-ed-wheel='+name+']'),s={node,offset:0,drag:null,acc:0,timer:0,frame:0};wheels.set(name,s);
    const snap=()=>{s.offset=0;s.acc=0;node.classList.remove('dragging');drawWheel(name)};

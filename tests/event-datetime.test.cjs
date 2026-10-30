@@ -60,3 +60,24 @@ test('cancel checkpoints restore the whole draft and untouched non-grid seconds 
  assert.throws(()=>m.setDate('start','2026-02-30'),/invalid_datetime/);
  assert.throws(()=>m.setDuration(0),/invalid_duration/);
 });
+test('all-day picker uses an inclusive final date and exclusive storage across months and leap days',()=>{
+ const m=D.model({...base,start:'2028-02-28',end:'2028-03-01',all_day:true});
+ assert.equal(m.status().minutes,2*1440);m.setDate('end','2028-03-02');assert.equal(m.value().end,'2028-03-03');
+ m.setDate('start','2028-02-29');assert.equal(m.value().end,'2028-03-04');
+ m.setDate('end','2028-02-28');assert.equal(m.status().valid,false);
+ assert.throws(()=>m.setDate('start','2028-02-30'),/invalid_datetime/);
+});
+test('timed/all-day toggles preserve the original clocks and do not include a midnight boundary',()=>{
+ const m=D.model({...base,start:'2026-10-31T23:00',end:'2026-11-01T00:00'});
+ m.setAllDay(true);assert.equal(m.value().start,'2026-10-31');assert.equal(m.value().end,'2026-11-01');
+ m.setAllDay(false);assert.equal(m.value().start,'2026-10-31T23:00');assert.equal(m.value().end,'2026-11-01T00:00');
+ const n=D.model(base);n.setAllDay(true);n.setDate('end','2026-11-02');n.setAllDay(false);
+ assert.equal(n.value().start,'2026-10-30T19:30');assert.equal(n.value().end,'2026-11-02T20:30');
+});
+test('all-day dates are independent of time zones and DST gaps',()=>{
+ for(const zone of ['Europe/Warsaw','Australia/Melbourne','Pacific/Apia']){
+  const m=D.model({start:'2026-03-29',end:'2026-03-30',all_day:true,timezone:zone});
+  assert.equal(m.status().valid,true);assert.equal(m.status().minutes,1440);
+  m.setDate('end','2026-03-29');assert.equal(m.value().end,'2026-03-30');
+ }
+});

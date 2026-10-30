@@ -106,3 +106,15 @@ Before merge: 301 Python tests, compileall and app.js syntax; five regression ca
 ## iCloud CDATA 0.10.3
 
 307 Python tests, compileall and app.js syntax; regression evidence recorded before the repair. Verify the remaining source's one-time retry, reject actual DTDs, and confirm /health 0.10.3 with the existing checkpoint and /data. Do not equate successful source reads with support for every individual recurrence format.
+## 0.10.7 — карточка и редактор события, 31 октября 2026
+
+- Проверить Python suite, 48 Node-тестов, compileall и синтаксис JS.
+- Пройти существующие браузерные сценарии и новый browser-event-surface.cjs.
+- Проверить отмену/сохранение формы и меню уведомлений, сохранение напоминаний
+  партнёра и scope экземпляра, повторения, RU/EN и явное согласие на замену.
+- Проверить включённую дату окончания «Весь день», эксклюзивную границу API,
+  повторную правку без сдвига, DST/fold, обе темы и ширины 320/390/430 px.
+- До выпуска проверить ready backup/release checkpoint. После слияния подтвердить
+  Railway SUCCESS для точного main SHA, /health 0.10.7, одну реплику и прежний /data.
+- Реальные Telegram iOS/WebKit, качество автоперевода и получение уведомлений
+  на телефоне не объявлять подтверждёнными по синтетическим сценариям.

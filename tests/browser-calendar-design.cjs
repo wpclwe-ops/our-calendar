@@ -130,28 +130,26 @@ const {mkdtempSync,rmSync,mkdirSync}=require('node:fs');const {tmpdir}=require('
  await page.locator('[data-action=new]').click();await page.waitForSelector('#event-form');
  assert.equal(await page.locator('.advanced-section').count(),0);
  assert.ok(await page.locator('[name=location]').isVisible());
- assert.ok(await page.locator('.event-reminders').evaluate(el=>{const repeat=document.querySelector('[name=repeat]').closest('.form-row');return repeat.nextElementSibling===el}),'reminder directly follows repetition');
+ assert.equal(await page.locator('.surface-notifications input:visible').count(),0);
  await page.locator('[name=title]').fill('Произвольное напоминание');
- let eventReminders=page.locator('[data-reminder-editor=event]');
- await eventReminders.locator('[data-reminder-amount]').fill('7');
- await eventReminders.locator('[data-reminder-unit]').selectOption('1440');
+ await page.locator('[data-action=form-reminders]').click();await wait();
+ let eventReminders=page.locator('.event-reminder-sheet');
+ await eventReminders.locator('[data-reminder-check=none]').check();await eventReminders.locator('[data-action=surface-add-custom]').click();
+ await eventReminders.locator('[data-reminder-amount]:enabled').fill('7');await eventReminders.locator('[data-reminder-unit]:enabled').selectOption('1440');
+ await eventReminders.locator('[type=submit]').click();await wait();
  assert.deepEqual(await page.evaluate(()=>formEvent.reminders[state.me.id]),[10080]);
  assert.equal(await page.inputValue('[name=title]'),'Произвольное напоминание');
  for(const width of [320,390]){
-  await page.setViewportSize({width,height:844});
-  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-  assert.ok(await page.locator('.all-day-switch').evaluate(row=>{const input=row.querySelector('input'),a=input.getBoundingClientRect(),b=row.getBoundingClientRect();return a.width===46&&a.height===28&&Math.abs(a.y+a.height/2-b.y-b.height/2)<2}));
-  assert.equal(await page.locator('[data-action=event-datetime][data-field=start]').evaluate(el=>getComputedStyle(el).textAlign),'center');
-  await screenshot('event-native-reminders-'+width);
+  await page.setViewportSize({width,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  assert.equal(await page.locator('[data-action=event-datetime]').evaluate(el=>getComputedStyle(el).textAlign),'left');
+  await screenshot('event-checkbox-reminders-'+width);
  }
- await page.locator('[name=all_day]').check();await wait();
- assert.equal(await page.locator('[name=start]').getAttribute('type'),'date');
- assert.equal(await page.inputValue('[name=title]'),'Произвольное напоминание');
+ await page.locator('[data-action=event-datetime]').click();await page.locator('[data-ed-all-day]').check();await page.locator('[data-ed-done]').click();await wait();
+ assert.equal(await page.evaluate(()=>formEvent.all_day),true);assert.equal(await page.inputValue('[name=title]'),'Произвольное напоминание');
  assert.deepEqual(await page.evaluate(()=>formEvent.reminders[state.me.id]),[10080]);
- await page.locator('[name=all_day]').uncheck();await wait();
+ await page.locator('[data-action=event-datetime]').click();await page.locator('[data-ed-all-day]').uncheck();await page.locator('[data-ed-done]').click();await wait();
  await page.locator('[type=submit][form=event-form]').click();await page.waitForSelector('.detail-title');
- assert.deepEqual(await page.evaluate(()=>currentEvent.reminders[state.me.id]),[10080]);
- assert.deepEqual(await page.evaluate(()=>currentEvent.reminders['2']),[60]);
+ assert.deepEqual(await page.evaluate(()=>currentEvent.reminders[state.me.id]),[10080]);assert.deepEqual(await page.evaluate(()=>currentEvent.reminders['2']),[60]);
  // Reminder editing is a separate cancellable sheet and sends no event fields.
  assert.doesNotMatch(await page.locator('.detail-reminders').textContent(),/Только ваши настройки|У партнёра/);
  assert.ok(await page.locator('.status-chip').evaluate(el=>{const a=el.querySelector('svg').getBoundingClientRect(),b=el.querySelector('span').getBoundingClientRect();return Math.abs(a.y+a.height/2-b.y-b.height/2)<1}),'status chevron is vertically centered');
@@ -161,13 +159,13 @@ const {mkdtempSync,rmSync,mkdirSync}=require('node:fs');const {tmpdir}=require('
  await page.locator('[data-action=edit-reminders]').click();await page.waitForSelector('.event-reminder-sheet');
  assert.equal(await page.locator('#event-form,[name=title]').count(),0);
  let sheet=page.locator('.event-reminder-sheet');
- await sheet.locator('[data-reminder-preset]').selectOption('120');
+ await sheet.locator('[data-reminder-check=none]').check();await sheet.locator('[data-reminder-check="120"]').check();
  await sheet.locator('.reminder-sheet-actions [data-close]').click();
  assert.equal(reminderRequests.length,0);assert.deepEqual(await page.evaluate(()=>currentEvent.reminders[state.me.id]),[10080]);
  await page.locator('[data-action=edit-reminders]').click();
- await sheet.locator('[data-reminder-preset]').selectOption('120');
- await sheet.locator('[data-action=add-reminder]').click();await sheet.locator('[data-action=add-reminder]').click();
- assert.equal(await sheet.locator('[data-reminder-preset]').count(),3);
+ await sheet.locator('[data-reminder-check=none]').check();await sheet.locator('[data-reminder-check="120"]').check();
+ await sheet.locator('[data-reminder-check="30"]').check();await sheet.locator('[data-reminder-check="15"]').check();
+ assert.equal(await sheet.locator('[data-reminder-check]:checked').count(),3);
  assert.equal(await sheet.locator('[data-action=add-reminder]').count(),0);
  await screenshot('reminder-only-sheet');
  await page.route(endpoint,r=>r.fulfill({status:503,contentType:'application/json',body:'{"error":"error"}'}));
@@ -180,7 +178,7 @@ const {mkdtempSync,rmSync,mkdirSync}=require('node:fs');const {tmpdir}=require('
  for(const field of ['title','start','end','timezone','owner','category_id','status','description'])assert.deepEqual(await page.evaluate(field=>currentEvent[field],field),beforeReminder[field]);
  // For a series, editing the displayed event changes only that occurrence.
  const series=await page.evaluate(async()=>{const e=await api('events','POST',{title:'Reminder series',start:'2026-10-17T12:00',end:'2026-10-17T13:00',timezone:'Europe/Warsaw',rrule:'FREQ=DAILY;COUNT=2'});await openEvent(e.id,'2026-10-18T12:00');return e.id});
- await page.locator('[data-action=edit-reminders]').click();await sheet.locator('[data-reminder-preset]').selectOption('120');await sheet.locator('[type=submit]').click();await page.waitForSelector('.reminder-backdrop',{state:'hidden'});await wait();
+ await page.locator('[data-action=edit-reminders]').click();await sheet.locator('[data-reminder-check=none]').check();await sheet.locator('[data-reminder-check="120"]').check();await sheet.locator('[type=submit]').click();await page.waitForSelector('.reminder-backdrop',{state:'hidden'});await wait();
  const result=await page.evaluate(id=>api('events/'+id+'?occurrence=2026-10-18T12:00'),series);
  assert.deepEqual(result.reminders['1'],[45]);assert.deepEqual(result.selected_instance.reminders['1'],[120]);assert.deepEqual(result.selected_instance.reminders['2'],[60]);
  await page.locator('[data-action=back]').first().click();await wait();

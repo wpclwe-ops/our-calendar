@@ -8,6 +8,13 @@ from app.recurrence import stamp,utcnow
 from datetime import timedelta
 from test_google_import import FakeGoogle,FakeOAuth,remote
 
+# Auto-import specimens are fixed in October. Keep their server eligibility clock
+# aligned with the browser fixture instead of letting the wall date expire them.
+from datetime import datetime, timezone
+import app.recurrence as recurrence
+import app.google_import as google_import
+recurrence.utcnow = google_import.utcnow = lambda: datetime(2026, 10, 20, 12, tzinfo=timezone.utc)
+
 cfg=replace(Config.env(),google_client_id='synthetic-client',google_client_secret='synthetic-secret',google_credential_key=Fernet.generate_key().decode())
 app=create_app(cfg,start_worker=False)
 g=app.state.google;fake=FakeGoogle();g.provider=fake;g.oauth=FakeOAuth()

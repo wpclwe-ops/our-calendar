@@ -32,7 +32,7 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  await page.locator('[data-action="new"]').click();await wait();
  assert.equal(await page.inputValue('[name="start"]'),'2026-10-16T22:30');assert.equal(await page.inputValue('[name="end"]'),'2026-10-16T23:30');
  const timeWheel=async(field,h,m,date)=>{
-  await page.locator(`[data-action=event-datetime][data-field=${field}]`).click();
+  await page.locator('[data-action=event-datetime]').click();if(field==='end')await page.locator('[data-ed-tab=end]').click();
   if(date){await page.locator('[data-ed-date-toggle]').click();await page.locator(`[data-ed-day-choice="${date}"]`).click()}
   for(const [part,n] of [['hour',h],['minute',m]]){await page.locator(`[data-ed-wheel=${part}]`).focus();await page.keyboard.press('Home');for(let i=0;i<n;i++)await page.keyboard.press('ArrowDown')}
   await page.locator('[data-ed-done]').click();await wait();
