@@ -7,6 +7,12 @@ from app.main import create_app
 from app.recurrence import stamp,utcnow
 from datetime import timedelta
 from test_google_import import FakeGoogle,FakeOAuth,remote
+import app.recurrence
+from tests.helpers.provider_clock import ProviderFixtureDateTime
+
+# The provider examples are dated 24 October; exercise future-event auto-import
+# consistently, even when the real test run takes place after those examples.
+app.recurrence.datetime=ProviderFixtureDateTime
 
 cfg=replace(Config.env(),google_client_id='synthetic-client',google_client_secret='synthetic-secret',google_credential_key=Fernet.generate_key().decode())
 app=create_app(cfg,start_worker=False)

@@ -330,3 +330,7 @@ body.dark .week-date.selected{background:#3b3048}
 .event-category-picker .category-choice>.svg-icon{width:18px;height:18px;flex:none;color:var(--accent)}
 /* Inside Telegram, stop the whole page rubber-banding; inner scrollers already contain their own overscroll. */
 html,body{overscroll-behavior:none}
+
+/* iOS focus zoom: touch and hybrid devices need at least 16 CSS px in fields.
+   Preserve the larger title fields and native pinch zoom. */
+@media(any-pointer:coarse){input:not(.title-field input),select,textarea{font-size:16px!important}}

@@ -3,6 +3,13 @@ from app.config import Config
 from app.db import Database
 from app.service import Service
 from app.backup import Backups
+from tests.helpers.provider_clock import ProviderFixtureDateTime
+
+@pytest.fixture
+def provider_clock(monkeypatch):
+    # Provider fixtures deliberately use 24 October 2026. Keep them future-dated
+    # without weakening production eligibility, token expiry or lease checks.
+    monkeypatch.setattr('app.recurrence.datetime',ProviderFixtureDateTime)
 
 @pytest.fixture
 def service(tmp_path):

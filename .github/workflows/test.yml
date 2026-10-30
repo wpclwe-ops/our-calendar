@@ -31,6 +31,8 @@ jobs:
       - run: node --test tests/*.test.cjs
       - run: npm install --no-save playwright@1.56.0
       - run: npx playwright install --with-deps chromium
+      - run: node tests/browser-event-allday-range.cjs
+      - run: node tests/browser-form-font-size.cjs
       - run: node tests/browser-google-import.cjs
       - run: node tests/browser-smart-events.cjs
       - run: node tests/browser-settings.cjs
