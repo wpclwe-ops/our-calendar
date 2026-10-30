@@ -92,7 +92,9 @@ let state=null,cfg={},events=[],categories=[],tab='calendar',page='main',selecte
 let filter={owner:'',category:'',status:''},currentEvent=null,formEvent=null,formBase=null,formScope='all',archiveData=null,previewData=null,inviteUrl='';
 let token='',busy=false,fetchVersion=0,detailLanguage='',systemStatus=null,providerStatuses={};
 const navigationCache=new Map();
-let monthWindow=[],monthLoading=false,endManuallySet=false,monthResize=null;
+let monthWindow=[],monthLoading=false,endManuallySet=false,monthResize=null,formReturn=null;
+Object.assign(words.ru,{listSwipeHint:'← Удалить · Изменить →'});
+Object.assign(words.en,{listSwipeHint:'← Delete · Edit →'});
 
 const t=k=>(words[state?.me?.language||'ru'][k]||words.en[k]||k);
 const locale=()=>state?.me?.language==='en'?'en-GB':'ru-RU';
@@ -298,7 +300,7 @@ async function changeEventStatus(e,value){
  else await api('events/'+e.id,'PATCH',{revision:e.revision,status:value});
 }
 async function deleteCalendarEvent(e){
- const scope=e.rrule?await chooseScope():null;if(e.rrule&&!scope)return;if(!await confirmDialog(t('confirmDelete')))return;
+ const scope=e.rrule?await chooseScope():null;if(e.rrule&&!scope)return;if(!await confirmDialog(t('confirmDelete'),title(e),true))return;
  if(e.rrule)await api('events/'+e.id+'/occurrence','POST',{occurrence:e.occurrence,revision:e.revision,scope,delete:true});
  else await api('events/'+e.id,'DELETE',{revision:e.revision,confirmed:true});
  page='main';await loadData();render();
@@ -335,6 +337,7 @@ async function changeWeekLayout(layout){
  try{state=await api('settings','PATCH',{week_layout:layout});navigationCache.clear();render()}catch(error){render();throw error}
 }
 function newEvent(day=selected,minutes){
+ formReturn=null;
  currentEvent=null;formScope='all';endManuallySet=false;
  formEvent={title:'',description:'',language:state.me.language,translations:{},...CalendarTime.defaults(day,tz(),state.me.default_duration||60,new Date(),minutes),all_day:false,timezone:tz(),owner:state.me.id,category_id:null,status:'planned',location:'',links:[],rrule:'',reminders:{[state.me.id]:[...ownNotificationDefaults()]}};
  page='form';render();
@@ -695,10 +698,37 @@ async function loadData(poll=false){
 async function changeView(v){view=v;state.me.view=v;await api('settings','PATCH',{view:v});await loadData();render()}
 function openDay(date){return navigateSmoothly({type:'view',view:'day',date},CalendarNavigation.motion({preview:navigationPreview}))}
 async function openEvent(id,key){
- const master=await api('events/'+id+(key?'?occurrence='+encodeURIComponent(key):''));
+ currentEvent=await fetchCalendarEvent(id,key);
  detailLanguage=state.me.language;
- currentEvent={...master,...(master.selected_instance||master.first_instance||{}),master};
  selected=eventDay(currentEvent);page='detail';render();
+}
+async function fetchCalendarEvent(id,key){
+ const master=await api('events/'+id+(key?'?occurrence='+encodeURIComponent(key):''));
+ return {...master,...(master.selected_instance||master.first_instance||{}),master};
+}
+async function editCalendarEvent(event=currentEvent,returnTo=null){
+ const scope=event.rrule?await chooseScope():'all';if(!scope)return;
+ currentEvent=event;formScope=scope;formReturn=returnTo;endManuallySet=false;
+ formEvent=structuredClone(scope==='all'?(event.master||event):event);
+ formEvent.reminders={...formEvent.reminders,[state.me.id]:eventReminderValues(formEvent)};
+ formBase=structuredClone(formEvent);page='form';render();
+}
+async function returnToEventList(){
+ const position=formReturn;page='main';
+ try{await loadData()}catch(error){page='form';throw error}
+ formReturn=null;render();
+ const scroller=$(position.selector);if(scroller)scroller.scrollTop=position.top;
+ window.scrollTo(0,position.windowTop);
+}
+async function quickListAction(node,action){
+ if(busy)return;busy=true;
+ try{
+  const event=listedEvent(node);
+  if(action==='delete'){await deleteCalendarEvent(event);return}
+  const selector='.day-checklist,.month-with-agenda,.agenda,.search-page',scroller=$(selector);
+  const returnTo={selector,top:scroller?.scrollTop||0,windowTop:window.scrollY};
+  await editCalendarEvent(await fetchCalendarEvent(event.id,event.occurrence),returnTo);
+ }finally{busy=false}
 }
 function captureForm(){
  const f=$('#event-form');if(!f)return;const d=new FormData(f);
@@ -706,7 +736,14 @@ function captureForm(){
  reminders:{...formEvent.reminders,[state.me.id]:readReminders($('[data-reminder-editor=event]',f))},translations:{...formEvent.translations}};
  for(const lang of ['ru','en']){const title=d.get('title_'+lang),description=d.get('description_'+lang);const old=formEvent.translations?.[lang];if((title||description||old)&&(title!==(old?.title||'')||description!==(old?.description||'')))formEvent.translations[lang]={title,description,manual:true,stale:false}}
 }
-function confirmDialog(title,message=''){return new Promise(resolve=>{const el=document.createElement('div');el.className='modal-backdrop';el.innerHTML=`<div class="modal" role="dialog" aria-modal="true"><h2>${esc(title)}</h2>${message?`<p class="muted">${esc(message)}</p>`:''}<button class="danger" data-choice="yes">${t('approve')}</button><button data-choice="no">${t('cancel')}</button></div>`;document.body.append(el);const finish=answer=>{el.remove();resolve(answer)};el.addEventListener('click',e=>{const c=e.target.closest('[data-choice]');if(c)finish(c.dataset.choice==='yes')});$('[data-choice=no]',el).focus()})}
+function confirmDialog(title,message='',centered=false){return new Promise(resolve=>{
+ const el=document.createElement('div'),previous=document.activeElement;el.className='modal-backdrop'+(centered?' centered-confirmation':'');
+ el.innerHTML=`<div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirmation-title"><h2 id="confirmation-title">${esc(title)}</h2>${message?`<p class="muted">${esc(message)}</p>`:''}<button class="danger" data-choice="yes">${t(centered?'delete':'approve')}</button><button data-choice="no">${t('cancel')}</button></div>`;
+ document.body.append(el);const finish=answer=>{el.remove();if(previous?.isConnected)previous.focus({preventScroll:true});resolve(answer)};
+ el.addEventListener('click',e=>{const c=e.target.closest('[data-choice]');if(c)finish(c.dataset.choice==='yes');else if(e.target===el)finish(false)});
+ el.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();finish(false)}if(e.key==='Tab'){e.preventDefault();(document.activeElement===$('[data-choice=no]',el)?$('[data-choice=yes]',el):$('[data-choice=no]',el)).focus()}});
+ $('[data-choice=no]',el).focus();
+})}
 function chooseScope(){return new Promise(resolve=>{const el=document.createElement('div');el.className='modal-backdrop';el.innerHTML=`<div class="modal" role="dialog" aria-modal="true"><h2>${t('occurrenceScope')}</h2>${[['one','one'],['following','following'],['all','series']].map(([v,k])=>`<button data-choice="${v}">${t(k)}</button>`).join('')}<button data-choice="cancel">${t('cancel')}</button></div>`;document.body.append(el);el.addEventListener('click',e=>{const c=e.target.closest('[data-choice]');if(c){el.remove();resolve(c.dataset.choice==='cancel'?null:c.dataset.choice)}});$('button',el).focus()})}
 async function saveForm(){
  try{captureForm()}catch(err){$('#form-error').textContent=t(err.message);return}const e=formEvent;
@@ -733,6 +770,7 @@ async function saveForm(){
    result=await api('events/'+currentEvent.id+'/occurrence','POST',{occurrence:currentEvent.occurrence,revision:currentEvent.revision,scope:formScope,changes:payload});
   }else result=await api(currentEvent?'events/'+currentEvent.id:'events',currentEvent?'PATCH':'POST',{...payload,...(currentEvent?{revision:currentEvent.revision}:{})});
   toast(result.overlap_warning?.length?t('overlap'):t('saved'));
+  if(formReturn){await returnToEventList();return}
   const id=result.id||currentEvent?.id;page='main';await loadData();await openEvent(id,result.occurrence||undefined);
  }catch(e){$('#form-error').textContent=e.message;$('#form-error').scrollIntoView({behavior:'smooth',block:'center'})}
 }
@@ -776,8 +814,8 @@ const actions={
  'return':async()=>{await api('membership','POST',{returning:true});await refresh()},
  'leave':async()=>{if(await confirmDialog(t('leave'),t('leaveHelp'))){await api('membership','POST',{returning:false});await refresh()}},
  'new':()=>newEvent(),
- 'edit-event':async()=>{endManuallySet=false;formScope=currentEvent.rrule?await chooseScope():'all';if(!formScope)return;formEvent={...structuredClone(formScope==='all'?(currentEvent.master||currentEvent):currentEvent)};formEvent.reminders={...formEvent.reminders,[state.me.id]:eventReminderValues(formEvent)};formBase=structuredClone(formEvent);page='form';render()},
- 'back':async()=>{if(page==='form'&&currentEvent){page='detail';render();return}page='main';await loadData();render()},
+ 'edit-event':()=>editCalendarEvent(),
+ 'back':async()=>{if(page==='form'&&formReturn){await returnToEventList();return}if(page==='form'&&currentEvent){page='detail';render();return}page='main';await loadData();render()},
  'delete-event':()=>deleteCalendarEvent(currentEvent),
  'trash':async()=>{page='trash';await loadData();render()},
  'restore-event':async el=>{await api('events/'+el.dataset.id+(el.dataset.occ?'/trash-occurrence':'/restore'),'POST',{revision:Number(el.dataset.revision),occurrence:el.dataset.occ});await loadData();render();toast(t('restored'))},
@@ -817,11 +855,17 @@ const calendarSwipe=CalendarNavigation.mount({
  run:async(action,motion)=>{busy=true;try{await navigateSmoothly(action,motion)}finally{busy=false}},
  onError:error=>toast(error.message)
 });
-const calendarTouch=CalendarTouch.mount({
+const timelineTouch=CalendarTouch.mount({
  enabled:()=>Boolean(state?.calendar?.active&&state.calendar.state==='active'&&tab==='calendar'&&page==='main'&&!showSearch&&!busy&&!monthLoading&&!document.querySelector('.modal-backdrop')),
  getEvent:el=>listedEvent(el),onCreate:newEvent,onMove:moveTimelineEvent,onError:error=>toast(t(error.message)),
  cancelSwipe:()=>calendarSwipe.cancel(),haptic:()=>{try{tg?.HapticFeedback?.impactOccurred('light')}catch{}}
 });
+const listTouch=CalendarTouch.mountList({
+ enabled:()=>Boolean(state?.calendar?.active&&state.calendar.state==='active'&&tab==='calendar'&&page==='main'&&!busy&&!monthLoading&&!document.querySelector('.modal-backdrop')),
+ onAction:quickListAction,onError:error=>toast(t(error.message)),cancelSwipe:()=>calendarSwipe.cancel(),
+ label:action=>t(action==='hold'?'listSwipeHint':action),haptic:()=>{try{tg?.HapticFeedback?.impactOccurred('light')}catch{}}
+});
+const calendarTouch={active:()=>timelineTouch.active()||listTouch.active(),cancel:()=>{timelineTouch.cancel();listTouch.cancel()}};
 $('#app').addEventListener('click',async e=>{const el=e.target.closest('[data-action]');if(!el||busy||calendarSwipe.active()||calendarTouch.active())return;e.stopPropagation();const action=actions[el.dataset.action];if(!action)return;busy=true;try{await action(el)}catch(error){toast(error.message)}finally{busy=false}});
 $('#app').addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('.day')){e.preventDefault();e.target.click()}});
 $('#app').addEventListener('submit',async e=>{if(e.target.id==='event-form'){e.preventDefault();if(busy)return;busy=true;e.target.classList.add('busy');try{await saveForm()}finally{busy=false;$('#event-form')?.classList.remove('busy')}}});

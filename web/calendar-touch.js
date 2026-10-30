@@ -24,7 +24,7 @@
   }
   document.addEventListener('pointerdown',e=>{
    if(press){cleanup();return}
-   if(!e.isPrimary||e.button>0||!enabled()||e.target.closest('header,.calendar-controls,.day-layout-row,.motion-preview'))return;
+   if(!e.isPrimary||e.button>0||!enabled()||e.target.closest('header,.calendar-controls,.day-layout-row,.motion-preview,.day-task,.search-page'))return;
    const eventNode=e.target.closest('.time-event'),timeline=e.target.closest('.timeline'),date=e.target.closest('.day,.week-date,.agenda,.day-checklist');
    if(!eventNode&&e.target.closest('[data-action="event"],button:not(.week-date),input,select,textarea'))return;
    if(!eventNode&&!timeline&&!date)return;
@@ -67,5 +67,58 @@
   document.addEventListener('click',e=>{if(Date.now()<suppressed){e.preventDefault();e.stopImmediatePropagation()}},true);
   return {active:()=>Boolean(press),cancel:cleanup};
  }
- root.CalendarTouch={mount};
+ // Hold first, then swipe a list card. Ordinary swipes still belong to navigation.
+ function mountList({enabled,onAction,onError,cancelSwipe,haptic,label}){
+  let press=null,suppressed=0;
+  const cleanup=()=>{
+   const p=press;if(!p)return;press=null;clearTimeout(p.timer);
+   p.row.style.transform='';p.row.classList.remove('list-swipe-armed','list-swipe-ready');
+   p.badge?.remove();document.body.classList.remove('list-holding');
+   if(p.node.hasPointerCapture(p.id))p.node.releasePointerCapture(p.id);
+  };
+  const actionAt=(dx,dy)=>Math.abs(dx)>=48&&Math.abs(dx)>Math.abs(dy)*1.5?(dx<0?'delete':'edit'):null;
+  document.addEventListener('pointerdown',e=>{
+   if(press){cleanup();return}
+   if(!e.isPrimary||e.button>0||!enabled()||e.target.closest('.motion-preview,.modal-backdrop'))return;
+   if(e.target.closest('.task-actions'))return;
+   const node=e.target.closest('.day-task')?.querySelector('.day-task-card')||e.target.closest('.search-page .event');if(!node)return;
+   const row=node.closest('.day-task')||node;
+   press={id:e.pointerId,x:e.clientX,y:e.clientY,node,row,held:false};
+   press.timer=setTimeout(()=>{
+    if(!press||!enabled()||!node.isConnected)return cleanup();
+    press.held=true;suppressed=Date.now()+650;cancelSwipe();haptic();
+    node.setPointerCapture(press.id);row.classList.add('list-swipe-armed');document.body.classList.add('list-holding');
+    press.badge=document.createElement('div');press.badge.className='list-swipe-hint';press.badge.setAttribute('role','status');
+    press.badge.textContent=label('hold');
+    const box=row.getBoundingClientRect();press.badge.style.top=Math.max(8,Math.min(innerHeight-48,box.top-38))+'px';
+    document.body.append(press.badge);
+   },400);
+  });
+  document.addEventListener('pointermove',e=>{
+   if(!press||press.id!==e.pointerId)return;
+   const dx=e.clientX-press.x,dy=e.clientY-press.y;
+   if(!press.held){if(Math.hypot(dx,dy)>9)cleanup();return}
+   if(Math.abs(dy)>12&&Math.abs(dy)>Math.abs(dx)){cleanup();return}
+   e.preventDefault();
+   const action=actionAt(dx,dy);press.row.style.transform=`translate3d(${Math.max(-88,Math.min(88,dx))}px,0,0)`;
+   press.row.classList.toggle('list-swipe-ready',Boolean(action));
+   press.badge.textContent=label(Math.abs(dx)<12?'hold':dx<0?'delete':'edit');
+   press.badge.dataset.action=dx<0?'delete':'edit';
+  },{passive:false});
+  document.addEventListener('touchmove',e=>{if(press?.held&&e.cancelable)e.preventDefault()},{passive:false});
+  document.addEventListener('pointerup',e=>{
+   if(!press||press.id!==e.pointerId)return;
+   const p=press,action=p.held?actionAt(e.clientX-p.x,e.clientY-p.y):null;
+   if(p.held){suppressed=Date.now()+650;e.preventDefault()}
+   cleanup();
+   if(action&&enabled()&&p.node.isConnected)Promise.resolve().then(()=>onAction(p.node,action)).catch(onError);
+  });
+  document.addEventListener('pointercancel',cleanup);document.addEventListener('lostpointercapture',e=>{if(e.pointerId===press?.id)cleanup()});
+  document.addEventListener('scroll',cleanup,true);window.addEventListener('blur',cleanup);
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)cleanup()});
+  document.addEventListener('contextmenu',e=>{if(press)e.preventDefault()});
+  document.addEventListener('click',e=>{if(Date.now()<suppressed){e.preventDefault();e.stopImmediatePropagation()}},true);
+  return {active:()=>Boolean(press),cancel:cleanup};
+ }
+ root.CalendarTouch={mount,mountList};
 })(globalThis);
