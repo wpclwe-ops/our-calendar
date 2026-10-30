@@ -607,7 +607,7 @@ function backupPage(){
 }
 async function refresh(){state=await api('state');await loadData();render()}
 function activeNavigation(){return tab==='calendar'?view:tab}
-function navigationTarget(action){return {date:action.type==='move'?CalendarNavigation.shift(selected,view,action.direction):selected,mode:action.type==='view'?action.view:view,tab:action.type==='tab'?action.tab:'calendar'}}
+function navigationTarget(action){return {date:action.date??(action.type==='move'?CalendarNavigation.shift(selected,view,action.direction):selected),mode:action.type==='view'?action.view:view,tab:action.type==='tab'?action.tab:'calendar'}}
 function atCalendarTarget(target,rows,fn){
  const old={selected,view,events,monthWindow,tab,categories,systemStatus};monthWindow=[...monthWindow];
  try{selected=target.date;view=target.mode;tab=target.tab||'calendar';if(rows){if(tab==='calendar')events=rows;else if(tab==='categories')categories=rows;else systemStatus=rows}return fn()}
@@ -693,6 +693,7 @@ async function loadData(poll=false){
  if(!query)navigationCache.set(params.toString(),{rows:result,promise:Promise.resolve(result)});warmNavigation();return true;
 }
 async function changeView(v){view=v;state.me.view=v;await api('settings','PATCH',{view:v});await loadData();render()}
+function openDay(date){return navigateSmoothly({type:'view',view:'day',date},CalendarNavigation.motion({preview:navigationPreview}))}
 async function openEvent(id,key){
  const master=await api('events/'+id+(key?'?occurrence='+encodeURIComponent(key):''));
  detailLanguage=state.me.language;
@@ -766,8 +767,8 @@ const actions={
  'filters':()=>filterDialog(),
  'today':async()=>{selected=isoDay();showSearch=false;query='';$('.timeline')?.removeAttribute('data-date');$('.timeline')?.removeAttribute('data-range');$('.month-scroll')?.removeAttribute('data-focus');$('.month-with-agenda,.day-checklist')?.removeAttribute('data-date');await loadData();render()},
  'prev':()=>move(-1),'next':()=>move(1),
- 'date':async el=>{const previousMonth=selected.slice(0,7);selected=el.dataset.date;if(previousMonth!==selected.slice(0,7))await loadData();render()},
- 'week-date':el=>{selected=el.dataset.date;render()},
+ 'date':el=>openDay(el.dataset.date),
+ 'week-date':el=>openDay(el.dataset.date),
  'event':el=>openEvent(el.dataset.id,el.dataset.occ),
  'create':async()=>{await api('calendar','POST',{});await refresh()},
  'invite':async()=>{const result=await api('invite','POST',{});inviteUrl=result.url;render()},

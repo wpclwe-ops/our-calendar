@@ -55,7 +55,8 @@ const {mkdtempSync,rmSync,mkdirSync}=require('node:fs');const {tmpdir}=require('
  await page.evaluate(()=>render());assert.ok(Math.abs((await page.locator('.month-with-agenda').evaluate(el=>el.scrollTop))-monthScrollTop)<2,'preserve unified scroll on repaint');
  await page.locator('[data-action=today]').click();await wait();
  assert.equal(await page.locator('.month-with-agenda').evaluate(el=>el.scrollTop),0,'Today reveals the calendar even when today is already selected');
- await page.locator('.day[data-date="2026-10-18"]').click();await wait();assert.equal(await page.evaluate(()=>view),'month');assert.equal(await page.locator('.month-agenda .day-task').count(),0);
+ await page.locator('.day[data-date="2026-10-18"]').click();await wait();assert.equal(await page.evaluate(()=>view),'day');assert.equal(await page.evaluate(()=>selected),'2026-10-18');assert.equal(await page.locator('.month-agenda').count(),0);
+ await page.evaluate(async()=>{await changeView('month')});await wait();
  await page.locator('[data-action=today]').click();await wait();await page.locator('.month-with-agenda').evaluate(el=>el.scrollTop=0);await screenshot('month-full-dark');
  await page.locator('[data-action=month-layout]').click();await wait();assert.equal(await page.locator('.month-agenda').count(),0);
  assert.equal(await page.locator('.month-scroll .day[data-date="2026-10-17"] .event-bar').count(),5);assert.equal(await page.locator('.month-scroll .day[data-date="2026-10-17"] .more').textContent(),'+2');
