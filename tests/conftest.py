@@ -5,6 +5,22 @@ from app.service import Service
 from app.backup import Backups
 
 @pytest.fixture
+def provider_clock(monkeypatch):
+    """Fixed provider specimens are in October 2026; keep them future-dated.
+
+    Patch the shared clock consistently, including imported references, so leases,
+    preview expiry and delivery assertions use the same time as eligibility.
+    Tests that explicitly advance a clock can still override it locally.
+    """
+    import sys
+    from datetime import datetime, timezone
+    from app.recurrence import utcnow as original
+    frozen = lambda: datetime(2026, 10, 20, 12, tzinfo=timezone.utc)
+    for module_name, module in list(sys.modules.items()):
+        if module_name.startswith(('app.', 'tests.', 'test_')) and getattr(module, 'utcnow', None) is original:
+            monkeypatch.setattr(module, 'utcnow', frozen)
+
+@pytest.fixture
 def service(tmp_path):
     cfg=Config(telegram_owner_id=1,telegram_partner_id=2,
                database=str(tmp_path/'test.db'),bot_username='our_calendar_test_bot',bot_token='test-token',

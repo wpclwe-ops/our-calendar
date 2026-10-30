@@ -1,0 +1,94 @@
+/* Approved event card and editor; scoped to avoid changing calendar geometry. */
+body[data-page=form] .shell,body[data-page=detail] .shell{max-width:480px;padding-bottom:28px}
+.event-surface-form,.event-surface-detail{background:var(--card);border-radius:28px;padding:22px;max-width:430px;margin:auto;color:var(--ink)}
+.event-surface-form .title-field{padding:0;margin-bottom:20px}
+.event-surface-form .title-field label{font-size:12px;color:var(--muted);font-weight:400}
+.event-surface-form .title-field input{font-size:26px;font-weight:500;letter-spacing:-.5px;padding:10px 0;background:transparent;border:0;width:100%}
+.event-surface-form .surface-field{margin:16px 0;min-width:0}
+.event-surface-form .field{margin:0;min-width:0}
+.event-surface-form .field>label,.surface-caption,.surface-manual-fields>label{display:block;color:var(--muted);font-size:12px;margin:0 0 7px;font-weight:400}
+.event-surface-form input:not([type=checkbox]):not([type=radio]):not([type=hidden]),.event-surface-form textarea,.event-surface-form select{width:100%;max-width:100%;min-width:0;border:1px solid var(--line);background:var(--bg);border-radius:14px;font-size:16px;padding:12px 13px;color:var(--ink)}
+.event-surface-form .title-field input{background:transparent!important;border:0!important;padding:10px 0!important;font-size:26px!important}
+.surface-field-pair{display:grid;grid-template-columns:1.3fr 1fr;gap:10px;align-items:start}
+.surface-field-pair select{padding-right:8px}
+.surface-schedule{display:block;background:var(--bg);padding:18px 20px;border-radius:20px;color:var(--ink);text-align:left}
+.event-surface-form button.surface-schedule{max-width:100%;width:100%;font-size:14px;margin-top:7px}
+.surface-schedule .surface-date{display:block;font-size:13px;color:var(--muted);font-weight:400;overflow-wrap:anywhere}
+.surface-schedule>strong{display:block;font-size:27px;line-height:1.4;letter-spacing:-.5px;font-weight:500;font-variant-numeric:tabular-nums;margin:7px 0 3px}
+.surface-schedule>strong>span{color:var(--muted);margin:0 8px;font-weight:400}
+.surface-schedule>small{display:block;font-size:12px;color:var(--muted);font-weight:400;overflow-wrap:anywhere}
+.surface-section{padding-top:18px;margin-top:22px;border-top:1px solid var(--line)}
+.surface-section>summary,.surface-manual>summary,.surface-smart>summary{list-style:none;display:flex;align-items:center;gap:10px;min-height:44px;color:var(--ink);font-size:16px;font-weight:500;padding:0}
+.surface-section>summary::-webkit-details-marker,.surface-manual>summary::-webkit-details-marker,.surface-smart>summary::-webkit-details-marker{display:none}
+.surface-section>summary>.svg-icon:first-child{width:19px;color:var(--accent);flex:none}
+.surface-section>summary>.svg-icon:last-child,.surface-manual>summary>.svg-icon:last-child,.surface-smart>summary>.svg-icon{width:16px;color:var(--muted);margin-left:auto;flex:none}
+.surface-section[open]>summary{margin-bottom:12px}
+.surface-section .form-row{padding:0;border:0;margin:14px 0;display:block}
+.surface-section .form-row .field{display:block}
+.surface-section .form-row .field>label{max-width:none;font-size:12px;color:var(--muted);padding:0;margin-bottom:7px}
+.surface-recurrence .repeat-interval input{width:90px!important}
+.surface-recurrence .form-note{border:0;padding:0}
+.surface-recurrence .weekday-options{padding:0;border:0;margin-top:14px}
+.surface-menu-row,.surface-detail-row{display:flex;align-items:center;gap:14px;width:100%;min-width:0;text-align:left;background:transparent;color:var(--ink);padding:14px 0;font-weight:400}
+.surface-menu-row>.svg-icon:first-child,.surface-detail-row>.svg-icon:first-child{width:20px;color:var(--accent);flex:none}
+.surface-menu-row>span,.surface-row-copy{flex:1;min-width:0}
+.surface-menu-row small,.surface-row-copy>small{display:block;font-size:12px;color:var(--muted);margin-bottom:3px;font-weight:400}
+.surface-menu-row strong,.surface-row-copy>span{display:block;font-size:14px;font-weight:400;overflow-wrap:anywhere;white-space:pre-wrap}
+.surface-menu-row>.svg-icon:last-child,.surface-detail-row>.svg-icon:last-child{width:16px;color:var(--muted);flex:none}
+.surface-notifications{padding-top:6px}
+.event-surface-form .surface-languages{margin:10px 0 14px;background:var(--bg);padding:4px;border-radius:13px}
+.surface-languages button{flex:1;font-size:14px;font-weight:500;min-height:38px}
+.surface-translation-preview{background:var(--bg);border-radius:15px;padding:14px;margin-bottom:12px}
+.surface-translation-preview>small{font-size:11px;color:var(--accent)}
+.surface-translation-preview>strong{display:block;margin:6px 0;font-size:15px;font-weight:500;overflow-wrap:anywhere}
+.surface-translation-preview>p{font-size:13px;color:var(--muted);margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.surface-secondary{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;font-weight:400;font-size:14px;min-height:46px;background:var(--bg);color:var(--ink);border-radius:13px;margin:8px 0}
+.surface-secondary svg{width:17px;flex:none}
+.surface-manual>summary{font-size:14px;background:var(--bg);padding:10px 12px;border-radius:13px;font-weight:400;gap:8px}
+.surface-manual>summary>svg:first-child{width:17px;flex:none}
+.surface-manual-fields>label{margin-top:14px}
+.surface-translation-pending{font-size:12px;color:var(--accent)}
+.event-surface-form .event-form-save{width:100%;min-height:50px;margin-top:24px;border-radius:16px;font-size:15px;font-weight:500}
+.event-surface-detail .surface-handle{width:36px;height:4px;border-radius:8px;background:var(--line);margin:-11px auto 20px}
+.event-surface-detail .surface-detail-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 22px}
+.event-surface-detail .status-chip{background:var(--bg);padding:8px 12px;min-height:36px;font-size:12px;gap:7px}
+.event-surface-detail .status-chip:before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor}
+.event-surface-detail .surface-close{display:grid;place-items:center;width:38px;height:38px;min-height:38px;padding:0;border-radius:50%;background:var(--bg);color:var(--muted)}
+.surface-close svg{width:17px}
+.surface-detail-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:13px}
+.event-surface-detail button.category-chip,.event-surface-detail .owner-chip{font-size:12px;border-radius:20px;padding:8px 12px;min-height:36px;font-weight:500;max-width:100%;overflow-wrap:anywhere}
+.event-surface-detail .owner-chip{background:var(--bg);color:var(--muted)}
+.event-surface-detail .detail-title{font-size:29px;font-weight:500;line-height:1.2;letter-spacing:-.8px;margin-bottom:20px}
+.surface-detail-schedule{margin-bottom:10px}
+.event-surface-detail .surface-detail-row{border-bottom:1px solid var(--line);min-height:66px;font-size:14px}
+.surface-row-copy a{display:block;overflow-wrap:anywhere;margin-top:4px}
+.surface-row-copy .text-button{display:block;font-size:12px;min-height:36px}
+.event-surface-detail .surface-detail-description{padding:18px 0 12px;background:transparent;border:0}
+.event-surface-detail .surface-detail-description h3{font-size:12px;font-weight:400;color:var(--muted)}
+.event-surface-detail .surface-detail-description p{font-size:14px;color:var(--muted);line-height:1.6;margin:7px 0 0}
+.surface-credit{font-size:11px;color:var(--muted);margin:10px 0 18px}
+.surface-smart>summary{font-size:12px;color:var(--muted);margin-bottom:10px;font-weight:400}
+.surface-smart .smart-detail{margin:10px 0}
+.event-surface-detail .detail-actions{display:grid;grid-template-columns:minmax(0,1fr) 50px;gap:10px;background:var(--card);padding:12px 0 max(2px,env(safe-area-inset-bottom));bottom:0}
+.event-surface-detail .detail-actions button{display:flex;align-items:center;justify-content:center;gap:8px;min-height:50px;padding:12px;border-radius:16px;font-size:15px;font-weight:500}
+.event-surface-detail .detail-actions svg{width:18px}
+.event-surface-detail .detail-actions .surface-more{background:var(--bg);color:var(--ink);letter-spacing:2px;padding:0}
+.surface-backdrop{z-index:100;padding:12px;align-items:center}
+.surface-backdrop .surface-modal{max-width:410px;border-radius:25px;max-height:calc(100dvh - 24px);padding:22px;overscroll-behavior:contain}
+.surface-modal .modal-header{margin-bottom:18px;gap:10px}
+.surface-modal .modal-header h2{font-size:18px;font-weight:500}
+.surface-modal .modal-header button{display:grid;place-items:center;border-radius:50%;width:36px;min-height:36px;background:var(--bg);color:var(--muted);padding:7px}
+.surface-modal .modal-header svg{width:16px}
+.surface-check-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.surface-check{display:flex;align-items:center;gap:10px;min-height:44px;padding:10px 12px;background:var(--bg);border-radius:13px;font-size:14px;color:var(--ink);margin:9px 0;font-weight:400}
+.surface-check-grid .surface-check{margin:0}
+.surface-check input{position:static;width:18px;height:18px;min-height:18px;margin:0;accent-color:var(--accent-fill);flex:none}
+.surface-check:has(input:checked){box-shadow:inset 0 0 0 1px var(--accent);color:var(--accent)}
+.surface-custom-fields{display:flex;gap:8px;margin:8px 0 14px}
+.surface-custom-fields input,.surface-custom-fields select{width:50%;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:12px;font-size:16px;padding:10px;color:var(--ink)}
+.surface-modal .reminder-sheet-actions{display:grid;grid-template-columns:1fr 1.4fr;gap:10px;position:sticky;bottom:-22px;background:var(--card);padding:12px 0 0;margin-top:12px}
+.surface-modal .reminder-sheet-actions button{margin:0;min-height:48px;border-radius:14px;font-weight:500}
+.surface-modal .reminder-sheet-error{font-size:13px}
+.ed-all-day{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:14px;background:var(--bg);color:var(--ink);font-size:14px;margin:0 0 14px;min-height:44px}
+.ed-all-day input{width:18px;height:18px;min-height:18px;margin:0;accent-color:var(--accent-fill)}
+@media(max-width:370px){.event-surface-form,.event-surface-detail{padding:18px}.event-surface-detail .detail-title{font-size:27px}.surface-schedule{padding:15px}.surface-schedule>strong{font-size:25px}.surface-backdrop .surface-modal{padding:18px 16px}.surface-field-pair{gap:0;grid-template-columns:1fr}.surface-field-pair>.surface-field{margin:10px 0}.surface-check{padding:10px;font-size:13px}}

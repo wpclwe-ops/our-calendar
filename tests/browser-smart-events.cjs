@@ -20,7 +20,7 @@ const {mkdtempSync,rmSync}=require('node:fs'),{tmpdir}=require('node:os'),{join}
   const id=await page.evaluate(async()=>{const e=await api('events','POST',{title:'Corner Salon: Tonowanie','start':'2026-10-24T12:00','end':'2026-10-24T13:00',translations:{ru:{title:'Уход за волосами',description:''},en:{title:'Hair treatment',description:''}}});await openEvent(e.id);return e.id});
   assert.equal(await page.locator('.description-card').count(),0,'translated title does not create an empty description card');
   assert.equal(await page.locator('[data-action=detail-language]').count(),2,'title-only events retain language controls');
-  await page.locator('[data-action=detail-language][data-lang=en]').click();assert.equal(await page.locator('.detail-title').textContent(),'Hair treatment');
+  await page.locator('.surface-smart>summary').click();await page.locator('[data-action=detail-language][data-lang=en]').click();assert.equal(await page.locator('.detail-title').textContent(),'Hair treatment');
   await page.locator('[data-action=smart-short-edit]').click();await page.locator('.smart-dialog input[name=ru]').fill('Мой салон');await page.locator('.smart-dialog input[name=en]').fill('My salon');await page.locator('.smart-dialog input[name=remember]').check();
   background(id);
   await page.locator('.smart-dialog button[type=submit]').click();await page.waitForSelector('.smart-dialog',{state:'detached'});
@@ -64,7 +64,7 @@ const {mkdtempSync,rmSync}=require('node:fs'),{tmpdir}=require('node:os'),{join}
    await page.setViewportSize({width,height:844});await page.evaluate(async({language,theme})=>{state=await api('settings','PATCH',{language,theme});render()},{language,theme});
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'no horizontal overflow');
   }
-  await page.evaluate(async id=>openEvent(id),id);await page.locator('#smart-event-excluded').check();await page.waitForFunction(()=>currentEvent.smart?.excluded===true);
+  await page.evaluate(async id=>openEvent(id),id);if(!await page.locator('.surface-smart').evaluate(el=>el.open))await page.locator('.surface-smart>summary').click();await page.locator('#smart-event-excluded').check();await page.waitForFunction(()=>currentEvent.smart?.excluded===true);
   assert.equal(await page.locator('.description-card').count(),0);
   if(process.env.CALENDAR_SCREENSHOT_DIR)await page.screenshot({path:join(process.env.CALENDAR_SCREENSHOT_DIR,'smart-detail.png'),fullPage:true});
   assert.deepEqual(errors,[]);console.log('Smart Events mobile acceptance passed: background/manual concurrency, partial form edits, unified titles in 7 views, title switch, live account states, auto mode, RU/EN and 320/390/430 px.');
