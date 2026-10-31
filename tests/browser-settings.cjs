@@ -60,6 +60,11 @@ const expectedVersion=readFileSync(join(__dirname,'../pyproject.toml'),'utf8').m
   await page.locator('[data-action=settings-back]').click();await page.locator('[data-action=settings-back]').click();await open('service');assert.ok((await page.locator('.settings-section').textContent()).includes(expectedVersion));
   for(const [width,language] of [[320,'ru'],[390,'en'],[430,'ru']]){
    await page.setViewportSize({width,height:844});await page.evaluate(async language=>{state=await api('settings','PATCH',{language});tab='settings';page='main';render()},language);
+   const alignment=await page.evaluate(()=>{
+    const card=document.querySelector('.settings-menu .form-group').getBoundingClientRect(),nav=document.querySelector('.bottom-nav').getBoundingClientRect();
+    return {left:Math.abs(card.left-nav.left),right:Math.abs(card.right-nav.right)};
+   });
+   assert.ok(alignment.left<1&&alignment.right<1,'settings groups align with navigation at '+width+': '+JSON.stringify(alignment));
    for(const section of order){await open(section);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'settings overflow '+section+' '+width);await back();}
   }
   assert.deepEqual(errors,[]);console.log('PASS: settings navigation, descriptions, own identity isolation, shared avatar/date, two/custom/start defaults, view previews, personal toggles, memory clear, RU/EN widths, unchanged default navigation style');

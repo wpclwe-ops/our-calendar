@@ -1,9 +1,24 @@
 /* Layout for settings only; the existing material, colour and type system stays intact. */
-.settings-menu-gap{height:24px}
+.settings-menu-gap{height:var(--space-6)}
+.settings-menu .settings-links:has(+.settings-menu-gap){margin-bottom:0}
 .settings-menu .setting-link small,.settings-section .setting-link small{display:block;margin-top:4px;line-height:1.45;white-space:normal}
 .settings-menu .setting-link,.settings-section .setting-link{text-align:left}
 .settings-menu .avatar{object-fit:cover}
-.settings-section .padded label{margin-bottom:14px}
+.settings-section .padded>label{margin-bottom:var(--space-4)}
+.settings-section .padded label>:is(input,select,textarea){margin-top:var(--space-2)}
+.settings-menu .setting-link,.settings-section .setting-link{padding:var(--space-4);gap:var(--space-3)}
+.settings-section :is(.setting-row,.switch-row){padding:var(--space-3) var(--space-4);gap:var(--space-3)}
+.settings-section .setting-row>label{flex:1;min-width:0}
+.settings-section .setting-row>:is(select,input){min-height:44px}
+.settings-section .form-group>:last-child{border-bottom:0}
+.settings-section .section-label{margin:var(--space-6) var(--space-1) var(--space-2)}
+.settings-section .back{display:inline-flex;align-items:center;gap:var(--space-1);margin-bottom:var(--space-3)}
+.settings-section .privacy{margin-bottom:var(--space-4)}
+@media(max-width:370px){
+ .settings-section .setting-row:has(>select),.settings-section .setting-row:has(>input:not([type=checkbox])),.settings-section .theme-row{flex-direction:column;align-items:stretch;gap:var(--space-2)}
+ .settings-section .setting-row>:is(select,input),.settings-section .theme-row .segment{width:100%;max-width:100%;text-align:left}
+ .settings-section .setting-row>label{max-width:none}
+}
 .settings-pair-avatar{display:block;width:72px;height:72px;object-fit:cover;border-radius:50%;margin:10px 0}
 .settings-consent-details{margin:0 0 18px}
 .settings-consent-details summary{padding:8px 0;color:var(--muted)}

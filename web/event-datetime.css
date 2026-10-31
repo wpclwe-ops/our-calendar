@@ -1,8 +1,8 @@
 /* The date/time dialog uses the existing application palette and opaque glass fallback. */
-.event-datetime-backdrop{padding:12px;align-items:center;overscroll-behavior:contain;z-index:110}
-.modal.event-datetime-picker{max-width:402px;border-radius:26px;padding:22px;max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain}
+.event-datetime-backdrop{padding:var(--dialog-inset);align-items:center;overscroll-behavior:contain;z-index:110}
+.modal.event-datetime-picker{max-width:402px;border-radius:26px;padding:var(--dialog-padding);max-height:calc(100dvh - 2 * var(--dialog-inset));overflow-y:auto;overscroll-behavior:contain}
 .event-datetime-picker button{width:auto;margin:0;min-height:44px;padding:0;font-weight:400;touch-action:manipulation}
-.event-datetime-picker .ed-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+.event-datetime-picker .ed-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:var(--space-4)}
 .event-datetime-picker .ed-header h2{font-size:24px;line-height:1.2;letter-spacing:-.6px;margin:0;font-weight:600}
 .event-datetime-picker .ed-header button{width:44px;flex:none;font-size:26px;background:transparent;color:var(--muted)}
 .ed-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:5px;background:var(--bg);border-radius:19px}
@@ -35,7 +35,7 @@
 .event-datetime-picker .ed-presets button[aria-pressed=true]{color:var(--accent);background:var(--soft)}
 .ed-zone{margin-top:12px;text-align:center;font-size:12px;color:var(--muted);overflow-wrap:anywhere}
 .ed-error{font-size:13px;line-height:1.4;color:var(--danger);margin-top:12px}
-.ed-footer{display:grid;grid-template-columns:1fr 1.4fr;gap:10px;margin-top:18px;padding-top:12px;position:sticky;bottom:0;z-index:2;background:var(--card)}
+.ed-footer{display:grid;grid-template-columns:1fr 1.4fr;gap:10px;margin-top:var(--space-4);padding-top:var(--space-3);position:sticky;bottom:0;z-index:2;background:var(--card)}
 .event-datetime-picker .ed-footer button{width:100%;min-height:48px;padding:10px;border-radius:14px;font-size:14px;font-weight:500}
 .event-datetime-picker [data-ed-cancel]{color:var(--muted);background:var(--bg)}
 .ed-calendar{margin-top:14px}
@@ -54,5 +54,5 @@
 .event-datetime-trigger>span{overflow-wrap:anywhere}
 .event-datetime-trigger svg{width:16px;height:16px;flex:none}
 .date-time-control .event-datetime-trigger{max-width:100%;width:100%}
-@media(max-width:360px){.modal.event-datetime-picker{padding:18px 16px}.event-datetime-picker .ed-tabs button{padding:10px}.event-datetime-picker .ed-date{padding:11px}.ed-date strong{font-size:13px}.ed-drums{margin-left:4px;margin-right:4px}.event-datetime-trigger{font-size:13px}}
+@media(max-width:360px){.modal.event-datetime-picker{--dialog-padding:16px}.event-datetime-picker .ed-tabs button{padding:10px}.event-datetime-picker .ed-date{padding:11px}.ed-date strong{font-size:13px}.ed-drums{margin-left:4px;margin-right:4px}.event-datetime-trigger{font-size:13px}}
 @media(prefers-reduced-motion:reduce){.ed-track{transition:none}}
