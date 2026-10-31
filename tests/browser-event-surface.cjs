@@ -60,7 +60,15 @@ const assert=require('node:assert/strict'),{mkdtempSync,rmSync,mkdirSync}=requir
   for(const language of ['ru','en'])for(const theme of ['light','dark'])for(const width of [320,390,430]){
    await page.setViewportSize({width,height:844});await page.evaluate(({language,theme})=>{state.me.language=language;state.me.theme=theme;render()},{language,theme});
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await shot(`detail-${language}-${theme}-${width}`);
-   await page.locator('[data-action=edit-event]').click();await idle();assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await page.locator('[data-action=form-reminders]').click();await idle();
+   await page.locator('[data-action=edit-event]').click();await idle();assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);const gaps=await page.evaluate(()=>{
+    const box=s=>document.querySelector(s).getBoundingClientRect();
+    const category=box('[name=category_id]'),owner=box('[name=owner]'),place=box('[name=location]'),description=box('[name=description]');
+    const placeLabel=document.querySelector('[name=location]').closest('.field').querySelector('label').getBoundingClientRect();
+    const descriptionLabel=document.querySelector('[name=description]').closest('.field').querySelector('label').getBoundingClientRect();
+    return {afterPair:placeLabel.top-Math.max(category.bottom,owner.bottom),afterPlace:descriptionLabel.top-place.bottom};
+   });
+   assert.ok(gaps.afterPair>0&&Math.abs(gaps.afterPair-gaps.afterPlace)<1,'equal field gaps without stacked margins: '+JSON.stringify(gaps));
+   await page.locator('[data-action=form-reminders]').click();await idle();
    assert.ok(await page.locator('.surface-modal').evaluate(el=>{const b=el.getBoundingClientRect();return b.left>=0&&b.right<=innerWidth&&b.top>=0&&b.bottom<=innerHeight}));
    await page.keyboard.press('Escape');await page.locator('[data-action=back]').first().click();await idle();
   }
