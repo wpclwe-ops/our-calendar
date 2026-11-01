@@ -15,7 +15,7 @@ from .recurrence import stamp,utcnow
 
 MAX_ARCHIVE = 10 * 1024 * 1024
 MAX_EXPANDED = 40 * 1024 * 1024
-PROFILE_FIELDS = {'language','timezone','timezone_mode','theme','view','day_layout','month_layout','week_layout','touch_bar','default_duration','default_reminders','default_notifications','notifications_template_version','notifications_enabled','reminders_enabled','notify_at_start','name','gender','reduce_transparency','smart_events'}
+PROFILE_FIELDS = {'language','timezone','timezone_mode','theme','view','day_layout','month_layout','week_layout','touch_bar','default_duration','default_reminders','default_notifications','notifications_template_version','notifications_enabled','reminders_enabled','notify_at_start','name','gender','reduce_transparency','smart_events','daily_summary_enabled','daily_summary_time'}
 
 class Backups:
     def __init__(self, service):
@@ -83,13 +83,14 @@ class Backups:
             public=Ed25519PublicKey.from_public_bytes(base64.b64decode(self.public_keys[manifest['key_id']]))
             public.verify(signature,dump(manifest).encode())
             data=load(payload)
-            from .preferences import validate_pair_profile,notification_offsets
+            from .preferences import validate_pair_profile,notification_offsets,daily_summary_settings
             validate_pair_profile(data.get('pair_profile',{}))
             require(data['schema'] in (1,2),'unsupported_archive_version')
             cal=data['calendar']; require(cal['first_id'] in data['members'],'invalid_archive')
             require(cal['second_id'] is None or cal['second_id'] in data['members'],'invalid_archive')
             require(len({v['id'] for v in data['events']})==len(data['events']),'invalid_archive')
             for prefs in data['members'].values():
+                daily_summary_settings(prefs)
                 if 'default_reminders' in prefs:prefs['default_reminders']=offsets(prefs['default_reminders'])[:1]
                 if 'default_notifications' in prefs:prefs['default_notifications']=notification_offsets(prefs['default_notifications'])
                 if 'gender' in prefs:require(prefs['gender'] in ('female','male','unspecified'),'invalid_settings')
@@ -281,6 +282,8 @@ class Backups:
                 if 'notifications_enabled' in profile_fields:prefs['reminders_enabled']=prefs['notifications_enabled']
                 elif 'reminders_enabled' in profile_fields:prefs['notifications_enabled']=prefs['reminders_enabled']
                 if 'timezone' in profile_fields:prefs['timezone_initialized']=True
+                if set(profile_fields) & {'daily_summary_enabled','daily_summary_time','notifications_enabled','reminders_enabled','timezone'}:
+                    self.service.rearm_daily_summary(c,user_id,prefs)
                 prefs.pop('id');c.execute('UPDATE users SET data=? WHERE id=?',(dump(prefs),user_id))
                 c.execute("UPDATE outbox SET status='cancelled' WHERE user_id=? AND kind='reminder' AND status IN ('pending','sending')",(user_id,))
             c.execute('DELETE FROM backup_previews WHERE id=?',(preview_id,))
@@ -381,4 +384,5 @@ class Backups:
                 exception.add('recurrence-id',date.fromisoformat(key) if data['all_day'] else begin)
                 fill(exception,data_instance);calendar.add_component(exception)
         return calendar.to_ical()
+
 

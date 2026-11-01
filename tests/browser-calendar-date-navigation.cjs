@@ -32,6 +32,14 @@ const {mkdtempSync,rmSync}=require('node:fs'),{tmpdir}=require('node:os'),{join}
    assert.equal(await page.locator('.month,.month-scroll,.week-strip,.week-timeline-shell').count(),0);
    assert.equal((await page.evaluate(()=>api('state'))).me.view,'day');
   };
+  const assertWeek=async(date,layout)=>{
+   const result=await info();assert.equal(result.selected,date);assert.equal(result.view,'week');assert.equal(result.page,'main');
+   assert.deepEqual(result.filter,{owner:'both',category:fixture.category.id,status:'planned'});
+   assert.equal(await page.locator(`.week-date[data-date="${date}"][aria-pressed=true]`).count(),1);
+   assert.equal(await page.locator('.day-checklist,.timeline:not(.week-timeline)').count(),0);
+   assert.equal(await page.locator(layout==='agenda'?'.week-strip':'.week-timeline-shell').count(),1);
+   assert.equal((await page.evaluate(()=>api('state'))).me.view,'week');
+  };
   // Both month layouts, with both personal day layouts, including a date already selected.
   // Day deliberately stays hidden from Touch Bar: direct navigation must still work.
   for(const month_layout of ['paged','scroll'])for(const day_layout of ['list','timeline']){
@@ -41,13 +49,21 @@ const {mkdtempSync,rmSync}=require('node:fs'),{tmpdir}=require('node:os'),{join}
    const items=page.locator(day_layout==='list'?'.day-task-card':'.time-event');assert.equal(await items.count(),1);assert.match(await items.first().textContent(),/October 31 specimen/);
    assert.equal(await page.locator('.bottom-nav [data-view="day"]').count(),0);
   }
-  // All three week layouts use their date headers; choosing a different date must load its events.
+  // Week dates select within Week. Agenda shows that day's events; grids retain their layout.
   for(const week_layout of ['agenda','three','seven'])for(const day_layout of ['list','timeline']){
    await set('week','2026-10-30',{week_layout,day_layout});
-   await page.locator('.week-date[data-date="2026-10-31"] .date-number').tap();await wait();await assertDay('2026-10-31',day_layout);
-   assert.equal(await page.locator(day_layout==='list'?'.day-task-card':'.time-event').count(),1);
+   await page.locator('.week-date[data-date="2026-10-31"] .date-number').tap();await wait();await assertWeek('2026-10-31',week_layout);
+   assert.equal(await page.locator(week_layout==='agenda'?'.day-task-card':'.time-event').count(),1);
+   await page.locator('.week-date[data-date="2026-10-31"]').tap();await wait();await assertWeek('2026-10-31',week_layout);
   }
   // Overflow month cells carry the full ISO date, including the year. Keyboard activation works.
+  await set('week','2026-11-03',{week_layout:'three'});
+  await page.locator('.week-timeline').evaluate(e=>e.scrollTop=560);
+  await page.locator('.week-date[data-date="2026-11-04"]').tap();await wait();await assertWeek('2026-11-04','three');
+  assert.deepEqual(await page.locator('.timeline-day').evaluateAll(nodes=>nodes.map(e=>e.dataset.date)),['2026-11-04','2026-11-05','2026-11-06']);
+  assert.equal(await page.locator('.week-timeline').evaluate(e=>e.scrollTop),560);
+  await set('week','2026-12-31',{week_layout:'seven'});
+  await page.locator('.week-date[data-date="2027-01-01"]').focus();await page.keyboard.press('Enter');await wait();await assertWeek('2027-01-01','seven');
   await set('month','2026-12-31',{month_layout:'paged',day_layout:'list'});
   await page.locator('.day[data-date="2027-01-01"]').focus();await page.keyboard.press('Enter');await wait();await assertDay('2027-01-01','list');
   assert.equal(await page.locator('.day-task-card').count(),0);
@@ -55,7 +71,7 @@ const {mkdtempSync,rmSync}=require('node:fs'),{tmpdir}=require('node:os'),{join}
   await page.locator('.day[data-date="2026-11-01"]').focus();await page.keyboard.press('Space');await wait();await assertDay('2026-11-01','list');
   // Timed events retain their displayed calendar date in a different viewer timezone.
   await set('week','2026-10-30',{week_layout:'seven',timezone:'Australia/Melbourne'});
-  await page.locator('.week-date[data-date="2026-10-31"]').tap();await wait();await assertDay('2026-10-31','list');
+  await page.locator('.week-date[data-date="2026-10-31"]').tap();await wait();await assertWeek('2026-10-31','seven');
   // An event nested inside a month date opens details rather than the day.
   await set('month','2026-10-31',{month_layout:'scroll',timezone:'Europe/Warsaw'});
   const chip=page.locator(`.day[data-date="2026-10-31"] [data-action="event"][data-id="${fixture.event.id}"]`);
@@ -72,7 +88,14 @@ const {mkdtempSync,rmSync}=require('node:fs'),{tmpdir}=require('node:os'),{join}
    await page.unroute(pattern);await page.locator('.day[data-date="2026-10-31"] .day-number').tap();await wait();await assertDay('2026-10-31','list');
   }
   await page.emulateMedia({reducedMotion:'reduce'});await set('week','2026-10-30',{week_layout:'agenda'});
-  await page.locator('.week-date[data-date="2026-10-31"]').focus();await page.keyboard.press('Enter');await wait();await assertDay('2026-10-31','list');
-  assert.deepEqual(errors,[]);console.log('PASS: month/week date taps, day layouts, filters, hidden Day tab, boundaries, keyboard, timezone, event details, failure/retry, reduced motion');
+  await page.evaluate(()=>navigationCache.clear());
+  await page.route('**/api/events?*',r=>r.fulfill({status:503,contentType:'application/json',body:'{"error":"test_failure"}'}));
+  await page.locator('.week-date[data-date="2026-10-31"]').tap();await wait();await assertWeek('2026-10-30','agenda');
+  await page.unroute('**/api/events?*');
+  await page.locator('.week-date[data-date="2026-10-31"]').focus();await page.keyboard.press('Enter');await wait();await assertWeek('2026-10-31','agenda');
+  assert.match(await page.locator('.agenda').textContent(),/October 31 specimen/);
+  assert.doesNotMatch(await page.locator('.agenda').textContent(),/Filtered out specimen/);
+  assert.deepEqual(errors,[]);console.log('PASS: month opens Day; week date selection retains Week, layouts, events, filters, keyboard and timezone');
  }finally{await browser?.close();server.kill();rmSync(directory,{recursive:true,force:true})}
 })().catch(e=>{console.error(e);process.exitCode=1});
+

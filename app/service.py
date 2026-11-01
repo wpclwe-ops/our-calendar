@@ -113,6 +113,8 @@ class Service:
         prefs.setdefault('timezone_mode', 'manual' if prefs.get('timezone_initialized') else 'auto')
         prefs.setdefault('reduce_transparency', False)
         prefs.setdefault('gender', 'unspecified')
+        prefs.setdefault('daily_summary_enabled', False)
+        prefs.setdefault('daily_summary_time', '09:00')
         return prefs
 
     def calendar(self, c, user_id, active=True):
@@ -202,7 +204,11 @@ class Service:
             if member:
                 self.calendar(c,user_id)
             me = self.user(c,user_id)
-            require(set(changes) <= {'language','timezone','timezone_mode','theme','view','day_layout','month_layout','week_layout','touch_bar','default_duration','default_reminders','default_notifications','notifications_enabled','reminders_enabled','notify_at_start','smart_events','name','gender','reduce_transparency'},'invalid_settings')
+            require(set(changes) <= {'language','timezone','timezone_mode','theme','view','day_layout','month_layout','week_layout','touch_bar','default_duration','default_reminders','default_notifications','notifications_enabled','reminders_enabled','notify_at_start','smart_events','name','gender','reduce_transparency','daily_summary_enabled','daily_summary_time'},'invalid_settings')
+            from .preferences import daily_summary_settings
+            daily_summary_settings(changes)
+            summary_changed = any(k in changes and changes[k] != me.get(k) for k in
+                                  ('daily_summary_enabled','daily_summary_time','timezone','notifications_enabled'))
             if 'name' in changes:
                 require(isinstance(changes['name'], str) and 0 < len(changes['name'].strip()) <= 100, 'invalid_text')
                 changes['name'] = changes['name'].strip()
@@ -242,6 +248,7 @@ class Service:
                 if member and any(changes['smart_events'].get(k)!=preferences(me).get(k) for k in ('consent','titles','categorize','mode','include_internal')):
                     c.execute("UPDATE smart_jobs SET state='cancelled',generation=? WHERE calendar_id=?",(uid(),self.calendar(c,user_id)['id']))
             me.update(changes); me.pop('id')
+            if summary_changed:self.rearm_daily_summary(c,user_id,me)
             if 'language' in changes:me['choose_language']=False
             if 'timezone' in changes:me['timezone_initialized']=True
             c.execute('UPDATE users SET data=? WHERE id=?',(dump(me),user_id))
@@ -250,6 +257,13 @@ class Service:
             if changes.get('notifications_enabled') is False:
                 c.execute("UPDATE outbox SET status='cancelled' WHERE user_id=? AND kind IN ('reminder','action') AND status IN ('pending','sending')", (user_id,))
         return self.state(user_id)
+
+    def rearm_daily_summary(self,c,user_id,prefs):
+        # A setting changed after today's chosen time starts with tomorrow.
+        prefs['daily_summary_since']=stamp()
+        prefs['daily_summary_generation']=uid()
+        c.execute("UPDATE outbox SET status='cancelled' WHERE user_id=? AND kind='daily_summary' "
+                  "AND status IN ('pending','sending')",(user_id,))
 
     def pair_profile(self, user_id, changes, revision):
         from .preferences import validate_pair_profile
@@ -764,4 +778,5 @@ class Service:
             c.execute("DELETE FROM translation_jobs WHERE (kind='event' AND NOT EXISTS (SELECT 1 FROM events e WHERE e.id=translation_jobs.resource_id)) OR (kind='category' AND NOT EXISTS (SELECT 1 FROM categories ca WHERE ca.id=translation_jobs.resource_id))")
             c.execute("DELETE FROM outbox WHERE status IN ('sent','cancelled','expired','failed') AND created_at<?",(cutoff,))
             c.execute('DELETE FROM restore_requests WHERE created_at<?',(cutoff,))
+
 

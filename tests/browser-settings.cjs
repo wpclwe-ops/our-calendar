@@ -44,7 +44,14 @@ const expectedVersion=readFileSync(join(__dirname,'../pyproject.toml'),'utf8').m
   await page.locator('[data-action=settings-view-choose][data-value=seven]').click();await page.waitForFunction(()=>state.me.week_layout==='seven');await page.waitForSelector('.modal-backdrop',{state:'detached'});
   await back();await open('events');
   assert.equal(await page.locator('[name=setting-notify_at_start],.delivery-row').count(),0);
+  assert.equal(await page.locator('#daily-summary-time').isDisabled(),true);
+  await page.locator('[data-personal-pref=daily_summary_enabled]').check();await page.waitForFunction(()=>state.me.daily_summary_enabled===true);
+  await page.locator('#daily-summary-time').fill('08:17');await page.locator('#daily-summary-time').blur();
+  await page.waitForFunction(()=>state.me.daily_summary_time==='08:17');
+  const partnerSummary=await page.evaluate(async()=>{const auth=await fetch('/api/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({demo_user:'2'})}).then(r=>r.json());return auth.state.me});
+  assert.equal(partnerSummary.daily_summary_enabled,false);assert.equal(partnerSummary.daily_summary_time,'09:00');
   await page.locator('[data-personal-pref=notifications_enabled]').uncheck();await page.waitForFunction(()=>state.me.notifications_enabled===false);
+  assert.match(await page.locator('.settings-section').textContent(),/Сводка приостановлена/);
   await page.locator('[data-personal-pref=notifications_enabled]').check();await page.waitForFunction(()=>state.me.notifications_enabled===true);
   await page.locator('[data-action=settings-default-notifications]').click();
   for(const value of await page.locator('[data-notification-choices] input:checked').evaluateAll(inputs=>inputs.map(x=>x.value)))await page.locator(`[data-notification-choices] input[value="${value}"]`).uncheck();
@@ -70,4 +77,5 @@ const expectedVersion=readFileSync(join(__dirname,'../pyproject.toml'),'utf8').m
   assert.deepEqual(errors,[]);console.log('PASS: settings navigation, descriptions, own identity isolation, shared avatar/date, two/custom/start defaults, view previews, personal toggles, memory clear, RU/EN widths, unchanged default navigation style');
  }finally{await browser?.close();server.kill('SIGTERM');await new Promise(r=>server.once('exit',r));rmSync(dir,{recursive:true,force:true})}
 })().catch(e=>{console.error(e);process.exitCode=1});
+
 

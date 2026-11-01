@@ -68,6 +68,8 @@ class Worker:
         self.google=GoogleImports(service)
         from .icloud_import import ICloudImports
         self.icloud=ICloudImports(service)
+        from .daily_summary import DailySummaries
+        self.summaries=DailySummaries(service)
         self.stop_event=threading.Event(); self.thread=None
         self.setup_complete=False;self.setup_next=None
     def start(self):
@@ -87,11 +89,11 @@ class Worker:
     def run(self):
         # Translation and backup network requests never block reminder delivery.
         while not self.stop_event.is_set():
-            try:
-                self.configure_bot();self.service.maintenance();self.schedule();self.deliver()
-                self.heartbeat('worker_heartbeat')
-            except Exception:
-                log.error('Calendar worker cycle failed')
+            for action in (self.configure_bot,self.service.maintenance,self.schedule,
+                           lambda:self.summaries.schedule(utcnow()),self.deliver,
+                           lambda:self.heartbeat('worker_heartbeat')):
+                try:action()
+                except Exception:log.error('Calendar worker operation failed')
             self.stop_event.wait(15)
     def run_translations(self):
         while not self.stop_event.is_set():
@@ -260,10 +262,16 @@ class Worker:
                 if not person_row and not denied:
                     c.execute("UPDATE outbox SET status='cancelled' WHERE id=?",(job['id'],));continue
                 person={'id':job['user_id'],'language':'ru'} if denied else self.service.user(c,job['user_id'])
-                if job['kind'] in ('action','reminder') and not person.get('notifications_enabled',True):
+                if job['kind'] in ('action','reminder','daily_summary') and not person.get('notifications_enabled',True):
                     c.execute("UPDATE outbox SET status='cancelled' WHERE id=?",(job['id'],));continue
                 if job['kind'] not in ('admin','access_denied') and (not member or not member['active'] or member['state']!='active'):
                     c.execute("UPDATE outbox SET status='cancelled' WHERE id=?",(job['id'],));continue
+                if job['kind']=='daily_summary':
+                    if not self.summaries.current(job,person,now):
+                        c.execute("UPDATE outbox SET status='cancelled' WHERE id=?",(job['id'],));continue
+                    payload=self.summaries.prepare(c,job,person)
+                    job['payload']=dump(payload)
+                    c.execute('UPDATE outbox SET payload=? WHERE id=?',(job['payload'],job['id']))
                 if job['kind']=='reminder':
                     ev=c.execute('SELECT * FROM events WHERE id=?',(job['event_id'],)).fetchone()
                     payload=load(job['payload'])
@@ -295,7 +303,8 @@ class Worker:
                     # No Mini App button, profile, or calendar membership for outsiders.
                     self.telegram.call('sendMessage',{'chat_id':int(job['user_id']),'text':'Доступ запрещён'})
                 else:
-                    self.telegram.send(job['user_id'],self.text(job,person),person['language'],url)
+                    text=payload['chunks'][payload['next_part']] if job['kind']=='daily_summary' else self.text(job,person)
+                    self.telegram.send(job['user_id'],text,person['language'],url)
             except TelegramAPIError as exc:
                 with self.service.db.transaction() as c:
                     if exc.code in (400,403) and not denied:
@@ -309,7 +318,13 @@ class Worker:
                 log.exception('Outbox processing failed for job %s',job['id'])
             else:
                 with self.service.db.transaction() as c:
-                    c.execute("UPDATE outbox SET status='sent',lease_until=NULL,error=NULL WHERE id=? AND status='sending'",(job['id'],))
+                    if job['kind']=='daily_summary':
+                        payload['next_part']+=1
+                        status='sent' if payload['next_part']==len(payload['chunks']) else 'pending'
+                        c.execute("UPDATE outbox SET status=?,payload=?,due=?,attempts=0,lease_until=NULL,error=NULL "
+                                  "WHERE id=? AND status='sending'",(status,dump(payload),stamp(now),job['id']))
+                    else:
+                        c.execute("UPDATE outbox SET status='sent',lease_until=NULL,error=NULL WHERE id=? AND status='sending'",(job['id'],))
                     row=c.execute('SELECT data FROM users WHERE id=?',(job['user_id'],)).fetchone()
                     if row:
                         prefs=load(row['data']);prefs['delivery_error']=None
@@ -346,4 +361,5 @@ class Worker:
                 # Persist welcome before returning 200. A retried webhook cannot enqueue it twice.
                 payload={'action':'welcome','title':'','data':{}}
                 self.service.enqueue(c,None,user_id,'admin',payload,key='start:'+str(update['update_id']))
+
 

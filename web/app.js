@@ -664,6 +664,15 @@ async function loadData(poll=false){
 }
 async function changeView(v){view=v;state.me.view=v;await api('settings','PATCH',{view:v});await loadData();render()}
 function openDay(date){return navigateSmoothly({type:'view',view:'day',date},CalendarNavigation.motion({preview:navigationPreview}))}
+async function selectWeekDate(date){
+ if(date===selected)return;
+ const rows=await navigationEntry({date,mode:'week',tab:'calendar'}).promise;
+ const top=$('.week-timeline')?.scrollTop,focused=document.activeElement?.closest('.week-date');
+ selected=date;events=rows;render();
+ if(top!==undefined&&$('.week-timeline'))$('.week-timeline').scrollTop=top;
+ if(focused)$(`.week-date[data-date="${date}"]`)?.focus({preventScroll:true});
+ warmNavigation();
+}
 async function openEvent(id,key){
  const scroll=page==='detail'&&currentEvent?.id===id?window.scrollY:0;
  currentEvent=await fetchCalendarEvent(id,key);
@@ -781,7 +790,7 @@ const actions={
  'today':async()=>{selected=isoDay();showSearch=false;query='';$('.timeline')?.removeAttribute('data-date');$('.timeline')?.removeAttribute('data-range');$('.month-scroll')?.removeAttribute('data-focus');$('.month-with-agenda,.day-checklist')?.removeAttribute('data-date');await loadData();render()},
  'prev':()=>move(-1),'next':()=>move(1),
  'date':el=>openDay(el.dataset.date),
- 'week-date':el=>openDay(el.dataset.date),
+ 'week-date':el=>selectWeekDate(el.dataset.date),
  'event':el=>openEvent(el.dataset.id,el.dataset.occ),
  'create':async()=>{await api('calendar','POST',{});await refresh()},
  'invite':async()=>{const result=await api('invite','POST',{});inviteUrl=result.url;render()},
@@ -923,4 +932,5 @@ setInterval(async()=>{
   }else if(page==='detail'&&(['pending','failed'].includes(currentEvent?.translation_status?.state)||['pending','running','retry_wait'].includes(currentEvent?.smart_status?.state)))await openEvent(currentEvent.id,currentEvent.occurrence);
  }catch(_){}
 },15000);
+
 
