@@ -27,7 +27,8 @@ const {mkdtempSync,rmSync,mkdirSync}=require('node:fs');const {tmpdir}=require('
   assert.equal(await page.locator('.time-event .time-place').count(),0);
   const firstTimeline=page.locator('.time-event').first();
   assert.equal(await firstTimeline.locator('.time-event-title').textContent(),'Выставка «Цвет и свет»');
-  assert.equal(await firstTimeline.locator('.time-owner').textContent(),'Обоим');
+  assert.equal(await firstTimeline.locator('.time-owner .owner-avatar').count(),2);
+  assert.equal(await firstTimeline.locator('.time-owner .owner-avatars').getAttribute('aria-label'),'Alex, Partner');
   assert.match(await firstTimeline.locator('.time-range').textContent(),/10:00.*10:30/);
   assert.equal(await firstTimeline.locator('.time-range').evaluate(el=>getComputedStyle(el).display),'block');
   assert.ok(await firstTimeline.evaluate(el=>{const a=el.querySelector('.time-event-title').getBoundingClientRect(),b=el.querySelector('.time-owner').getBoundingClientRect(),c=el.querySelector('.time-range').getBoundingClientRect();return b.left>=a.left&&c.top>=a.top+a.height-1}));
@@ -186,4 +187,5 @@ const {mkdtempSync,rmSync,mkdirSync}=require('node:fs');const {tmpdir}=require('
  assert.deepEqual(errors,[]);console.log('PASS: compact timeline time/owner, gray centered actions, unified month-and-agenda scrolling, settings hierarchy, status dialog and two distinct month modes.');
  }finally{await browser?.close();server.kill();await new Promise(resolve=>server.once('exit',resolve));rmSync(directory,{recursive:true,force:true})}
 })().catch(e=>{console.error(e);process.exit(1)});
+
 

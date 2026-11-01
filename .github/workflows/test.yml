@@ -19,6 +19,7 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: python -m pytest -q
       - run: python -m compileall -q app scripts
+      - run: node --check web/event-owners.js
       - run: node --check web/app.js
       - run: node --check web/settings.js
       - run: node --check web/smart-events.js
@@ -48,3 +49,5 @@ jobs:
       - run: node tests/browser-event-datetime.cjs
       - run: node tests/browser-event-surface.cjs
 
+
+      - run: node tests/browser-event-owners.cjs

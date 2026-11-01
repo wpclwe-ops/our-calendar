@@ -10,6 +10,7 @@
 .settings-section :is(.setting-row,.switch-row){padding:var(--space-3) var(--space-4);gap:var(--space-3)}
 .settings-section .setting-row>label{flex:1;min-width:0}
 .settings-section .setting-row>:is(select,input){min-height:44px}
+.settings-section #daily-summary-time{font-size:16px;min-inline-size:140px;max-inline-size:100%}
 .settings-section .form-group>:last-child{border-bottom:0}
 .settings-section .section-label{margin:var(--space-6) var(--space-1) var(--space-2)}
 .settings-section .back{display:inline-flex;align-items:center;gap:var(--space-1);margin-bottom:var(--space-3)}
@@ -33,3 +34,4 @@
 .settings-view-mini.weeks{grid-template-columns:repeat(7,1fr);grid-template-rows:repeat(2,1fr);gap:2px}
 /* This user-selected accessibility mode is the only opt-in material change. */
 body.reduce-transparency :is(.form-group,.card,.bottom-nav,.calendar-tools .icon,.today-btn,.fab,.modal){background-color:var(--card)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+

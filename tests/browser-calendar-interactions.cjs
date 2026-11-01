@@ -71,7 +71,8 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  await set('2026-10-16','week');const indicator=page.locator('.week-date[data-date="2026-10-16"] .week-marker');assert.equal(await indicator.getAttribute('data-bg'),'#D77777');
  await page.evaluate(async()=>{state=await api('settings','PATCH',{day_layout:'timeline'});view='day';await loadData();render()});await wait();
  await page.locator('.timeline').evaluate(el=>el.scrollTop=8*70);
- assert.equal(await page.locator(`.time-event[data-id="${ev.id}"] .time-owner`).textContent(),'Обоим');
+ assert.equal(await page.locator(`.time-event[data-id="${ev.id}"] .time-owner .owner-avatar`).count(),2);
+ assert.equal(await page.locator(`.time-event[data-id="${ev.id}"] .time-owner .owner-avatars`).getAttribute('aria-label'),'Alex, Partner');
  box=await page.locator(`.time-event[data-id="${ev.id}"]`).boundingBox();await hold(box.x+box.width/2,box.y+12,box.y+82);
  const moved=await page.evaluate(id=>api('events/'+id),ev.id);assert.equal(moved.start,'2026-10-16T10:00');assert.equal(moved.end,'2026-10-16T11:00');
  // Empty timeline long press uses the touched time, without opening an existing event.
@@ -100,4 +101,5 @@ const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');
  assert.deepEqual(errors,[]);console.log('PASS: defaults, end tracking, midnight, personal settings, Today, current-time positioning, scrolling months, long press in all views, real touch event drag, ownership/category markers, exact-event and occurrence links, responsive layout');
  }finally{await browser?.close();server.kill();await new Promise(resolve=>server.once('exit',resolve));rmSync(directory,{recursive:true,force:true})}
 })().catch(e=>{console.error(e);process.exit(1)});
+
 

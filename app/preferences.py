@@ -2,10 +2,20 @@
 import base64
 import binascii
 import struct
+import re
 from datetime import date
 from .security import require
 
 PAIR_FIELDS = {'name', 'avatar', 'relationship_started'}
+
+
+def daily_summary_settings(values):
+    if 'daily_summary_enabled' in values:
+        require(type(values['daily_summary_enabled']) is bool, 'invalid_settings')
+    if 'daily_summary_time' in values:
+        require(isinstance(values['daily_summary_time'], str) and
+                re.fullmatch(r'(?:[01][0-9]|2[0-3]):[0-5][0-9]', values['daily_summary_time']) is not None,
+                'invalid_daily_summary_time')
 
 
 def notification_offsets(values):
@@ -50,3 +60,4 @@ def validate_pair_profile(value):
             width, height = struct.unpack('>II', data[16:24])
             require(0 < width <= 512 and 0 < height <= 512, 'invalid_avatar')
     return value
+
