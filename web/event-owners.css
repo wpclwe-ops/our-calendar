@@ -1,0 +1,13 @@
+/* One neutral avatar material for every owner; category colours stay independent. */
+.owner-avatars{display:inline-flex;align-items:center;flex:none;vertical-align:middle;white-space:nowrap;pointer-events:none;isolation:isolate}
+.owner-avatar{display:inline-grid;place-items:center;width:23px;height:23px;flex:none;border-radius:50%;border:1px solid var(--card);background:var(--soft);color:var(--ink);font-size:11px;line-height:1;font-weight:600;overflow:hidden}
+.owner-avatar+.owner-avatar{margin-left:-5px}
+.owner-avatars-compact .owner-avatar{width:16px;height:16px;font-size:9px}
+.owner-avatars-compact .owner-avatar+.owner-avatar{margin-left:-4px}
+.day-task-heading,.event-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;min-width:0}
+.day-task-heading>.day-task-title,.event-heading>.event-title{flex:1;min-width:0}
+.time-event .time-event-heading .time-owner:has(.owner-avatars){flex:none;max-width:none;overflow:visible;line-height:16px;opacity:1}
+.time-event .time-event-heading:has(.owner-avatars){align-items:flex-start}
+.time-event.short-event .time-event-heading:has(.owner-avatars){align-items:center}
+/* Narrow week columns retain their existing owner disclosure via the event label. */
+.timeline-day .time-event .time-owner:has(.owner-avatars){display:none}

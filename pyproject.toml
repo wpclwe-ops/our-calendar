@@ -1,6 +1,6 @@
 [project]
 name = "our-calendar"
-version = "0.10.7"
+version = "0.10.8"
 description = "Private Telegram Mini App calendar for an immutable pair"
 requires-python = ">=3.12"
 
@@ -8,5 +8,6 @@ requires-python = ">=3.12"
 testpaths = ["tests"]
 pythonpath = ["."]
 filterwarnings = ["ignore:Using `httpx` with:DeprecationWarning"]
+
 
 

@@ -1,8 +1,9 @@
-# Daily summary and week date selection
+# Daily summary, week date selection and owner initials — 0.10.8
 
-Prepared from main `294f8be` in a separate feature branch. No merge or production
-deployment is included. Open month-refactor PR #54 and all-day/font PR #55 remain
-separate. Initial avatars are a conversation mockup only.
+Prepared from main `294f8be` in a separate feature branch. Production release requires observed Railway
+SUCCESS and a ready /health at version 0.10.8. Open month-refactor PR #54 and all-day/font PR #55 remain
+separate. The approved initial-avatar mockup is implemented in event lists and the
+day timeline. Category colours remain independent; shared events show both initials.
 
 ## Behavior
 
@@ -35,10 +36,13 @@ separate. Initial avatars are a conversation mockup only.
 ## Validation
 
 - `python -m pytest -q`: 422 passed, one existing Starlette deprecation warning.
-- `node --test tests/*.test.cjs`: 48 passed.
+- `node --test tests/*.test.cjs`: 51 passed.
 - `python -m compileall -q app scripts`, JS syntax, `git diff --check`: passed.
 - Chromium 141 / Playwright 1.56.0 scenarios: settings, calendar-date-navigation,
-  calendar-week, calendar-design, calendar-interactions and list-swipe-actions.
+  calendar-week, calendar-design, calendar-interactions, list-swipe-actions and
+  event-owners. The owner scenario checks RU/EN × light/dark × 320/390/430 px,
+  neutral colours, accessible labels, profile updates, escaped names, event taps
+  and completion controls.
 - Date regression covers all three week layouts and both personal Day layouts,
   repeat taps, filters, hidden Day tab, keyboard, reduced motion, year/month edges,
   failed loading/retry, a moving three-day window and retained timeline scroll.
