@@ -432,7 +432,7 @@ def test_revoked_refresh_token_reports_reconnect(google):
     g,f,source=google;link=imported(google)
     with g.s.db.transaction() as c:
         c.execute('UPDATE google_accounts SET credentials=?',(g.vault.encrypt({'access_token':'old','refresh_token':'revoked','expires_at':'2000-01-01'}),))
-    def revoked(token):raise ProviderFailure(400)
+    def revoked(token):raise ProviderFailure(400,reason="invalid_grant")
     g.oauth.refresh=revoked
     with pytest.raises(Problem) as exc:g.sync_source('1',source,True)
     assert exc.value.code=='google_reconnect'

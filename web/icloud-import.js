@@ -19,6 +19,8 @@ Object.assign(words.en,{
  icloud_rate_limited:'Apple temporarily limited requests. Wait a few minutes before checking again.',
  icloud_invalid_response:'Apple returned an incomplete or invalid response. Your events are retained; try checking again.'
 });
+Object.assign(words.ru,{i_connected:'Подключено',i_recovering:'Проверяем доступ — повторим автоматически',i_unavailable:'Нет доступа к этому календарю; подключение сохранено'});
+Object.assign(words.en,{i_connected:'Connected',i_recovering:'Checking access; will retry automatically',i_unavailable:'This calendar is unavailable; the connection is retained'});
 let icloudUI={step:'accounts',status:null,account:null,calendars:[],source:null,items:[],conflict:null};
 async function openICloudImports(){icloudUI.step='accounts';icloudUI.status=await api('icloud');tab='settings';page='icloud';render()}
 async function icloudOpenCalendars(account){
@@ -35,8 +37,8 @@ function icloudImportPage(){
  if(i.step==='events')return h+`<h2>${t('iSelect')}</h2><section class="form-group">${i.items.map(e=>`<label class="g-choice g-check"><input type="checkbox" class="i-event" value="${esc(e.id)}" ${e.supported?'':'disabled'}><span><strong>${esc(e.title)}</strong><small>${esc(e.start)} → ${esc(e.end)}</small>${!e.supported?'<small>'+t('gUnsupported')+'</small>':''}</span></label>`).join('')||'<p>'+t('gNoEvents')+'</p>'}</section>${button('icloud-import',t('iImport'),'primary full')}`;
  if(i.step==='calendars')return h+`<h2>${t('iSources')}</h2><p class="privacy">${t('iAutoInfo')}</p><section class="card">${i.calendars.map(c=>`<div class="g-source-pick"><label class="g-check"><input type="checkbox" class="i-source" value="${esc(c.id)}" ${c.selected?'checked':''}><span>${esc(c.name)}</span></label><label class="g-check g-auto-choice"><input type="checkbox" class="i-auto" value="${esc(c.id)}" ${c.auto_import?'checked':''}><span>${t('iAuto')}</span></label></div>`).join('')||t('gCalendarEmpty')}${button('icloud-save-sources',t('iSaveSources'),'primary full')}</section>`;
  for(const a of s.accounts){
-   h+=`<section class="card"><h2>${esc(a.email)}</h2><p class="privacy">${t('gImportOnly')}${a.state!=='connected'?' · '+t('i_'+a.state):''}</p><div class="row wrap">${button(a.state==='connected'?'icloud-calendars':'icloud-connect-open',t(a.state==='connected'?'iChange':'gReconnect'),'primary','data-id="'+esc(a.id)+'"')}${button('icloud-disconnect',t('iDisconnect'),'text-button danger','data-id="'+esc(a.id)+'"')}</div>`;
-   for(const c of a.sources.filter(x=>x.selected))h+=`<div class="g-source-card"><h3>${esc(c.name)}</h3><p class="privacy">${t(c.auto_import?'iActive':'iManual')} · ${t('i_'+c.state)}</p><p class="privacy">${t('iLinked')}: ${Number(c.linked_count)||0}${c.unsupported_count?' · '+t('iUnsupportedCount')+': '+Number(c.unsupported_count):''}${c.checked_at?' · '+t('gLastCheck')+': '+esc(c.checked_at):''}</p>${(c.issues||[]).map(v=>button('icloud-conflict',t('iReview')+' · '+esc(v.title),'text-button','data-id="'+esc(v.id)+'"')).join('')}${a.state==='connected'?button('icloud-sync',t('iSync'),'text-button','data-id="'+esc(c.id)+'"')+' '+button('icloud-events',t('iChooseEvents'),'text-button','data-id="'+esc(c.id)+'"'):''}</div>`;
+   h+=`<section class="card"><h2>${esc(a.email)}</h2><p class="privacy">${t('gImportOnly')} · ${t('i_'+a.state)}</p>${connectionDetails(a)}<div class="row wrap">${button(a.state==='connected'?'icloud-calendars':'icloud-connect-open',t(a.state==='connected'?'iChange':'gReconnect'),'primary','data-id="'+esc(a.id)+'"')}${button('icloud-disconnect',t('iDisconnect'),'text-button danger','data-id="'+esc(a.id)+'"')}</div>`;
+   for(const c of a.sources.filter(x=>x.selected))h+=`<div class="g-source-card"><h3>${esc(c.name)}</h3><p class="privacy">${t(c.auto_import?'iActive':'iManual')} · ${t('i_'+c.state)}</p>${connectionDetails(c)}<p class="privacy">${t('iLinked')}: ${Number(c.linked_count)||0}${c.unsupported_count?' · '+t('iUnsupportedCount')+': '+Number(c.unsupported_count):''}</p>${(c.issues||[]).map(v=>button('icloud-conflict',t('iReview')+' · '+esc(v.title),'text-button','data-id="'+esc(v.id)+'"')).join('')}${a.state==='connected'?button('icloud-sync',t('iSync'),'text-button','data-id="'+esc(c.id)+'"')+' '+button('icloud-events',t('iChooseEvents'),'text-button','data-id="'+esc(c.id)+'"'):''}</div>`;
    h+='</section>';
  }
  if(!s.accounts.length)h+=`<p class="privacy">${t('iNoAccounts')}</p>`;
@@ -55,9 +57,11 @@ Object.assign(actions,{
  'icloud-resolve-local':()=>icloudResolve('local'),
  'icloud-resolve-remote':()=>icloudResolve('icloud'),
  'icloud-resolve-trash':()=>icloudResolve('trash'),
- 'icloud-sync':async el=>{const result=await api('icloud/sources/'+el.dataset.id+'/sync','POST',{});icloudUI.status=await api('icloud');render();toast(t('i_'+result.state))},
+ 'icloud-sync':async el=>{let result;try{result=await api('icloud/sources/'+el.dataset.id+'/sync','POST',{})}finally{icloudUI.status=await api('icloud');render()}toast(t('i_'+result.state))},
  'icloud-disconnect':async el=>{if(!await confirmDialog(t('iDisconnect'),t('iDisconnectHelp')))return;icloudUI.status=await api('icloud/accounts/'+el.dataset.id,'DELETE');render()}
 });
 
 async function icloudResolve(choice){const c=icloudUI.conflict;if(choice==='trash'&&!await confirmDialog(t('iTrash')))return;await api('icloud/links/'+c.id+'/resolve','POST',{choice,revision:c.revision,remote_version:c.remote_version});icloudUI.status=await api('icloud');icloudUI.step='accounts';render();toast(t('iResolved'))}
 
+
+setInterval(async()=>{if(page==='icloud'&&icloudUI.step==='accounts'&&!busy&&!document.hidden){try{icloudUI.status=await api('icloud');render()}catch{}}},15000);

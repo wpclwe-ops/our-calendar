@@ -76,6 +76,27 @@ const assert=require('node:assert/strict'),{mkdtempSync,rmSync}=require('node:fs
   assert.ok(await page.locator('.g-link').count()>=3);
   const allShared=await page.evaluate(async()=>{const a=await fetch('/api/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({demo_user:'2'})}).then(r=>r.json());return fetch('/api/events?start=2026-10-01&end=2026-11-01',{headers:{Authorization:'Bearer '+a.token}}).then(r=>r.json())});
   assert.ok(allShared.some(e=>e.title==='Never share this'));
+  // A temporary/server problem keeps the normal controls and shows retry timing.
+  const savedStatus=await page.evaluate(()=>JSON.parse(JSON.stringify(googleUI.status)));
+  for(const source of savedStatus.accounts[0].sources){source.state='delayed';source.last_error='credential_storage';source.checked_at='2026-10-20T10:00:00Z';source.next_at='2026-10-20T12:05:00Z'}
+  await page.route('**/api/google',r=>r.fulfill({contentType:'application/json',body:JSON.stringify(savedStatus)}));
+  await page.evaluate(()=>refreshGoogleStatus());
+  assert.ok((await page.locator('#app').textContent()).includes('Последняя успешная синхронизация'));
+  assert.ok((await page.locator('#app').textContent()).includes('Следующая попытка'));
+  assert.ok((await page.locator('#app').textContent()).includes('Сервер не смог прочитать'));
+  assert.equal(await page.locator('[data-action="google-calendars"]').count(),1);
+  await page.unroute('**/api/google');
+  // The same diagnostics and retained controls apply to iCloud, in both languages.
+  const appleStatus={configured:true,accounts:[{id:'apple',email:'synthetic@example.com',state:'connected',sources:[{id:'source',name:'Personal',selected:1,auto_import:1,state:'recovering',checked_at:'2026-10-20T10:00:00Z',next_at:'2026-10-20T12:05:00Z',last_error:'',linked_count:1,issues:[]}]}]};
+  await page.route('**/api/icloud',r=>r.fulfill({contentType:'application/json',body:JSON.stringify(appleStatus)}));
+  await page.evaluate(()=>openICloudImports());
+  assert.ok((await page.locator('#app').textContent()).includes('Проверяем доступ'));
+  assert.equal(await page.locator('[data-action="icloud-calendars"]').count(),1);
+  assert.equal(await page.locator('[data-action="icloud-sync"]').count(),1);
+  await page.evaluate(()=>{state.me.language='en';render()});
+  assert.ok((await page.locator('#app').textContent()).includes('Checking access'));
+  assert.ok((await page.locator('#app').textContent()).includes('Last successful sync'));
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   assert.deepEqual(errors,[]);console.log('Google import mobile acceptance passed: manual privacy, consent-gated auto import, preview, retry, deduplication, RU/EN and mobile viewports.');
  }finally{if(browser)await browser.close();server.kill();rmSync(directory,{recursive:true,force:true})}
 })().catch(e=>{console.error(e);process.exit(1)});

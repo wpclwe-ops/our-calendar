@@ -1,8 +1,17 @@
 import os
+import logging
 import uvicorn
 from .config import Config
 from .main import create_app
 from .setup import create_setup_app,missing_configuration
+
+# Provider diagnostics use fixed labels/counts, never account or event data.
+app_logger=logging.getLogger('app')
+app_logger.setLevel(logging.INFO)
+handler=logging.StreamHandler()
+handler.setFormatter(logging.Formatter('%(levelname)s %(name)s %(message)s'))
+app_logger.addHandler(handler)
+app_logger.propagate=False
 
 setup_allowed=os.getenv('SETUP_MODE','false').lower()=='true'
 is_demo=os.getenv('DEMO_MODE','false').lower()=='true'

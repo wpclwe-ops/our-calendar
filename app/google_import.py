@@ -9,6 +9,9 @@ from datetime import datetime, timedelta, date
 import random
 import secrets
 import hmac
+import logging
+from threading import RLock
+from .connection_recovery import recover_legacy
 from .providers.google import GoogleOAuth, GoogleCalendar
 from .google_description import google_description_text
 from .providers.vault import CredentialVault
@@ -36,6 +39,31 @@ TTL = 600
 POLL = 300
 MAX_BATCH = 50
 AUTO_BATCH = 20
+logger=logging.getLogger(__name__)
+# The SQLite service runs one process. Bounded shared locks also cover importer
+# instances created by requests/tests; network IO never holds a DB transaction.
+TOKEN_LOCKS=tuple(RLock() for _ in range(64))
+
+
+class GoogleSession:
+    """Retry one API authentication failure with a refreshed access token."""
+    def __init__(self,importer,account,credentials):
+        self.importer,self.account,self.credentials=importer,account,credentials
+
+    def __getattr__(self,name):
+        attribute=getattr(self.importer.provider(self.credentials['access_token']),name)
+        if not callable(attribute):return attribute
+        def request(*args,**kwargs):
+            g=self.importer
+            try:
+                return getattr(g.provider(self.credentials['access_token']),name)(*args,**kwargs)
+            except ProviderFailure as exc:
+                if exc.code!=401:raise
+            self.credentials=g.credentials(self.account,rejected_token=self.credentials['access_token'])
+            # A second API 401 is an availability/permission problem, not proof
+            # that the refresh grant was revoked. Keep polling with backoff.
+            return getattr(g.provider(self.credentials['access_token']),name)(*args,**kwargs)
+        return request
 
 
 def eligible_auto(item, source_timezone, now):
@@ -155,27 +183,54 @@ class GoogleImports:
         return row, account
 
     def client(self, account):
+        return GoogleSession(self,account,self.credentials(account))
+
+    def credentials(self, account, rejected_token=None):
         self.ready()
-        credentials = self.vault.decrypt(account['credentials'])
-        if credentials.get('expires_at','') <= stamp(utcnow()+timedelta(seconds=60)):
-            require(bool(credentials.get('refresh_token')), 'google_reconnect', 409)
+        lock=TOKEN_LOCKS[hash((self.s.db.path,account['id']))%len(TOKEN_LOCKS)]
+        with lock:
+            with self.s.db.transaction() as c:
+                current=self.account(c,account['user_id'],account['id'])
+                require(current['generation']==account['generation'],'google_selection_expired',409)
+            credentials=self.vault.decrypt(current['credentials'])
+            stale=credentials.get('expires_at','') <= stamp(utcnow()+timedelta(seconds=60))
+            rejected=rejected_token is not None and credentials.get('access_token')==rejected_token
+            if not stale and not rejected:return credentials
+            if not credentials.get('refresh_token'):
+                self.auth_lost(account,'missing_refresh_token')
+                raise Problem(409,'google_reconnect')
             try:
                 fresh = self.oauth.refresh(credentials['refresh_token'])
             except ProviderFailure as exc:
-                if exc.code in (400,401):
-                    with self.s.db.transaction() as c:
-                        c.execute("UPDATE google_accounts SET state='needs_reconnect',generation=generation+1 WHERE id=? AND generation=?",
-                                  (account['id'], account['generation']))
-                    raise Problem(409, 'google_reconnect')
+                if exc.reason=='invalid_grant':
+                    self.auth_lost(account,'invalid_grant')
+                    raise Problem(409,'google_reconnect') from None
+                if exc.reason in ('invalid_client','unauthorized_client','invalid_scope','invalid_request'):
+                    raise ProviderFailure(503,reason='oauth_configuration') from None
                 raise
+            if not isinstance(fresh.get('access_token'),str) or not fresh['access_token']:
+                raise ProviderFailure(502,reason='invalid_response')
+            try:expires=int(fresh.get('expires_in',3600))
+            except (ValueError,TypeError):raise ProviderFailure(502,reason='invalid_response') from None
+            if expires<=0:raise ProviderFailure(502,reason='invalid_response')
+            # Google normally omits refresh_token on refresh. Preserve the grant
+            # unless the provider actually rotates it to a nonempty value.
+            if not fresh.get('refresh_token'):fresh={k:v for k,v in fresh.items() if k!='refresh_token'}
             credentials.update(fresh)
-            credentials['expires_at'] = stamp(utcnow()+timedelta(seconds=int(fresh.get('expires_in',3600))))
+            credentials['expires_at'] = stamp(utcnow()+timedelta(seconds=expires))
             with self.s.db.transaction() as c:
                 current = self.account(c, account['user_id'], account['id'])
                 require(current['generation']==account['generation'], 'google_selection_expired', 409)
-                c.execute('UPDATE google_accounts SET credentials=? WHERE id=?',
+                c.execute("UPDATE google_accounts SET credentials=?,last_error='' WHERE id=?",
                           (self.vault.encrypt(credentials), account['id']))
-        return self.provider(credentials['access_token'])
+            logger.info('google token_refreshed')
+            return credentials
+
+    def auth_lost(self,account,reason):
+        with self.s.db.transaction() as c:
+            c.execute("UPDATE google_accounts SET state='needs_reconnect',last_error=?,generation=generation+1 WHERE id=? AND generation=? AND state='connected'",
+                      (reason,account['id'],account['generation']))
+        logger.warning('google authorization_lost reason=%s',reason)
 
     def start(self, actor):
         self.ready()
@@ -233,9 +288,9 @@ class GoogleImports:
             if pending and pending['state']=='confirm' and self.vault:
                 confirmation = {'email': self.vault.decrypt(pending['secret'])['email']}
             accounts=[]
-            for a in c.execute('SELECT id,email,state FROM google_accounts WHERE user_id=? AND calendar_id=?',(actor,cal['id'])):
+            for a in c.execute('SELECT id,email,state,last_error FROM google_accounts WHERE user_id=? AND calendar_id=?',(actor,cal['id'])):
                 sources=[]
-                for source in c.execute('SELECT id,name,selected,auto_import,state FROM google_sources WHERE account_id=?',(a['id'],)):
+                for source in c.execute('SELECT id,name,selected,auto_import,state,checked_at,next_at,last_error FROM google_sources WHERE account_id=?',(a['id'],)):
                     links=[dict(v) for v in c.execute('SELECT l.id,l.event_id,l.state,l.checked_at,json_extract(e.data,\'$.title\') AS title FROM google_links l LEFT JOIN events e ON e.id=l.event_id WHERE l.source_id=? AND l.event_id IS NOT NULL',(source['id'],))]
                     sources.append({**dict(source),'links':links})
                 accounts.append({**dict(a),'mode':'import_only','sources':sources})
@@ -254,7 +309,7 @@ class GoogleImports:
                 existing=c.execute('SELECT id FROM google_accounts WHERE user_id=? AND calendar_id=? AND subject=?',
                                    (actor,cal['id'],data['subject'])).fetchone()
                 if existing:account_id=existing['id']
-                c.execute("INSERT INTO google_accounts(id,user_id,calendar_id,subject,email,credentials) VALUES(?,?,?,?,?,?) ON CONFLICT(user_id,calendar_id,subject) DO UPDATE SET email=excluded.email,credentials=excluded.credentials,state='connected',generation=google_accounts.generation+1",
+                c.execute("INSERT INTO google_accounts(id,user_id,calendar_id,subject,email,credentials) VALUES(?,?,?,?,?,?) ON CONFLICT(user_id,calendar_id,subject) DO UPDATE SET email=excluded.email,credentials=excluded.credentials,state='connected',last_error='',generation=google_accounts.generation+1",
                           (account_id,actor,cal['id'],data['subject'],data['email'],self.vault.encrypt(data['credentials'])))
                 # Reconnection never silently re-enables old sources or links.
                 c.execute("UPDATE google_sources SET selected=0,auto_import=0,sync_token=NULL,generation=generation+1,lease_until=NULL,state='ready' WHERE account_id=?",(account_id,))
@@ -704,18 +759,20 @@ class GoogleImports:
 
                 cursor=(None if delta['reset'] else source['sync_token']) if more_auto else delta['sync_token']
                 delay=15 if more_auto else POLL
-                c.execute("UPDATE google_sources SET sync_token=?,next_at=?,state='ready',attempts=0,lease_until=NULL WHERE id=?",
-                          (cursor,stamp(now+timedelta(seconds=delay)),source_id))
+                c.execute("UPDATE google_sources SET sync_token=?,next_at=?,state='ready',last_error='',checked_at=?,attempts=0,lease_until=NULL WHERE id=?",
+                          (cursor,stamp(now+timedelta(seconds=delay)),stamp(),source_id))
             return {'state':'ready','created':created}
         except (ProviderFailure,Problem,KeyError,ValueError,TypeError) as exc:
             state='delayed'
-            if isinstance(exc,ProviderFailure) and exc.code in (401,):state='needs_reconnect'
             if isinstance(exc,ProviderFailure) and exc.code in (403,404):state='unavailable'
             if isinstance(exc,Problem) and exc.code=='google_reconnect':state='needs_reconnect'
+            error=(exc.reason if exc.reason in ('credential_storage','oauth_configuration','invalid_response') else
+                   'api_auth' if exc.code==401 else 'provider_unavailable') if isinstance(exc,ProviderFailure) else state
+            logger.warning('google sync_failed state=%s reason=%s',state,error)
             delay=max(getattr(exc,'retry_after',0),min(3600,30*2**min(source['attempts'],7)))+random.randint(0,15)
             with self.s.db.transaction() as c:
-                c.execute('UPDATE google_sources SET state=?,next_at=?,attempts=attempts+1,lease_until=NULL WHERE id=? AND generation=? AND lease_until=?',
-                          (state,stamp(now+timedelta(seconds=delay)),source_id,source['generation'],lease))
+                c.execute('UPDATE google_sources SET state=?,last_error=?,next_at=?,attempts=attempts+1,lease_until=NULL WHERE id=? AND generation=? AND lease_until=?',
+                          (state,error,stamp(now+timedelta(seconds=delay)),source_id,source['generation'],lease))
                 if state=='needs_reconnect':c.execute("UPDATE google_accounts SET state='needs_reconnect' WHERE id=? AND generation=?",(account['id'],account['generation']))
             if force:
                 if isinstance(exc,Problem):raise
@@ -752,6 +809,7 @@ class GoogleImports:
 
     def run_due(self):
         if not self.configured:return
+        recover_legacy(self.s,'google')
         with self.s.db.transaction() as c:
             c.execute('DELETE FROM google_oauth_requests WHERE expires_at<=?',(stamp(),))
             c.execute('DELETE FROM google_previews WHERE expires_at<=?',(stamp(),))
