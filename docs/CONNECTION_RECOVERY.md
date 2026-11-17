@@ -65,3 +65,7 @@ explicit disconnect, deselection and calendar lock. Existing provider privacy,
 consent and import-only tests continue to apply. Browser acceptance also checks
 RU/EN recovery messages, retained controls and successful-sync/retry timestamps.
 These scenarios do not establish real multi-day Google/iCloud acceptance.
+
+CI runner is pinned to Ubuntu 24.04: ubuntu-latest moved to 26.04, which the
+project's pinned Playwright 1.56.0 cannot install browsers on. Browser checks
+remain mandatory; no checks are skipped.
