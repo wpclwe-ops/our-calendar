@@ -31,11 +31,11 @@ class GoogleOAuth:
         import json
         try:
             result=json.loads(body)
-            if not isinstance(result.get('access_token'),str):raise ValueError()
+            if not isinstance(result,dict) or not isinstance(result.get('access_token'),str) or not result['access_token']:raise ValueError()
             if 'scope' in result and not set(SCOPES)<=set(result['scope'].split()):
                 raise ProviderFailure(403,reason='missing_scopes')
             return result
-        except (ValueError,TypeError):raise ProviderFailure(401)
+        except (ValueError,TypeError):raise ProviderFailure(502,reason='invalid_response') from None
     def exchange(self,code,verifier):
         return self._token({'code':code,'code_verifier':verifier,'redirect_uri':self.redirect_uri,'grant_type':'authorization_code'})
     def refresh(self,refresh_token):return self._token({'refresh_token':refresh_token,'grant_type':'refresh_token'})

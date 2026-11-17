@@ -8,4 +8,5 @@ class CredentialVault:
     def encrypt(self,credentials):return self.cipher.encrypt(dump(credentials).encode()).decode()
     def decrypt(self,value):
         try:return load(self.cipher.decrypt(value.encode()))
-        except (InvalidToken,ValueError,TypeError):raise ProviderFailure(401)
+        except (InvalidToken,ValueError,TypeError,AttributeError):
+            raise ProviderFailure(503,reason='credential_storage') from None

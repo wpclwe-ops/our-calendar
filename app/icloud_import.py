@@ -4,6 +4,8 @@ Only explicitly selected sources are scanned. Automatic sharing is separate cons
 from datetime import date, datetime, timedelta
 import random
 import logging
+from urllib.parse import urlparse
+from .connection_recovery import recover_legacy
 from icalendar import Calendar
 from .providers.icloud import ICloudCalDAV, failure_code
 from .providers.http import ProviderFailure
@@ -154,13 +156,78 @@ class ICloudImports:
 
     def previews(self,account,source):
         client=self.client(account)
+        try:
+            return client,self.read_previews(client,source['remote_id'])
+        except ProviderFailure as exc:
+            if exc.code not in (401,403,404):raise
+        # A collection failure does not establish that the account password was
+        # revoked. Rediscover from Apple's root before asking for credentials.
+        try:calendars=client.discover()
+        except ProviderFailure as exc:
+            if exc.code==401:raise ProviderFailure(401,reason='account_auth') from None
+            raise
+        with self.s.db.transaction() as c:
+            c.execute("UPDATE icloud_accounts SET auth_failures=0,auth_failed_at='',auth_checked_at='',last_error='' WHERE id=? AND generation=? AND state='connected'",
+                      (account['id'],account['generation']))
+        old=urlparse(source['remote_id'])
+        matches=[v['url'] for v in calendars if urlparse(v['url']).path==old.path]
+        if len(matches)==1 and matches[0]!=source['remote_id']:
+            self.rebind_source(account,source,matches[0])
+        try:return client,self.read_previews(client,source['remote_id'])
+        except ProviderFailure as exc:
+            if exc.code==401:raise ProviderFailure(401,reason='source_auth') from None
+            raise
+
+    @staticmethod
+    def read_previews(client,remote_id):
         # Keep compatible with older injected providers and test adapters.
         if callable(getattr(client,'previews',None)):
-            items=client.previews(source['remote_id'])
+            items=client.previews(remote_id)
         else:
-            items=client.events(source['remote_id'])
+            items=client.events(remote_id)
         require(len(items)<=MAX_REMOTE,'icloud_calendar_too_large',413)
-        return client,items
+        return items
+
+    def rebind_source(self,account,source,new_url):
+        # Match the exact account/collection path, never a display name. Only a
+        # host migration within Apple's HTTPS allowlist is eligible.
+        validator=ICloudCalDAV('','')
+        old_url=validator.safe_url(source['remote_id'],'')
+        new_url=validator.safe_url(new_url,'')
+        old,new=urlparse(old_url),urlparse(new_url)
+        require(old.path==new.path and not old.query and not new.query and not old.fragment and not new.fragment,
+                'icloud_selection_expired',409)
+        with self.s.db.transaction() as c:
+            current,active=self.source(c,account['user_id'],source['id'])
+            require(current['generation']==source['generation'] and active['generation']==account['generation'],
+                    'icloud_selection_expired',409)
+            require(not c.execute('SELECT 1 FROM icloud_sources WHERE account_id=? AND remote_id=? AND id!=?',
+                                 (account['id'],new_url,source['id'])).fetchone(),'icloud_selection_expired',409)
+            replacements=[]
+            for link in c.execute('SELECT id,remote_id FROM icloud_links WHERE source_id=?',(source['id'],)):
+                value=urlparse(validator.safe_url(link['remote_id'],''))
+                require(value.netloc==old.netloc and value.path.startswith(old.path.rstrip('/')+'/') and not value.query and not value.fragment,
+                        'icloud_selection_expired',409)
+                replacements.append((value._replace(netloc=new.netloc).geturl(),link['id']))
+            c.executemany('UPDATE icloud_links SET remote_id=? WHERE id=?',replacements)
+            c.execute('UPDATE icloud_sources SET remote_id=?,generation=generation+1 WHERE id=?',(new_url,source['id']))
+        source['remote_id']=new_url;source['generation']+=1
+        logger.info('icloud collection_rediscovered')
+
+    def auth_failure(self,account,now):
+        """Three root-login rejections at least a minute apart survive restart."""
+        with self.s.db.transaction() as c:
+            current=self.account(c,account['user_id'],account['id'])
+            require(current['generation']==account['generation'],'icloud_selection_expired',409)
+            count=current['auth_failures'];first=current['auth_failed_at'];last=current['auth_checked_at']
+            if not first or now>datetime.fromisoformat(first)+timedelta(minutes=30):
+                first=last=stamp(now);count=1
+            elif not last or now>=datetime.fromisoformat(last)+timedelta(seconds=60):
+                last=stamp(now);count+=1
+            state='needs_reconnect' if count>=3 else 'connected'
+            c.execute('UPDATE icloud_accounts SET auth_failures=?,auth_failed_at=?,auth_checked_at=?,state=?,last_error=? WHERE id=? AND generation=?',
+                      (count,first,last,state,'account_auth',account['id'],account['generation']))
+        return 'needs_reconnect' if state=='needs_reconnect' else 'recovering'
 
     @staticmethod
     def full_item(client,item):
@@ -173,9 +240,9 @@ class ICloudImports:
         with self.s.db.transaction() as c:
             cal=self.s.calendar(c,actor)
             accounts=[]
-            for a in c.execute('SELECT id,email,state FROM icloud_accounts WHERE user_id=? AND calendar_id=?',(actor,cal['id'])):
+            for a in c.execute('SELECT id,email,state,last_error FROM icloud_accounts WHERE user_id=? AND calendar_id=?',(actor,cal['id'])):
                 sources=[]
-                for src in c.execute('SELECT id,name,selected,auto_import,state,checked_at FROM icloud_sources WHERE account_id=?',(a['id'],)):
+                for src in c.execute('SELECT id,name,selected,auto_import,state,checked_at,next_at,last_error FROM icloud_sources WHERE account_id=?',(a['id'],)):
                     count=c.execute('SELECT COUNT(*) AS n FROM icloud_links WHERE source_id=? AND event_id IS NOT NULL',(src['id'],)).fetchone()['n']
                     unsupported=c.execute("SELECT COUNT(*) AS n FROM icloud_links WHERE source_id=? AND state='unsupported'",(src['id'],)).fetchone()['n']
                     issues=[dict(v) for v in c.execute("SELECT l.id,l.state,json_extract(e.data,'$.title') AS title FROM icloud_links l JOIN events e ON e.id=l.event_id WHERE l.source_id=? AND l.state IN ('conflict','remote_deleted')",(src['id'],))]
@@ -200,7 +267,7 @@ class ICloudImports:
             if previous:account_id=previous['id']
             c.execute("""INSERT INTO icloud_accounts(id,user_id,calendar_id,email,credentials)
                          VALUES(?,?,?,?,?) ON CONFLICT(user_id,calendar_id,email)
-                         DO UPDATE SET credentials=excluded.credentials,state='connected',generation=icloud_accounts.generation+1""",
+                          DO UPDATE SET credentials=excluded.credentials,state='connected',last_error='',auth_failures=0,auth_failed_at='',auth_checked_at='',generation=icloud_accounts.generation+1""",
                       (account_id,actor,cal['id'],email.strip().lower(),
                        self.vault.encrypt({'email':email.strip(),'password':password.strip()})))
             # Reconnecting must not silently re-enable auto sharing.
@@ -384,6 +451,9 @@ class ICloudImports:
             links=[dict(v) for v in c.execute('SELECT * FROM icloud_links WHERE source_id=?',(source_id,))]
         try:
             client,items=self.previews(account,source)
+            # Discovery may have moved the collection to a new Apple host.
+            with self.s.db.transaction() as c:
+                links=[dict(v) for v in c.execute('SELECT * FROM icloud_links WHERE source_id=?',(source_id,))]
             linked_by_id={link['remote_id']:link for link in links}
             present=set()
             parsed=[]
@@ -488,28 +558,50 @@ class ICloudImports:
                     "SELECT COUNT(*) AS n FROM icloud_links WHERE source_id=? AND state='unsupported'",
                     (source_id,)).fetchone()['n']
                 state='unsupported' if unsupported else 'ready'
-                c.execute("UPDATE icloud_sources SET next_at=?,state=?,attempts=0,lease_until=NULL,checked_at=? WHERE id=?",
+                c.execute("UPDATE icloud_sources SET next_at=?,state=?,last_error='',attempts=0,lease_until=NULL,checked_at=? WHERE id=?",
                           (stamp(now+timedelta(seconds=15 if more else POLL)),state,stamp(),source_id))
+                c.execute("UPDATE icloud_accounts SET auth_failures=0,auth_failed_at='',auth_checked_at='',last_error='' WHERE id=? AND generation=?",
+                          (account['id'],account['generation']))
                 if created:self.s.notify_import(c,account['calendar_id'],'icloud',created_events)
-            logger.warning('icloud sync_completed state=%s created=%s unsupported=%s',state,created,unsupported)
+            logger.info('icloud sync_completed state=%s created=%s unsupported=%s',state,created,unsupported)
             return {'state':state,'created':created,'unsupported':unsupported}
         except (ProviderFailure,Problem,ValueError,TypeError,KeyError) as exc:
             logger.warning('icloud sync_failed type=%s status=%s',type(exc).__name__,
                            exc.code if isinstance(exc,ProviderFailure) else 0)
-            state='needs_reconnect' if isinstance(exc,ProviderFailure) and exc.code==401 else 'delayed'
-            delay=max(getattr(exc,'retry_after',0),min(3600,30*2**min(source['attempts'],7)))+random.randint(0,15)
+            state='delayed'
+            error='provider_unavailable'
+            if isinstance(exc,ProviderFailure):
+                error=exc.reason if exc.reason in ('credential_storage','account_auth','source_auth') else 'provider_unavailable'
+                if exc.code==401 and exc.reason!='source_auth':
+                    # A full VEVENT GET can fail after the collection succeeded.
+                    if exc.reason!='account_auth':
+                        try:self.client(account).discover()
+                        except ProviderFailure as probe:
+                            exc=ProviderFailure(probe.code,probe.retry_after,'account_auth' if probe.code==401 else probe.reason)
+                        else:exc=ProviderFailure(401,reason='source_auth')
+                    error=exc.reason if exc.reason in ('account_auth','source_auth','credential_storage') else 'provider_unavailable'
+                    if exc.reason=='account_auth':state=self.auth_failure(account,utcnow())
+                if exc.reason=='source_auth' or exc.code in (403,404):state='unavailable'
+            logger.warning('icloud connection_state state=%s reason=%s',state,error)
+            # Authentication verification has its own cadence. A long history
+            # of network failures must not push each auth probe beyond the
+            # confirmation window and prevent a truly revoked login surfacing.
+            backoff=60 if state=='recovering' else min(3600,30*2**min(source['attempts'],7))
+            delay=max(getattr(exc,'retry_after',0),backoff)+random.randint(0,15)
             with self.s.db.transaction() as c:
-                c.execute('UPDATE icloud_sources SET state=?,attempts=attempts+1,next_at=?,lease_until=NULL WHERE id=? AND generation=? AND lease_until=?',
-                          (state,stamp(now+timedelta(seconds=delay)),source_id,source['generation'],lease))
-                if state=='needs_reconnect':
-                    c.execute("UPDATE icloud_accounts SET state='needs_reconnect' WHERE id=?",(account['id'],))
+                c.execute('UPDATE icloud_sources SET state=?,last_error=?,attempts=attempts+1,next_at=?,lease_until=NULL WHERE id=? AND generation=? AND lease_until=?',
+                          (state,error,stamp(now+timedelta(seconds=delay)),source_id,source['generation'],lease))
             if force:
                 if isinstance(exc,Problem):raise
-                raise Problem(503,failure_code(exc) if isinstance(exc,ProviderFailure) else 'icloud_delayed') from None
+                code='icloud_delayed'
+                if state=='needs_reconnect':code='icloud_reconnect'
+                elif isinstance(exc,ProviderFailure) and exc.code!=401:code=failure_code(exc)
+                raise Problem(503,code) from None
             return {'state':state}
 
     def run_due(self):
         if not self.configured:return
+        recover_legacy(self.s,'icloud')
         with self.s.db.transaction() as c:
             # Retry previously selected, delayed sources once after this parser
             # repair. Preserve selection, sharing consent and active leases;

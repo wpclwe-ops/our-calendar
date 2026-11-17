@@ -163,7 +163,7 @@ def test_unsafe_index_href_never_reaches_multiget():
 
 
 @pytest.mark.parametrize('status,error',[
-    (401,'icloud_reconnect'),(403,'icloud_access_denied'),(404,'icloud_source_missing'),
+    (401,'icloud_delayed'),(403,'icloud_access_denied'),(404,'icloud_source_missing'),
     (413,'icloud_response_too_large'),(429,'icloud_rate_limited'),
     (502,'icloud_invalid_response'),(503,'icloud_delayed'),
 ])

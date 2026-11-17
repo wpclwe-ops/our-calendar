@@ -122,7 +122,7 @@ class ICloudCalDAV:
             if etag is None or not etag.text:invalid_response('event_etag')
             if any(v['url']==url for v in result):invalid_response('duplicate_resource')
             result.append({'url':url,'etag':etag.text,'ics':data.text})
-        logger.warning('icloud report_read resources=%s collection_rows=%s',len(result),collection_rows)
+        logger.info('icloud report_read resources=%s collection_rows=%s',len(result),collection_rows)
         return result
 
     def _indexed_query(self,calendar_url,calendar_data):

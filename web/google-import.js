@@ -7,6 +7,38 @@ Object.assign(words.en,{
  integrationsInfo:'Google Calendar and Apple iCloud support automatic and selective import. External calendar originals stay unchanged.',gManage:'Open',gImportOnly:'Import only',gTitle:'Google Calendar',gPrivacy:'Only you can see this selection. Confirmed events become visible to both of you. The app does not change Google events.',gSetup:'Google connection is not configured on the server yet. Google OAuth credentials are required. The rest of your calendar works as usual.',gConnect:'Connect Google account',gConfirmAccount:'Connect this account?',gReturn:'Finish signing in in your browser, then return here.',gRefresh:'Check connection',gSources:'Choose calendars',gChooseSources:'Choose calendars first, then individual events.',gSaveSources:'Save calendar selection',gAutoLabel:'Automatically add events',gAutoExplanation:'Automatic import can be enabled for individual calendars. Existing upcoming and all new events, including titles and descriptions, will be shared with your partner. Past one-off events are not imported. Without this option, event selection remains manual.',gAutoConfirmTitle:'Enable automatic import?',gAutoConfirmBody:'All current and future events in the checked Google calendars will be added automatically to the shared Our Calendar and visible to your partner. Google originals remain unchanged.',gAutoActive:'Automatic import enabled',gEvents:'Choose events',gFrom:'From date',gTo:'To date',gLoad:'Show events',gMore:'Load more',gSelectVisible:'Select available on this page',gClear:'Clear selection',gSelected:'Selected',gPreview:'Import preview',gImport:'Add selected to Our Calendar',gSeries:'Entire series, including future occurrences',gInstances:'Choose an individual occurrence',gUnsupported:'This event type or recurrence is not supported yet',gExisting:'Already added: no duplicate will be created',gReconnectLink:'The link will be reconciled and restored; local edits are retained',gConfirmShare:'Importing shares these events with your partner. Entire series include future occurrences.',gImported:'Import completed',gDisconnect:'Disconnect account',gDisconnectHelp:'Shared events will stay. Links will be disconnected; Google originals remain.',gSync:'Check for changes',gConnections:'Connected accounts',gNoAccounts:'No accounts yet',gNoEvents:'No available events in this date range',gCalendarEmpty:'No readable calendars available',gReconnect:'Reconnect',gNeedsDecision:'Your decision is needed',gConflict:'Event versions differ',gLocal:'In Our Calendar',gRemote:'In Google',gKeepLocal:'Keep our version',gUseGoogle:'Use Google version',gDeleted:'The original was deleted in Google. Choose what to do with the shared event.',gKeepIndependent:'Keep an independent event',gTrashLocal:'Move to shared Trash',gResolved:'Decision saved',gExceptions:'Exceptions',gLastCheck:'Last checked',gLinked:'Linked events',gNoLinks:'No events imported from this calendar yet',g_back:'Back to connections',g_unsupported:'Change needs review: unsupported type or recurrence',g_ready:'Checked',g_local_changes:'Local changes retained',g_conflict:'Conflict',g_remote_deleted:'Deleted in Google',g_disconnected:'Disconnected',g_delayed:'Check delayed',g_unavailable:'Check calendar access',g_needs_reconnect:'Sign in again',g_waiting:'Waiting for check',g_running:'Check already running',gRecheck:'Compare versions',gNotice:'Google changes are checked automatically, including while the app is closed. Google reminders remain independent.',
  google_not_configured:'Google connection is not configured on the server yet.',google_series_overlap:'This series or an occurrence is already imported. Importing both would create duplicates.',google_select_events:'Choose between 1 and 50 events per import.',google_selection_expired:'This selection expired. Open it again.',google_preview_changed:'The event changed. Compare fresh versions again.',google_reconnect:'Reconnect your Google account.',google_delayed:'Google is temporarily unavailable. Try again later.',google_unavailable:'This Google calendar is not accessible. Check permissions.',google_choose_series:'Choose the entire series or an individual occurrence.',google_unsupported_event:'This event type is not supported yet.',google_unsupported_recurrence:'This recurrence cannot be imported without losing data yet.',google_restore_local_first:'Restore the event from Trash first.',google_event_deleted:'The Google event was deleted. Refresh your selection.',google_source_not_selected:'Choose the source calendar first.',google_authorization_cancelled:'Google sign-in was cancelled.'
 });
+
+Object.assign(words.ru,{
+ g_connected:'Подключено',g_recovering:'Восстанавливаем подключение автоматически',
+ g_delayed:'Временный сбой — повторим автоматически',gLastSuccess:'Последняя успешная синхронизация',gNextRetry:'Следующая попытка',
+ connection_credential_storage:'Сервер не смог прочитать сохранённый доступ. Требуется исправление на сервере.',
+ connection_oauth_configuration:'Ошибка настройки Google на сервере. Повторный вход её не исправит.',
+ connection_invalid_grant:'Google отозвал доступ или срок разрешения истёк. Войдите снова.',
+ connection_missing_refresh_token:'Google не выдал доступ для фонового обновления. Войдите снова.',
+ connection_account_auth:'Apple повторно отклонила вход. Проверьте пароль приложения.',
+ connection_source_auth:'Нет доступа к этому календарю; подключение аккаунта сохранено.',
+ provider_credential_storage:'Сервер не смог прочитать сохранённый доступ. Повторный вход пока не требуется.',
+ google_oauth_configuration:'Проверьте настройки Google OAuth на сервере. Повторный вход не поможет.'
+});
+Object.assign(words.en,{
+ g_connected:'Connected',g_recovering:'Restoring the connection automatically',
+ g_delayed:'Temporary problem; will retry automatically',gLastSuccess:'Last successful sync',gNextRetry:'Next attempt',
+ connection_credential_storage:'The server could not read the saved credentials. A server fix is required.',
+ connection_oauth_configuration:'Google server configuration error. Signing in again will not fix it.',
+ connection_invalid_grant:'Google access was revoked or expired. Sign in again.',
+ connection_missing_refresh_token:'Google did not grant background access. Sign in again.',
+ connection_account_auth:'Apple repeatedly rejected sign-in. Check the app-specific password.',
+ connection_source_auth:'This calendar is not accessible; the account connection is retained.',
+ provider_credential_storage:'The server could not read saved credentials. You do not need to sign in again yet.',
+ google_oauth_configuration:'Check the server Google OAuth configuration. Signing in again will not help.'
+});
+function connectionDetails(source){
+ const date=value=>{const d=new Date(value);return Number.isFinite(d.getTime())?d.toLocaleString(state.me.language==='ru'?'ru-RU':'en-GB',{timeZone:state.me.timezone}):''};
+ const errors=new Set(['credential_storage','oauth_configuration','invalid_grant','missing_refresh_token','account_auth','source_auth']);
+ return (source.checked_at?`<p class="privacy">${t('gLastSuccess')}: ${esc(date(source.checked_at))}</p>`:'')+
+  (['delayed','recovering','unavailable'].includes(source.state)&&source.next_at?`<p class="privacy">${t('gNextRetry')}: ${esc(date(source.next_at))}</p>`:'')+
+  (errors.has(source.last_error)&&(source.last_error!=='account_auth'||source.state==='needs_reconnect')?`<p class="privacy">${t('connection_'+source.last_error)}</p>`:'');
+}
 // Provider credentials and unselected event bodies are never stored in the browser.
 let googleUI={step:'accounts',status:null,account:null,source:null,calendars:[],items:[],selected:new Map(),preview:null,next:null,parent:null,conflict:null,from:addDays(isoDay(),-30),to:addDays(isoDay(),365)};
 async function openGoogleImports(){googleUI.step='accounts';await refreshGoogleStatus();tab='settings';page='google';render()}
@@ -35,8 +67,8 @@ function googleImportPage(){
  html+=`<p class="privacy">${t('gNotice')}</p>`;
  if(['pending','exchanging'].includes(s.pending))html+=`<section class="card"><p>${t('gReturn')}</p>${button('google-refresh',t('gRefresh'),'full')}</section>`;
  for(const a of s.accounts){
-  html+=`<section class="card g-account"><h2>${esc(a.email)}</h2><p class="privacy">${t('gImportOnly')}${a.state!=='connected'?' · '+t('g_'+a.state):''}</p><div class="row wrap">${button(a.state==='connected'?'google-calendars':'google-connect',t(a.state==='connected'?'gSources':'gReconnect'),'primary',gAttr(a.id))}${button('google-disconnect',t('gDisconnect'),'text-button danger',gAttr(a.id))}</div>`;
-  for(const source of a.sources.filter(c=>c.selected))html+=`<div class="g-source-card"><h3>${esc(source.name)}</h3><p class="privacy">${t('g_'+source.state)}${source.auto_import?' · '+t('gAutoActive'):''}</p>${a.state==='connected'?`<div class="row wrap">${button('google-events',t('gEvents'),'soft-button',gAttr(source.id))}${button('google-sync',t('gSync'),'text-button',gAttr(source.id))}</div>`:''}<h4>${t('gLinked')}</h4>${source.links.map(l=>`<div class="g-link"><span><strong>${esc(l.title||'')}</strong><small>${t('g_'+l.state)}</small><small>${t('gLastCheck')}: ${esc(l.checked_at)}</small></span>${a.state==='connected'&&['conflict','remote_deleted'].includes(l.state)?button('google-conflict',t('gRecheck'),'text-button',gAttr(l.id)):''}</div>`).join('')||`<p class="privacy">${t('gNoLinks')}</p>`}</div>`;
+  html+=`<section class="card g-account"><h2>${esc(a.email)}</h2><p class="privacy">${t('gImportOnly')} · ${t('g_'+a.state)}</p>${connectionDetails(a)}<div class="row wrap">${button(a.state==='connected'?'google-calendars':'google-connect',t(a.state==='connected'?'gSources':'gReconnect'),'primary',gAttr(a.id))}${button('google-disconnect',t('gDisconnect'),'text-button danger',gAttr(a.id))}</div>`;
+  for(const source of a.sources.filter(c=>c.selected))html+=`<div class="g-source-card"><h3>${esc(source.name)}</h3><p class="privacy">${t('g_'+source.state)}${source.auto_import?' · '+t('gAutoActive'):''}</p>${connectionDetails(source)}${a.state==='connected'?`<div class="row wrap">${button('google-events',t('gEvents'),'soft-button',gAttr(source.id))}${button('google-sync',t('gSync'),'text-button',gAttr(source.id))}</div>`:''}<h4>${t('gLinked')}</h4>${source.links.map(l=>`<div class="g-link"><span><strong>${esc(l.title||'')}</strong><small>${t('g_'+l.state)}</small><small>${t('gLastCheck')}: ${esc(l.checked_at)}</small></span>${a.state==='connected'&&['conflict','remote_deleted'].includes(l.state)?button('google-conflict',t('gRecheck'),'text-button',gAttr(l.id)):''}</div>`).join('')||`<p class="privacy">${t('gNoLinks')}</p>`}</div>`;
   html+='</section>';
  }
  if(!s.accounts.length)html+=`<p>${t('gNoAccounts')}</p>`;
@@ -82,7 +114,7 @@ Object.assign(actions,{
  'google-preview':async()=>{googleUI.preview=await api('google/sources/'+googleUI.source.id+'/preview','POST',{selections:[...googleUI.selected.values()].map(e=>({id:e.id,scope:e.scope}))});googleUI.step='preview';render()},
  'google-preview-back':()=>{googleUI.step='events';render()},
  'google-import':async()=>{await api('google/import','POST',{preview_id:googleUI.preview.preview_id,confirmed:true});googleUI.selected.clear();googleUI.step='accounts';await refreshGoogleStatus();toast(t('gImported'))},
- 'google-sync':async el=>{const result=await api('google/sources/'+el.dataset.id+'/sync','POST',{});await refreshGoogleStatus();toast(t('g_'+result.state))},
+ 'google-sync':async el=>{let result;try{result=await api('google/sources/'+el.dataset.id+'/sync','POST',{})}finally{await refreshGoogleStatus()}toast(t('g_'+result.state))},
  'google-conflict':async el=>{googleUI.conflict=await api('google/links/'+el.dataset.id);googleUI.step='conflict';render()},
  'google-resolve-local':()=>googleResolve('local'), 'google-resolve-google':()=>googleResolve('google'), 'google-resolve-trash':()=>googleResolve('trash')
 });
@@ -94,3 +126,5 @@ $('#app').addEventListener('change',e=>{
 });
 setInterval(async()=>{if(page==='google'&&googleUI.step==='accounts'&&googleUI.status?.pending&&!busy&&!document.hidden){try{await refreshGoogleStatus()}catch{}}},4000);
 
+
+setInterval(async()=>{if(page==='google'&&googleUI.step==='accounts'&&!googleUI.status?.pending&&!busy&&!document.hidden){try{await refreshGoogleStatus()}catch{}}},15000);

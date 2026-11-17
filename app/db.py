@@ -178,6 +178,20 @@ class Database:
                 if len(calendars)==1:
                     c.execute('UPDATE smart_usage SET calendar_id=?',(calendars[0]['id'],))
             c.execute('INSERT OR IGNORE INTO schema_version VALUES(4)')
+            # Diagnostics contain fixed codes only; existing secrets/consents stay intact.
+            for table in ('google_accounts','icloud_accounts','google_sources','icloud_sources'):
+                columns = {row[1] for row in c.execute(f'PRAGMA table_info({table})')}
+                if 'last_error' not in columns:
+                    c.execute(f"ALTER TABLE {table} ADD COLUMN last_error TEXT NOT NULL DEFAULT ''")
+            columns = {row[1] for row in c.execute('PRAGMA table_info(google_sources)')}
+            if 'checked_at' not in columns:
+                c.execute("ALTER TABLE google_sources ADD COLUMN checked_at TEXT NOT NULL DEFAULT ''")
+            columns = {row[1] for row in c.execute('PRAGMA table_info(icloud_accounts)')}
+            for name,definition in (('auth_failures','INTEGER NOT NULL DEFAULT 0'),
+                                    ('auth_failed_at',"TEXT NOT NULL DEFAULT ''"),
+                                    ('auth_checked_at',"TEXT NOT NULL DEFAULT ''")):
+                if name not in columns:c.execute(f'ALTER TABLE icloud_accounts ADD COLUMN {name} {definition}')
+            c.execute('INSERT OR IGNORE INTO schema_version VALUES(5)')
 
     def connect(self):
         c = sqlite3.connect(self.path, timeout=30, isolation_level=None)
