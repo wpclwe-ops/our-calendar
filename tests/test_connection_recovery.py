@@ -297,3 +297,15 @@ def test_legacy_recovery_does_not_resume_locked_account(linked):
         c.execute("UPDATE calendars SET state='pending_delete'")
     recover_legacy(g.s,'icloud')
     assert account_row(g,'icloud',account)['state']=='needs_reconnect'
+
+
+def test_icloud_auth_confirmation_has_own_retry_cadence_after_network_failures(linked):
+    from datetime import datetime
+    g,f,account,source=linked;g.select('1',account,[source],[source])
+    with g.s.db.transaction() as c:
+        c.execute('UPDATE icloud_sources SET attempts=20 WHERE id=?',(source,))
+    f.fail=ProviderFailure(401)
+    with pytest.raises(Problem):g.sync_source('1',source,True)
+    s=g.status('1')['accounts'][0]['sources'][0]
+    assert s['state']=='recovering'
+    assert 60<=(datetime.fromisoformat(s['next_at'])-utcnow()).total_seconds()<=75

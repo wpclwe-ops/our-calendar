@@ -583,7 +583,11 @@ class ICloudImports:
                     if exc.reason=='account_auth':state=self.auth_failure(account,utcnow())
                 if exc.reason=='source_auth' or exc.code in (403,404):state='unavailable'
             logger.warning('icloud connection_state state=%s reason=%s',state,error)
-            delay=max(getattr(exc,'retry_after',0),min(3600,30*2**min(source['attempts'],7)))+random.randint(0,15)
+            # Authentication verification has its own cadence. A long history
+            # of network failures must not push each auth probe beyond the
+            # confirmation window and prevent a truly revoked login surfacing.
+            backoff=60 if state=='recovering' else min(3600,30*2**min(source['attempts'],7))
+            delay=max(getattr(exc,'retry_after',0),backoff)+random.randint(0,15)
             with self.s.db.transaction() as c:
                 c.execute('UPDATE icloud_sources SET state=?,last_error=?,attempts=attempts+1,next_at=?,lease_until=NULL WHERE id=? AND generation=? AND lease_until=?',
                           (state,error,stamp(now+timedelta(seconds=delay)),source_id,source['generation'],lease))
