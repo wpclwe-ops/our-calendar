@@ -110,7 +110,10 @@
      cleanup();throw error;
     }
     try{
-     if(!keep){commit();return}
+     // A background refresh or focus event may have replaced this viewport
+     // while data/preference requests were pending. Never adopt detached DOM:
+     // render the target into the current document instead.
+     if(!keep||!viewport.isConnected||!current.isConnected||!incoming?.isConnected){commit();return}
      // The incoming page becomes the live page; the outgoing one is dropped without a rebuild.
      const page=incoming;incoming=null;page.classList.remove('motion-preview');page.inert=false;page.removeAttribute('aria-hidden');page.style.transform='';page.style.opacity='';
      animations.forEach(a=>a.cancel());animations=[];current.remove();current=page;commit(page);

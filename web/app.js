@@ -627,11 +627,14 @@ function navigationPreview(action){
  return node;
 }
 async function navigateSmoothly(action,motion){
+ // Invalidate a poll already fetching the outgoing day's data before awaiting
+ // the target. Its response must not overwrite the incoming month's events.
+ ++fetchVersion;
  if(!action.direction&&['view','tab'].includes(action.type)){const items=touchBarItems();action={...action,direction:items.indexOf(action.view||action.tab)>items.indexOf(activeNavigation())?1:-1}}
  const target=navigationTarget(action),rows=await navigationEntry(target).promise;
  const ready=action.type==='view'?api('settings','PATCH',{view:target.mode}):Promise.resolve();
  const keep=tab==='calendar'&&target.tab==='calendar',key=JSON.stringify(target),top=carriedTimelineTop(action);
- const commit=live=>{selected=target.date;view=target.mode;tab=target.tab;state.me.view=view;if(tab==='calendar')events=rows;else if(tab==='categories')categories=rows;else systemStatus=rows;if(live)adoptCalendarPage(live);else render();warmNavigation()};
+ const commit=live=>{selected=target.date;view=target.mode;tab=target.tab;state.me.view=view;if(tab==='calendar'){events=rows;if(view==='month'&&state.me.month_layout==='scroll')ensureMonthWindow()}else if(tab==='categories')categories=rows;else systemStatus=rows;if(live)adoptCalendarPage(live);else render();warmNavigation()};
  // A preview already on screen for this target becomes the live page instead of being rebuilt.
  const build=preview=>preview?.navigationKey===key&&preview.navigationRows===rows?preview:navigationPage(target,rows,top);
  if(motion)await motion.finish(action,build,commit,ready,keep);else{await ready;commit()}
@@ -649,10 +652,11 @@ async function loadData(poll=false){
  const done=()=>{if(!poll)return true;const changed=print()!==before;if(changed)navigationCache.clear();return changed};
  if(!state.calendar?.active||state.calendar.state!=='active')return done();
  if(page==='form'||page==='detail'||(page==='google'||page==='icloud'))return done();
- categories=await api('categories');
- if(page==='trash'){events=await api('events?trash=true');return done()}
+ const nextCategories=await api('categories');if(version!==fetchVersion)return false;categories=nextCategories;
+ if(page==='trash'){const result=await api('events?trash=true');if(version!==fetchVersion)return false;events=result;return done()}
  if(tab==='settings'&&page==='main'){
   const results=await Promise.allSettled([api('system-status'),api('google'),api('icloud')]);
+  if(version!==fetchVersion)return false;
   systemStatus=results[0].status==='fulfilled'?results[0].value:null;
   for(const [i,key] of ['google','icloud'].entries())providerStatuses[key]=results[i+1].status==='fulfilled'?results[i+1].value:null;
  }
@@ -663,7 +667,7 @@ async function loadData(poll=false){
  if(poll&&!done())return false;
  if(!query)navigationCache.set(params.toString(),{rows:result,promise:Promise.resolve(result)});warmNavigation();return true;
 }
-async function changeView(v){view=v;state.me.view=v;await api('settings','PATCH',{view:v});await loadData();render()}
+async function changeView(v){++fetchVersion;view=v;state.me.view=v;await api('settings','PATCH',{view:v});await loadData();render()}
 function openDay(date){return navigateSmoothly({type:'view',view:'day',date},CalendarNavigation.motion({preview:navigationPreview}))}
 async function selectWeekDate(date){
  if(date===selected)return;
@@ -917,15 +921,17 @@ const pollUserBusy=()=>touchesDown>0||performance.now()-lastScrollAt<600;
 for(const type of ['touchstart','touchend','touchcancel'])document.addEventListener(type,e=>{touchesDown=e.touches.length},{passive:true,capture:true});
 document.addEventListener('scroll',()=>{lastScrollAt=performance.now()},{passive:true,capture:true});
 setInterval(async()=>{
- if(document.hidden||busy||monthLoading||calendarSwipe.active()||calendarTouch.active()||!token||document.querySelector('.modal-backdrop')||pollUserBusy())return;
+ const blocked=()=>document.hidden||busy||monthLoading||calendarSwipe.active()||calendarTouch.active()||!token||document.querySelector('.modal-backdrop')||pollUserBusy();
+ if(blocked())return;
+ const pollVersion=fetchVersion;
  try{
-  const next=await api('state');if(calendarSwipe.active()||calendarTouch.active()||monthLoading)return;
+  const next=await api('state');if(blocked()||pollVersion!==fetchVersion)return;
   if(!next.calendar?.active||next.calendar.state!=='active'){state=next;render();return}
   const stateSame=JSON.stringify(next)===JSON.stringify(state);state=next;if(!stateSame)pollRenderPending=true;
   if(page==='main'){
    if(document.activeElement?.matches('input,textarea,select'))return;
    const scroll=window.scrollY,timelineScroll=$('.timeline')?.scrollTop;
-   const changed=await loadData(true);if(changed)pollRenderPending=true;if(calendarSwipe.active()||calendarTouch.active()||monthLoading||pollUserBusy())return;
+   const changed=await loadData(true);if(changed)pollRenderPending=true;if(blocked())return;
    if(!pollRenderPending)return;
    pollRenderPending=false;render();
    if(timelineScroll!==undefined&&$('.timeline'))$('.timeline').scrollTop=timelineScroll;
