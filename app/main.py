@@ -35,7 +35,7 @@ def create_app(config=None,start_worker=True):
         if start_worker:worker.start()
         yield
         worker.stop()
-    app=FastAPI(title='Our Calendar',version='0.10.10',lifespan=lifespan,docs_url=None,redoc_url=None,openapi_url=None)
+    app=FastAPI(title='Our Calendar',version='0.10.11',lifespan=lifespan,docs_url=None,redoc_url=None,openapi_url=None)
     app.state.service=service;app.state.backups=backups;app.state.worker=worker
     google=worker.google
     icloud=worker.icloud
@@ -125,7 +125,7 @@ def create_app(config=None,start_worker=True):
         result=health_status(service)
         return {k:result[k] for k in ('ready','degraded','translation','backup')}
     @app.get('/api/config')
-    def public_config():return {'demo':config.demo,'bot_username':config.bot_username,'version':'0.10.10',
+    def public_config():return {'demo':config.demo,'bot_username':config.bot_username,'version':'0.10.11',
                               'integrations':{'google':'import_only' if google.configured else 'not_configured','icloud':'import_only' if icloud.configured else 'not_configured','translation':'configured' if config.translation_url or config.openai_api_key else 'not_configured','smart_events':bool(config.openai_api_key)}}
     @app.get('/api/smart-events')
     def smart_status(request:Request):return worker.smart.status(actor(request))
@@ -305,7 +305,8 @@ def create_app(config=None,start_worker=True):
     @app.patch('/api/events/{eid}')
     async def edit_event(request:Request,eid:str):
         data=await body(request);revision=data.pop('revision',None)
-        return service.save_event(actor(request),data,eid,revision)
+        category_scope=data.pop('category_scope',None)
+        return service.save_event(actor(request),data,eid,revision,category_scope=category_scope)
     @app.post('/api/events/{eid}/translate')
     async def translate_event(request:Request,eid:str):
         data=await body(request)
@@ -317,7 +318,7 @@ def create_app(config=None,start_worker=True):
     @app.post('/api/events/{eid}/occurrence')
     async def occurrence(request:Request,eid:str):
         data=await body(request)
-        return service.occurrence_change(actor(request),eid,data['occurrence'],data.get('changes',{}),data['revision'],data.get('scope','one'),data.get('delete',False))
+        return service.occurrence_change(actor(request),eid,data['occurrence'],data.get('changes',{}),data['revision'],data.get('scope','one'),data.get('delete',False),category_scope=data.get('category_scope'))
     @app.delete('/api/events/{eid}')
     async def remove(request:Request,eid:str):
         data=await body(request);require(data.get('confirmed') is True,'confirmation_required')
