@@ -1,0 +1,668 @@
+[
+  {
+    "id": "pl-00",
+    "input": {
+      "title": "Hybryda / żel · S/A STUDIO",
+      "description": "",
+      "owner": "owner_A",
+      "categories": [
+        {
+          "id": "beauty",
+          "name": "Beauty",
+          "translations": {
+            "ru": "Красота"
+          },
+          "description": "Hair, manicure, lashes. Exclude medical care."
+        },
+        {
+          "id": "health",
+          "name": "Health",
+          "translations": {
+            "ru": "Здоровье"
+          },
+          "description": "Medical appointments, psychotherapy, tests. Exclude beauty services."
+        },
+        {
+          "id": "travel",
+          "name": "Travel",
+          "translations": {
+            "ru": "Поездки"
+          },
+          "description": "Flights, trains, accommodation. Exclude routine errands."
+        }
+      ],
+      "confirmed_rules": [],
+      "related_examples": []
+    },
+    "expected_category": "beauty"
+  },
+  {
+    "id": "pl-01",
+    "input": {
+      "title": "Badanie krwi 12:30 · Klinika",
+      "description": "",
+      "owner": "owner_A",
+      "categories": [
+        {
+          "id": "beauty",
+          "name": "Beauty",
+          "translations": {
+            "ru": "Красота"
+          },
+          "description": "Hair, manicure, lashes. Exclude medical care."
+        },
+        {
+          "id": "health",
+          "name": "Health",
+          "translations": {
+            "ru": "Здоровье"
+          },
+          "description": "Medical appointments, psychotherapy, tests. Exclude beauty services."
+        },
+        {
+          "id": "travel",
+          "name": "Travel",
+          "translations": {
+            "ru": "Поездки"
+          },
+          "description": "Flights, trains, accommodation. Exclude routine errands."
+        }
+      ],
+      "confirmed_rules": [],
+      "related_examples": []
+    },
+    "expected_category": "health"
+  },
+  {
+    "id": "pl-02",
+    "input": {
+      "title": "Lot LO123 Wrocław → Amsterdam",
+      "description": "",
+      "owner": "owner_A",
+      "categories": [
+        {
+          "id": "beauty",
+          "name": "Beauty",
+          "translations": {
+            "ru": "Красота"
+          },
+          "description": "Hair, manicure, lashes. Exclude medical care."
+        },
+        {
+          "id": "health",
+          "name": "Health",
+          "translations": {
+            "ru": "Здоровье"
+          },
+          "description": "Medical appointments, psychotherapy, tests. Exclude beauty services."
+        },
+        {
+          "id": "travel",
+          "name": "Travel",
+          "translations": {
+            "ru": "Поездки"
+          },
+          "description": "Flights, trains, accommodation. Exclude routine errands."
+        }
+      ],
+      "confirmed_rules": [],
+      "related_examples": []
+    },
+    "expected_category": "travel"
+  },
+  {
+    "id": "ru-03",
+    "input": {
+      "title": "Маникюр · Corner Salon",
+      "description": "",
+      "owner": "owner_A",
+      "categories": [
+        {
+          "id": "beauty",
+          "name": "Beauty",
+          "translations": {
+            "ru": "Красота"
+          },
+          "description": "Hair, manicure, lashes. Exclude medical care."
+        },
+        {
+          "id": "health",
+          "name": "Health",
+          "translations": {
+            "ru": "Здоровье"
+          },
+          "description": "Medical appointments, psychotherapy, tests. Exclude beauty services."
+        },
+        {
+          "id": "travel",
+          "name": "Travel",
+          "translations": {
+            "ru": "Поездки"
+          },
+          "description": "Flights, trains, accommodation. Exclude routine errands."
+        }
+      ],
+      "confirmed_rules": [],
+      "related_examples": []
+    },
+    "expected_category": "beauty"
+  },
+  {
+    "id": "ru-04",
+    "input": {
+      "title": "Психотерапия · 45 минут",
+      "description": "",
+      "owner": "owner_A",
+      "categories": [
+        {
+          "id": "beauty",
+          "name": "Beauty",
+          "translations": {
+            "ru": "Красота"
+          },
+          "description": "Hair, manicure, lashes. Exclude medical care."
+        },
+        {
+          "id": "health",
+          "name": "Health",
+          "translations": {
+            "ru": "Здоровье"
+          },
+          "description": "Medical appointments, psychotherapy, tests. Exclude beauty services."
+        },
+        {
+          "id": "travel",
+          "name": "Travel",
+          "translations": {
+            "ru": "Поездки"
+          },
+          "description": "Flights, trains, accommodation. Exclude routine errands."
+        }
+      ],
+      "confirmed_rules": [],
+      "related_examples": []
+    },
+    "expected_category": "health"
+  },
+  {
+    "id": "ru-05",
+    "input": {
+      "title": "Рейс KL123 Варшава → Амстердам",
+      "description": "",
+      "owner": "owner_A",
+      "categories": [
+        {
+          "id": "beauty",
+          "name": "Beauty",
+          "translations": {
+            "ru": "Красота"
+          },
+          "description": "Hair, manicure, lashes. Exclude medical care."
+        },
+        {
+          "id": "health",
+          "name": "Health",
+          "translations": {
+            "ru": "Здоровье"
+          },
+          "description": "Medical appointments, psychotherapy, tests. Exclude beauty services."
+        },
+        {
+          "id": "travel",
+          "name": "Travel",
+          "translations": {
+            "ru": "Поездки"
+          },
+          "description": "Flights, trains, accommodation. Exclude routine errands."
+        }
+      ],
+      "confirmed_rules": [],
+      "related_examples": []
+    },
+    "expected_category": "travel"
+  },
+  {
+    "id": "en-06",
+    "input": {
+      "title": "Hair colouring · Corner Salon",
+      "description": "",
+      "owner": "owner_A",
+      "categories": [
+        {
+          "id": "beauty",
+          "name": "Beauty",
+          "translations": {
+            "ru": "Красота"
+          },
+          "description": "Hair, manicure, lashes. Exclude medical care."
+        },
+        {
+          "id": "health",
+          "name": "Health",
+          "translations": {
+            "ru": "Здоровье"
+          },
+          "description": "Medical appointments, psychotherapy, tests. Exclude beauty services."
+        },
+        {
+          "id": "travel",
+          "name": "Travel",
+          "translations": {
+            "ru": "Поездки"
+          },
+          "description": "Flights, trains, accommodation. Exclude routine errands."
+        }
+      ],
+      "confirmed_rules": [],
+      "related_examples": []
+    },
+    "expected_category": "beauty"
+  },
+  {
+    "id": "en-07",
+    "input": {
+      "title": "Blood test 09:30 · Clinic",
+      "description": "",
+      "owner": "owner_A",
+      "categories": [
+        {
+          "id": "beauty",
+          "name": "Beauty",
+          "translations": {
+            "ru": "Красота"
+          },
+          "description": "Hair, manicure, lashes. Exclude medical care."
+        },
+        {
+          "id": "health",
+          "name": "Health",
+          "translations": {
+            "ru": "Здоровье"
+          },
+          "description": "Medical appointments, psychotherapy, tests. Exclude beauty services."
+        },
+        {
+          "id": "travel",
+          "name": "Travel",
+          "translations": {
+            "ru": "Поездки"
+          },
+          "description": "Flights, trains, accommodation. Exclude routine errands."
+        }
+      ],
+      "confirmed_rules": [],
+      "related_examples": []
+    },
+    "expected_category": "health"
+  },
+  {
+    "id": "en-08",
+    "input": {
+      "title": "Flight LO456 Amsterdam → Wrocław",
+      "description": "",
+      "owner": "owner_A",
+      "categories": [
+        {
+          "id": "beauty",
+          "name": "Beauty",
+          "translations": {
+            "ru": "Красота"
+          },
+          "description": "Hair, manicure, lashes. Exclude medical care."
+        },
+        {
+          "id": "health",
+          "name": "Health",
+          "translations": {
+            "ru": "Здоровье"
+          },
+          "description": "Medical appointments, psychotherapy, tests. Exclude beauty services."
+        },
+        {
+          "id": "travel",
+          "name": "Travel",
+          "translations": {
+            "ru": "Поездки"
+          },
+          "description": "Flights, trains, accommodation. Exclude routine errands."
+        }
+      ],
+      "confirmed_rules": [],
+      "related_examples": []
+    },
+    "expected_category": "travel"
+  },
+  {
+    "id": "mixed-09",
+    "input": {
+      "title": "Corner Salon: уход за волосами + LASH SET",
+      "description": "",
+      "owner": "owner_A",
+      "categories": [
+        {
+          "id": "beauty",
+          "name": "Beauty",
+          "translations": {
+            "ru": "Красота"
+          },
+          "description": "Hair, manicure, lashes. Exclude medical care."
+        },
+        {
+          "id": "health",
+          "name": "Health",
+          "translations": {
+            "ru": "Здоровье"
+          },
+          "description": "Medical appointments, psychotherapy, tests. Exclude beauty services."
+        },
+        {
+          "id": "travel",
+          "name": "Travel",
+          "translations": {
+            "ru": "Поездки"
+          },
+          "description": "Flights, trains, accommodation. Exclude routine errands."
+        }
+      ],
+      "confirmed_rules": [],
+      "related_examples": []
+    },
+    "expected_category": "beauty"
+  },
+  {
+    "id": "mixed-10",
+    "input": {
+      "title": "Dentysta · приём 250 zł",
+      "description": "",
+      "owner": "owner_A",
+      "categories": [
+        {
+          "id": "beauty",
+          "name": "Beauty",
+          "translations": {
+            "ru": "Красота"
+          },
+          "description": "Hair, manicure, lashes. Exclude medical care."
+        },
+        {
+          "id": "health",
+          "name": "Health",
+          "translations": {
+            "ru": "Здоровье"
+          },
+          "description": "Medical appointments, psychotherapy, tests. Exclude beauty services."
+        },
+        {
+          "id": "travel",
+          "name": "Travel",
+          "translations": {
+            "ru": "Поездки"
+          },
+          "description": "Flights, trains, accommodation. Exclude routine errands."
+        }
+      ],
+      "confirmed_rules": [],
+      "related_examples": []
+    },
+    "expected_category": "health"
+  },
+  {
+    "id": "mixed-11",
+    "input": {
+      "title": "Train IC123 · Wrocław → Kraków",
+      "description": "",
+      "owner": "owner_A",
+      "categories": [
+        {
+          "id": "beauty",
+          "name": "Beauty",
+          "translations": {
+            "ru": "Красота"
+          },
+          "description": "Hair, manicure, lashes. Exclude medical care."
+        },
+        {
+          "id": "health",
+          "name": "Health",
+          "translations": {
+            "ru": "Здоровье"
+          },
+          "description": "Medical appointments, psychotherapy, tests. Exclude beauty services."
+        },
+        {
+          "id": "travel",
+          "name": "Travel",
+          "translations": {
+            "ru": "Поездки"
+          },
+          "description": "Flights, trains, accommodation. Exclude routine errands."
+        }
+      ],
+      "confirmed_rules": [],
+      "related_examples": []
+    },
+    "expected_category": "travel"
+  },
+  {
+    "id": "pl-12",
+    "input": {
+      "title": "Wizyta · Corner",
+      "description": "",
+      "owner": "owner_A",
+      "categories": [
+        {
+          "id": "beauty",
+          "name": "Beauty",
+          "translations": {
+            "ru": "Красота"
+          },
+          "description": "Hair, manicure, lashes. Exclude medical care."
+        },
+        {
+          "id": "health",
+          "name": "Health",
+          "translations": {
+            "ru": "Здоровье"
+          },
+          "description": "Medical appointments, psychotherapy, tests. Exclude beauty services."
+        },
+        {
+          "id": "travel",
+          "name": "Travel",
+          "translations": {
+            "ru": "Поездки"
+          },
+          "description": "Flights, trains, accommodation. Exclude routine errands."
+        }
+      ],
+      "confirmed_rules": [],
+      "related_examples": []
+    },
+    "expected_category": null
+  },
+  {
+    "id": "ru-13",
+    "input": {
+      "title": "Запись на завтра",
+      "description": "",
+      "owner": "owner_A",
+      "categories": [
+        {
+          "id": "beauty",
+          "name": "Beauty",
+          "translations": {
+            "ru": "Красота"
+          },
+          "description": "Hair, manicure, lashes. Exclude medical care."
+        },
+        {
+          "id": "health",
+          "name": "Health",
+          "translations": {
+            "ru": "Здоровье"
+          },
+          "description": "Medical appointments, psychotherapy, tests. Exclude beauty services."
+        },
+        {
+          "id": "travel",
+          "name": "Travel",
+          "translations": {
+            "ru": "Поездки"
+          },
+          "description": "Flights, trains, accommodation. Exclude routine errands."
+        }
+      ],
+      "confirmed_rules": [],
+      "related_examples": []
+    },
+    "expected_category": null
+  },
+  {
+    "id": "en-14",
+    "input": {
+      "title": "Appointment · Studio",
+      "description": "",
+      "owner": "owner_A",
+      "categories": [
+        {
+          "id": "beauty",
+          "name": "Beauty",
+          "translations": {
+            "ru": "Красота"
+          },
+          "description": "Hair, manicure, lashes. Exclude medical care."
+        },
+        {
+          "id": "health",
+          "name": "Health",
+          "translations": {
+            "ru": "Здоровье"
+          },
+          "description": "Medical appointments, psychotherapy, tests. Exclude beauty services."
+        },
+        {
+          "id": "travel",
+          "name": "Travel",
+          "translations": {
+            "ru": "Поездки"
+          },
+          "description": "Flights, trains, accommodation. Exclude routine errands."
+        }
+      ],
+      "confirmed_rules": [],
+      "related_examples": []
+    },
+    "expected_category": null
+  },
+  {
+    "id": "mixed-15",
+    "input": {
+      "title": "Salon · consultation / консультация",
+      "description": "",
+      "owner": "owner_A",
+      "categories": [
+        {
+          "id": "beauty",
+          "name": "Beauty",
+          "translations": {
+            "ru": "Красота"
+          },
+          "description": "Hair, manicure, lashes. Exclude medical care."
+        },
+        {
+          "id": "health",
+          "name": "Health",
+          "translations": {
+            "ru": "Здоровье"
+          },
+          "description": "Medical appointments, psychotherapy, tests. Exclude beauty services."
+        },
+        {
+          "id": "travel",
+          "name": "Travel",
+          "translations": {
+            "ru": "Поездки"
+          },
+          "description": "Flights, trains, accommodation. Exclude routine errands."
+        }
+      ],
+      "confirmed_rules": [],
+      "related_examples": []
+    },
+    "expected_category": null
+  },
+  {
+    "id": "pl-16",
+    "input": {
+      "title": "Nie manicure, konsultacja dermatologiczna",
+      "description": "",
+      "owner": "owner_A",
+      "categories": [
+        {
+          "id": "beauty",
+          "name": "Beauty",
+          "translations": {
+            "ru": "Красота"
+          },
+          "description": "Hair, manicure, lashes. Exclude medical care."
+        },
+        {
+          "id": "health",
+          "name": "Health",
+          "translations": {
+            "ru": "Здоровье"
+          },
+          "description": "Medical appointments, psychotherapy, tests. Exclude beauty services."
+        },
+        {
+          "id": "travel",
+          "name": "Travel",
+          "translations": {
+            "ru": "Поездки"
+          },
+          "description": "Flights, trains, accommodation. Exclude routine errands."
+        }
+      ],
+      "confirmed_rules": [],
+      "related_examples": []
+    },
+    "expected_category": "health"
+  },
+  {
+    "id": "en-17",
+    "input": {
+      "title": "Hotel reservation https://example.org/booking?id=123",
+      "description": "",
+      "owner": "owner_A",
+      "categories": [
+        {
+          "id": "beauty",
+          "name": "Beauty",
+          "translations": {
+            "ru": "Красота"
+          },
+          "description": "Hair, manicure, lashes. Exclude medical care."
+        },
+        {
+          "id": "health",
+          "name": "Health",
+          "translations": {
+            "ru": "Здоровье"
+          },
+          "description": "Medical appointments, psychotherapy, tests. Exclude beauty services."
+        },
+        {
+          "id": "travel",
+          "name": "Travel",
+          "translations": {
+            "ru": "Поездки"
+          },
+          "description": "Flights, trains, accommodation. Exclude routine errands."
+        }
+      ],
+      "confirmed_rules": [],
+      "related_examples": []
+    },
+    "expected_category": "travel"
+  }
+]

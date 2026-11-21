@@ -174,3 +174,33 @@ reprocessing. The advanced Smart Events page shows the current calendar's monthl
 reserve and selected-job progress, and links to the existing preview/selection flow.
 Ordinary settings show consent, title simplification, remembering and categories.
 Internal-event processing still requires both participants' explicit consent.
+
+## Translation and classification quality improvements
+
+- Full AI translation has its own `translate` preference (default true); `titles`
+  controls short titles independently. Both retain consent and per-field protection.
+- Category editing accepts an optional description (2000 characters): inclusion,
+  exclusion and examples. It is included in the model context and catalog hash;
+  editing it invalidates older suggestions and in-flight context.
+- Memory matches normalize Unicode, case, punctuation and whitespace. Nearby titles
+  with at least three shared words may supply up to eight non-binding category
+  examples for the same owner and calendar. They never impose a short title or an
+  automatic category; this is conservative lexical retrieval, not semantic search.
+- A model score alone cannot auto-assign: an unambiguous confirmed rule or a unique
+  matching category name/translation in the source is also required. Other results
+  stay suggestions. These checks are conservative heuristics, not calibrated accuracy.
+- Full translations must preserve supplied numeric strings, URLs and flight codes;
+  detail loss fails the job before any result is applied. The source and manual
+  versions remain intact and explicit reprocessing remains available. These checks
+  do not certify negations, route direction, proper-name translation or overall meaning.
+- The prompt version changed; existing events are not mass-reprocessed. Use the
+  existing preview/selection or explicit reprocessing flow for selected old events.
+
+`tests/fixtures/smart_quality.json` is an initial 18-case labelled PL/RU/EN/mixed set,
+including ambiguous and exclusion cases. Save actual model responses as a JSON
+object keyed by case ID, then run
+`python -m scripts.evaluate_smart_events answers.json` to report category correctness,
+structural/detail preservation and missing/failed answers. No paid calls are made by
+this evaluator. Human bilingual review of meaning and short titles is still needed;
+expand the dataset and hold out independent cases before claiming production quality.
+Synthetic regression tests are not measurements of live model accuracy.

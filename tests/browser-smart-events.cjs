@@ -60,6 +60,15 @@ const {mkdtempSync,rmSync}=require('node:fs'),{tmpdir}=require('node:os'),{join}
   assert.equal(updated.location,'Airport');assert.equal(updated.translations.en.description,'en: Trip details');
   assert.equal(updated.smart.short_titles.ru,'Уход за волосами');
   await page.evaluate(async()=>{tab='settings';page='main';await loadData();await openSettingsSection('events')});
+  assert.equal(await page.locator('[data-smart-pref=translate]').count(),1);
+  assert.equal(await page.locator('[data-smart-pref=titles]').count(),1);
+  await page.evaluate(()=>categoryDialog());
+  await page.locator('#category-form [name=name]').fill('Quality category');
+  await page.locator('#category-form [name=description]').fill('Manicure; exclude medical care <safe>');
+  await page.locator('#category-form button[type=submit]').click();
+  await page.waitForSelector('#category-form',{state:'detached'});
+  assert.equal(await page.evaluate(()=>categories.find(c=>c.name==='Quality category').description),'Manicure; exclude medical care <safe>');
+  await page.evaluate(async()=>openSettingsSection('events'));
   for(const [width,language,theme] of [[320,'ru','light'],[390,'en','dark'],[430,'ru','dark']]){
    await page.setViewportSize({width,height:844});await page.evaluate(async({language,theme})=>{state=await api('settings','PATCH',{language,theme});render()},{language,theme});
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'no horizontal overflow');

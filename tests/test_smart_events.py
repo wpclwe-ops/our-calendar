@@ -81,7 +81,7 @@ def test_auto_category_requires_both_modes(service):
     smart,fake=configured(service)
     category=service.save_category('1',{'name':'Beauty','color':'#9B77D1'});fake.category=category['id']
     service.settings('1',{'smart_events':{'mode':'auto'}})
-    e=create(service);smart.process();assert service.get_event('1',e['id'])['category_id'] is None
+    e=create(service,title='Beauty appointment');smart.process();assert service.get_event('1',e['id'])['category_id'] is None
     service.settings('2',{'smart_events':{'mode':'auto'}})
     smart.request('1',e['id']);smart.process()
     assert service.get_event('1',e['id'])['category_id']==category['id']
@@ -312,3 +312,90 @@ def test_changed_background_suggestion_requires_reconfirmation(service):
     smart.edit('1',e['id'],e['revision'],category_action='accept',expected_suggestion=b['id'])
     assert service.get_event('1',e['id'])['category_id']==b['id']
 
+
+@pytest.mark.parametrize('source,translated,ok', [
+    ('Flight LO123, 12:30', 'Рейс LO123, 12:30', True),
+    ('Flight LO123, 12:30', 'Рейс LO124, 12:30', False),
+    ('Wizyta 250 zł', 'Приём 250 zł', True),
+    ('Wizyta 250 zł', 'Приём', False),
+    ('Link https://example.org/a?x=2', 'Ссылка https://example.org/a?x=2', True),
+    ('Link https://example.org/a?x=2', 'Ссылка https://other.org', False),
+])
+def test_translation_preserves_critical_details(source,translated,ok):
+    from app.smart_events import validate_result
+    payload={'title':source,'description':'','categories':[]}
+    result,_=FakeAI().process(payload)
+    result['translations']['ru']['title']=translated
+    if ok:validate_result(result,payload)
+    else:
+        with pytest.raises(Problem) as exc:validate_result(result,payload)
+        assert exc.value.code=='smart_detail_loss'
+
+
+def test_full_translation_independent_of_short_titles(service):
+    smart,fake=configured(service)
+    for actor in ('1','2'):service.settings(actor,{'smart_events':{'titles':False}})
+    e=create(service);smart.process();data=service.get_event('1',e['id'])
+    assert data['translations']['en']['title'].startswith('en:')
+    assert not data['smart']['short_titles']
+
+
+def test_category_description_preserved_and_context_fenced(service):
+    smart,fake=configured(service)
+    cat=service.save_category('1',{'name':'Beauty','color':'#9B77D1','description':'Manicure only; exclude medical appointments'})
+    e=create(service);fake.category=cat['id'];smart.process()
+    assert fake.calls[0]['categories'][0]['description'].startswith('Manicure')
+    data=service.get_event('1',e['id'])
+    service.save_category('2',{'name':'Beauty','color':'#9B77D1','description':'Hair only'},cat['id'])
+    with pytest.raises(Problem):smart.edit('1',e['id'],data['revision'],category_action='accept',expected_suggestion=cat['id'])
+    cat=service.save_category('1',{'name':'Beauty','color':'#9B77D1'},cat['id'])
+    assert cat['description']=='Hair only'
+
+
+def test_related_memory_is_hint_not_automatic_rule(service):
+    smart,fake=configured(service)
+    cat=service.save_category('1',{'name':'Beauty','color':'#9B77D1'})
+    first=create(service,title='Corner Salon manicure gel polish');fake.category=cat['id'];smart.process()
+    data=service.get_event('1',first['id'])
+    smart.edit('1',first['id'],data['revision'],category_action='accept',expected_suggestion=cat['id'],remember=True)
+    for actor in ('1','2'):service.settings(actor,{'smart_events':{'mode':'auto'}})
+    second=create(service,title='Corner Salon manicure gel polish removal');smart.process()
+    assert fake.calls[-1]['related_examples'] and not fake.calls[-1]['confirmed_rules']
+    assert service.get_event('1',second['id'])['category_id'] is None
+    other=create(service,title='Corner Salon haircut');smart.process()
+    assert not fake.calls[-1]['related_examples']
+
+
+def test_high_model_score_alone_does_not_assign_category(service):
+    smart,fake=configured(service)
+    cat=service.save_category('1',{'name':'Travel','color':'#9B77D1'});fake.category=cat['id']
+    for actor in ('1','2'):service.settings(actor,{'smart_events':{'mode':'auto'}})
+    e=create(service);smart.process()
+    assert service.get_event('1',e['id'])['category_id'] is None
+    assert service.get_event('1',e['id'])['smart']['category']['suggestion']==cat['id']
+
+
+def test_detail_loss_never_applies_partial_results(service):
+    smart,fake=configured(service)
+    original=fake.process
+    def lose_details(payload):
+        result,usage=original(payload)
+        result['translations']['en']['title']='Flight'
+        return result,usage
+    fake.process=lose_details
+    e=create(service,title='Flight LO123 at 12:30');smart.process()
+    data=service.get_event('1',e['id'])
+    assert not data['translations'] and not data['smart'].get('short_titles')
+    assert data['smart_status']=={'state':'failed','error':'smart_detail_loss'}
+
+
+def test_quality_report_includes_missing_wrong_and_invalid_answers():
+    from scripts.evaluate_smart_events import evaluate
+    payload={'title':'Flight LO123','description':'','categories':[]}
+    good,_=FakeAI().process(payload)
+    bad=deepcopy(good);bad['translations']['en']['title']='Flight'
+    cases=[{'id':str(i),'input':payload,'expected_category':None} for i in range(3)]
+    report=evaluate(cases,{'0':good,'1':bad})
+    assert report['cases']==3 and report['answered']==2
+    assert report['category_correct']==2 and report['critical_details_preserved']==1
+    assert {v['reason'] for v in report['failures']}=={'missing','smart_detail_loss'}
