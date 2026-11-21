@@ -204,3 +204,20 @@ structural/detail preservation and missing/failed answers. No paid calls are mad
 this evaluator. Human bilingual review of meaning and short titles is still needed;
 expand the dataset and hold out independent cases before claiming production quality.
 Synthetic regression tests are not measurements of live model accuracy.
+
+### 0.10.11 — source shortening before translation
+
+The production adapter now performs two sequential structured requests: first one
+canonical short title in the original title language, then RU/EN translations of
+that title alongside full translations of the unchanged original title/description.
+The second step receives the canonical title explicitly and must not independently
+shorten it. An uncertain source summary produces no automatic short titles; full
+translation still proceeds. Translation confidence cannot exceed source confidence.
+Manual versions and confirmed manual title rules retain precedence.
+
+The informational reservation accounts for both requests and completed token usage
+sums both stages. A lost/failed second response remains an uncertain reservation.
+No cache migration or paid mass reprocessing is triggered on deployment. The prompt
+version changes for future/explicitly selected processing. Automated adapter tests
+verify request order, data dependency, unchanged originals, failure isolation and
+combined usage; they do not certify live bilingual semantic equivalence.

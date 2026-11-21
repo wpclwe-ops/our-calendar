@@ -453,7 +453,7 @@ class SmartEvents:
             if not cached:
                 # UTF-8 bytes conservatively bound input tokens; all retries reserve again.
                 rate_in,rate_out=PRICES[self.config.openai_model]
-                reserved=((len(dump(payload).encode())+len(INSTRUCTIONS.encode())+6000)*rate_in*1.25+self.config.openai_max_output_tokens*rate_out)/1000000
+                reserved=2*((len(dump(payload).encode())+len(INSTRUCTIONS.encode())+6000)*rate_in*1.25+self.config.openai_max_output_tokens*rate_out)/1000000
                 month=stamp()[:7]
                 reservation=uid()
                 c.execute('INSERT INTO smart_usage(id,month,reserved,model,state,calendar_id) VALUES(?,?,?,?,?,?)',(reservation,month,reserved,self.config.openai_model,'reserved',row['calendar_id']))

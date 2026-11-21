@@ -514,3 +514,8 @@ URL/flight-code preservation checks. Added labelled multilingual quality cases a
 an offline answer evaluator. See SMART_EVENTS.md for limitations and acceptance.
 Existing consent, manual provenance, provider import-only behavior and recurrence
 storage remain in force. Live model quality has not been measured in this change.
+
+0.10.11: source-language shortening now completes before a second request translates
+that canonical title to RU/EN. Full original translations remain separate. Null/low
+confidence summaries do not create short titles. Both calls are included in usage
+and conservative reservations. Runtime/package/asset versions are aligned.

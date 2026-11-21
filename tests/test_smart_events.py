@@ -399,3 +399,41 @@ def test_quality_report_includes_missing_wrong_and_invalid_answers():
     assert report['cases']==3 and report['answered']==2
     assert report['category_correct']==2 and report['critical_details_preserved']==1
     assert {v['reason'] for v in report['failures']}=={'missing','smart_detail_loss'}
+
+@pytest.mark.parametrize('short,confidence', [('Manicure żelowy · Salon',.98),(None,.2)])
+def test_source_shortening_precedes_translation(service,monkeypatch,short,confidence):
+    from app.ai_client import OpenAIClient
+    import urllib.request
+    calls=[]
+    payload={'title':'Hybryda/Żel (swoja płytka) · Salon','description':'','categories':[]}
+    translated,_=FakeAI().process(payload)
+    responses=[{'short_title':short,'confidence':confidence},translated]
+    class Response:
+        def __init__(self,data):self.data=data
+        def __enter__(self):return self
+        def __exit__(self,*args):pass
+        def read(self,*args):
+            return json.dumps({'status':'completed','output':[{'type':'message','content':[{'type':'output_text','text':json.dumps(self.data)}]}], 'usage':{'input_tokens':10,'output_tokens':20,'total_tokens':30}}).encode()
+    class Opener:
+        def open(self,request,timeout):
+            calls.append(json.loads(request.data))
+            return Response(responses.pop(0))
+    monkeypatch.setattr(urllib.request,'build_opener',lambda *a:Opener())
+    result,usage=OpenAIClient(service.config).process(payload)
+    assert len(calls)==2
+    assert calls[0]['text']['format']['name']=='source_title'
+    assert json.loads(calls[1]['input'])['canonical_short_title']==short
+    assert json.loads(calls[1]['input'])['title']==payload['title']
+    assert all(c['store'] is False and 'tools' not in c for c in calls)
+    assert usage=={'input_tokens':20,'output_tokens':40,'total_tokens':60}
+    assert result['short_confidence']['ru']<=confidence
+    if short is None:assert result['short_titles']=={'ru':None,'en':None}
+
+
+def test_failed_source_stage_never_translates(service,monkeypatch):
+    from app.ai_client import OpenAIClient
+    client=OpenAIClient(service.config);calls=[]
+    def invalid(*args):calls.append(args);return {'short_title':'Invented','confidence':float('nan')},{}
+    monkeypatch.setattr(client,'_request',invalid)
+    with pytest.raises(Problem):client.process({'title':'Original'})
+    assert len(calls)==1
