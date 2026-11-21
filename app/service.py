@@ -245,7 +245,7 @@ class Service:
                 validate_preferences(changes['smart_events'])
                 changes['smart_events']={**preferences(me),**changes['smart_events']}
                 # Revocation/settings changes also fence an already in-flight API response.
-                if member and any(changes['smart_events'].get(k)!=preferences(me).get(k) for k in ('consent','titles','categorize','mode','include_internal')):
+                if member and any(changes['smart_events'].get(k)!=preferences(me).get(k) for k in ('consent','translate','titles','categorize','mode','include_internal')):
                     c.execute("UPDATE smart_jobs SET state='cancelled',generation=? WHERE calendar_id=?",(uid(),self.calendar(c,user_id)['id']))
             me.update(changes); me.pop('id')
             if summary_changed:self.rearm_daily_summary(c,user_id,me)
@@ -312,7 +312,7 @@ class Service:
                 for rule in c.execute('SELECT * FROM smart_rules WHERE calendar_id=?',(cal['id'],)).fetchall():
                     if load(rule['data']).get('category_id')==category_id:c.execute('DELETE FROM smart_rules WHERE id=?',(rule['id'],))
                 return {'ok':True}
-            require(set(data)<={'name','color','translations'},'invalid_category')
+            require(set(data)<={'name','color','translations','description'},'invalid_category')
             require(isinstance(data.get('name'),str) and 0<len(data['name'].strip())<=100,'invalid_name')
             require(re.fullmatch('#[0-9a-fA-F]{6}',data.get('color','')) is not None,'invalid_color')
             translations=data.get('translations',{})
@@ -322,6 +322,9 @@ class Service:
             category_id=category_id or uid()
             previous=c.execute('SELECT data FROM categories WHERE id=?',(category_id,)).fetchone()
             old=load(previous['data']) if previous else {}
+            description=data.get('description',old.get('description',''))
+            require(isinstance(description,str) and len(description)<=2000,'invalid_category')
+            data['description']=description.strip()
             data['translation_manual']={k:old.get('translation_manual',{}).get(k,True) if v==old.get('translations',{}).get(k) else True for k,v in translations.items()}
             c.execute('INSERT INTO categories VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data',(category_id,cal['id'],dump(data)))
             from .translation import enqueue_translation

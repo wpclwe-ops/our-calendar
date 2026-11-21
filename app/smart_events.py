@@ -8,12 +8,15 @@ from copy import deepcopy
 from datetime import timedelta
 import math
 import random
+import re
+import unicodedata
+from difflib import SequenceMatcher
 from .service import dump, load, uid
 from .security import require, Problem, digest
 from .recurrence import stamp, utcnow
 from .ai_client import OpenAIClient, INSTRUCTIONS, PROMPT_VERSION
 
-DEFAULTS = {'consent': False, 'titles': True, 'categorize': True, 'mode': 'suggest',
+DEFAULTS = {'consent': False, 'translate': True, 'titles': True, 'categorize': True, 'mode': 'suggest',
             'remember': True, 'include_internal': False, 'display_short': True}
 PRICES = {'gpt-6-luna': (0.10, 0.50), 'gpt-5.4-mini': (0.75, 4.50)}
 
@@ -160,22 +163,49 @@ def _allowed(c, config, row, data):
             settings.append(prefs)
     if not settings:
         return None
-    return {'titles': all(v['titles'] for v in settings), 'categorize': all(v['categorize'] for v in settings),
+    return {'translate': all(v['translate'] for v in settings), 'titles': all(v['titles'] for v in settings), 'categorize': all(v['categorize'] for v in settings),
             'auto': config.smart_auto_categories and bool(cal['second_id']) and not c.execute('SELECT 1 FROM members WHERE calendar_id=? AND active=0',(row['calendar_id'],)).fetchone() and all(preferences(load(m['data']))['consent'] and preferences(load(m['data']))['categorize'] and preferences(load(m['data']))['mode']=='auto'
                 for m in c.execute('SELECT u.data FROM users u JOIN members m ON m.user_id=u.id WHERE m.calendar_id=? AND m.active=1', (row['calendar_id'],)))}
+
+
+def normalized_title(text):
+    # Keep digits and words: dates, service variants and flight numbers matter.
+    return ' '.join(re.findall(r'\w+', unicodedata.normalize('NFKC', text).casefold()))
+
+
+def category_catalog(c, calendar_id):
+    return [{'id': r['id'], 'name': load(r['data'])['name'],
+             'translations': load(r['data']).get('translations', {}),
+             'description': load(r['data']).get('description', '')}
+            for r in c.execute('SELECT * FROM categories WHERE calendar_id=? ORDER BY id', (calendar_id,))]
+
+
+def related_rule(rule, title):
+    a, b = normalized_title(rule['match']), normalized_title(title)
+    words_a, words_b = set(a.split()), set(b.split())
+    return (len(words_a & words_b) >= 3 and
+            len(words_a & words_b) / max(len(words_a | words_b), 1) >= .6 and
+            SequenceMatcher(None, a, b).ratio() >= .75)
+
+
+def critical_details(text):
+    # Conservative, language-independent checks. Semantic correctness still needs evaluation.
+    return set(re.findall(r'https?://[^\s<>]+|\b[A-Z]{2}\s?\d{2,5}\b|\b\d+(?:[.,:]\d+)*\b', text))
 
 
 def _payload(c, row, data, settings):
     cal = c.execute('SELECT first_id,second_id FROM calendars WHERE id=?', (row['calendar_id'],)).fetchone()
     aliases = {cal['first_id']: 'owner_A', cal['second_id']: 'owner_B', 'both': 'both'}
-    categories = [{'id': r['id'], 'name': load(r['data'])['name'], 'translations': load(r['data']).get('translations', {})}
-                  for r in c.execute('SELECT * FROM categories WHERE calendar_id=? ORDER BY id', (row['calendar_id'],))] if settings['categorize'] else []
+    categories = category_catalog(c, row['calendar_id']) if settings['categorize'] else []
     rules = [load(r['data']) for r in c.execute('SELECT data FROM smart_rules WHERE calendar_id=? ORDER BY id', (row['calendar_id'],))]
-    rules = [r for r in rules if r['enabled'] and r['owner']==data.get('owner') and r['match'].casefold()==data['title'].strip().casefold()]
+    eligible = [r for r in rules if r['enabled'] and r['owner']==data.get('owner')]
+    rules = [r for r in eligible if normalized_title(r['match'])==normalized_title(data['title'])]
+    related = [r for r in eligible if r not in rules and related_rule(r, data['title'])][:8]
     # Never send Telegram IDs or unrelated rules to the external processor.
     hints = [{k:r[k] for k in ('match','category_id','short_titles') if k in r} for r in rules]
     payload = {'title': data['title'], 'description': data.get('description',''),
-               'owner': aliases.get(data.get('owner'), 'both'), 'categories': categories, 'confirmed_rules': hints}
+               'owner': aliases.get(data.get('owner'), 'both'), 'categories': categories, 'confirmed_rules': hints,
+               'related_examples': [{k:r[k] for k in ('match','category_id') if k in r} for r in related]}
     require(len(dump(payload).encode()) <= 150000, 'smart_input_too_large', 422)
     fingerprint = digest(dump({'input':payload,'settings':settings,'protected':metadata(data), 'prompt':PROMPT_VERSION}))
     cache_hash = digest(dump({'input':payload, 'prompt':PROMPT_VERSION}))
@@ -196,7 +226,7 @@ def enqueue(c, config, event_id, force=False, replace_fields=None, only_occurren
             continue
         current, data, _ = scoped
         settings = _allowed(c,config,current,data)
-        if not settings or not (settings['titles'] or settings['categorize']):
+        if not settings or not (settings['translate'] or settings['titles'] or settings['categorize']):
             continue
         payload, fingerprint, cache_hash, _ = _payload(c,current,data,settings)
         old = c.execute('SELECT * FROM smart_jobs WHERE event_id=? AND occurrence=?', (event_id,occurrence)).fetchone()
@@ -234,6 +264,10 @@ def validate_result(result, payload):
         score(result['short_confidence'][lang])
     require(result['category_id'] is None or result['category_id'] in {c['id'] for c in payload['categories']}, 'smart_invalid_category',502)
     score(result['category_confidence'])
+    for lang in ('ru', 'en'):
+        for field in ('title', 'description'):
+            require(critical_details(payload[field]) <= critical_details(result['translations'][lang][field]),
+                    'smart_detail_loss', 502)
     return result
 
 
@@ -321,7 +355,7 @@ class SmartEvents:
                 if category_action=='accept':
                     require(suggestion and suggestion==expected_suggestion,'smart_suggestion_stale',409)
                     require(suggestion and c.execute('SELECT 1 FROM categories WHERE id=? AND calendar_id=?',(suggestion,row['calendar_id'])).fetchone(),'invalid_category')
-                    catalog=[{'id':r['id'],'name':load(r['data'])['name'],'translations':load(r['data']).get('translations',{})} for r in c.execute('SELECT * FROM categories WHERE calendar_id=? ORDER BY id',(row['calendar_id'],))]
+                    catalog=category_catalog(c, row['calendar_id'])
                     require(meta['category'].get('context_hash')==digest(dump(catalog)),'smart_suggestion_stale',409)
                     data['category_id']=suggestion
                     meta['category']={'manual':True,'origin':'confirmed'}
@@ -419,7 +453,7 @@ class SmartEvents:
             if not cached:
                 # UTF-8 bytes conservatively bound input tokens; all retries reserve again.
                 rate_in,rate_out=PRICES[self.config.openai_model]
-                reserved=((len(dump(payload).encode())+len(INSTRUCTIONS.encode())+6000)*rate_in*1.25+self.config.openai_max_output_tokens*rate_out)/1000000
+                reserved=2*((len(dump(payload).encode())+len(INSTRUCTIONS.encode())+6000)*rate_in*1.25+self.config.openai_max_output_tokens*rate_out)/1000000
                 month=stamp()[:7]
                 reservation=uid()
                 c.execute('INSERT INTO smart_usage(id,month,reserved,model,state,calendar_id) VALUES(?,?,?,?,?,?)',(reservation,month,reserved,self.config.openai_model,'reserved',row['calendar_id']))
@@ -445,17 +479,17 @@ class SmartEvents:
                 c.execute('INSERT INTO smart_cache VALUES(?,?,?,?,?) ON CONFLICT(calendar_id,hash,model) DO UPDATE SET result=excluded.result,expires_at=excluded.expires_at',
                           (row['calendar_id'],cache_hash,self.config.openai_model,dump(result),stamp(utcnow()+timedelta(days=30))))
                 meta=metadata(data);replace=load(job['payload']).get('replace_fields',[])
-                if settings['titles']:
+                if settings['translate'] or settings['titles']:
                     translations=deepcopy(data.get('translations',{}))
                     for lang in ('ru','en'):
                         tr=translations.setdefault(lang,{'title':'','description':''})
                         for field in ('title','description'):
                             key=lang+'.'+field
-                            if not meta['fields'][key]['manual'] or key in replace:
+                            if settings['translate'] and (not meta['fields'][key]['manual'] or key in replace):
                                 tr[field]=result['translations'][lang][field]
                                 meta['fields'][key]={'manual':False,'stale':False}
                         key=lang+'.short_title'
-                        if not meta['fields'].get(key,{}).get('manual') or key in replace:
+                        if settings['titles'] and (not meta['fields'].get(key,{}).get('manual') or key in replace):
                             short=result['short_titles'][lang] if result['short_confidence'][lang]>=0.9 else None
                             rule_shorts={r.get('short_titles',{}).get(lang) for r in rules if r.get('short_titles',{}).get(lang)}
                             meta['short_titles'][lang]=next(iter(rule_shorts)) if len(rule_shorts)==1 else '' if len(rule_shorts)>1 else short or ''
@@ -471,7 +505,14 @@ class SmartEvents:
                         choice=next(iter(rule_choices))
                         if choice is None or choice in {v['id'] for v in payload['categories']}:cat=choice;conf=1;ambiguous=False
                     meta['category']={'manual':False,'origin':'ai','suggestion':cat,'confidence':conf,'ambiguous':ambiguous,'context_hash':digest(dump(payload['categories']))}
-                    if cat and settings['auto'] and conf>=0.95 and not ambiguous:
+                    # Related examples guide suggestions; they never authorize unattended assignment.
+                    candidates = payload['categories']
+                    text = normalized_title(payload['title']+' '+payload['description'])
+                    supported = [v['id'] for v in candidates if any(
+                        len(normalized_title(term)) >= 4 and normalized_title(term) in text
+                        for term in [v['name'], *v['translations'].values()])]
+                    grounded = len(rule_choices)==1 or supported==[cat]
+                    if cat and settings['auto'] and conf>=0.95 and not ambiguous and grounded:
                         data['category_id']=cat;meta['category']['origin']='ai_auto'
                 meta['languages']=result['languages'];meta['input_hash']=cache_hash
                 data['smart']=meta

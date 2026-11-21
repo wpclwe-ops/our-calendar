@@ -505,3 +505,17 @@ AI-consent; экспорт проверяет распакованный раз�
 
 Проверки доставки выполняются с подставным Telegram и временными БД: оба провайдера, ручной/автоматический импорт, одиночный/пакетный, повторы, личное отключение, выход и отсутствие диалога; обе локализации, принадлежность/автор, экземпляр серии и ограничение длины сводки. Живое получение на телефонах требует нового реального импорта после публикации.
 
+
+## 21 November: Smart Events quality
+
+Independent full-translation preference, editable category context, normalized
+memory with bounded related hints, conservative auto-category evidence and numeric/
+URL/flight-code preservation checks. Added labelled multilingual quality cases and
+an offline answer evaluator. See SMART_EVENTS.md for limitations and acceptance.
+Existing consent, manual provenance, provider import-only behavior and recurrence
+storage remain in force. Live model quality has not been measured in this change.
+
+0.10.11: source-language shortening now completes before a second request translates
+that canonical title to RU/EN. Full original translations remain separate. Null/low
+confidence summaries do not create short titles. Both calls are included in usage
+and conservative reservations. Runtime/package/asset versions are aligned.
