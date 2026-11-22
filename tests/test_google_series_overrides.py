@@ -23,6 +23,24 @@ def link_state(g):
         return c.execute("SELECT state FROM google_links WHERE remote_id='s'").fetchone()['state']
 
 
+def test_confirmed_category_survives_google_series_sync(google):
+    g, f, source = google
+    f.items['s'] = daily_series()
+    f.items['s_x'] = moved_instance()
+    imported(google, 's', 'series')
+    event = g.s.events('1', '2026-10-22', '2026-11-10')[0]
+    category = g.s.save_category('1', {'name': 'Plans', 'color': '#9B77D1'})['id']
+    g.s.save_event('1', {'category_id': category}, event['id'], event['revision'], category_scope='all')
+    f.items['s']['summary'] = 'Remote title updated'
+    f.items['s']['etag'] = 'new-version'
+    g.sync_source('1', source, force=True)
+    instances = g.s.events('1', '2026-10-22', '2026-11-10')
+    assert len(instances) == 8
+    assert {e['category_id'] for e in instances} == {category}
+    assert any(e['title'] == 'Remote title updated' for e in instances)
+    assert next(e for e in instances if e['occurrence'] == '2026-10-25T08:00')['start'] == '2026-10-25T12:00:00'
+
+
 def shorten_series(f):
     f.items['s']['recurrence'] = ['RRULE:FREQ=DAILY;COUNT=5']
     f.items['s']['etag'] = 'z'

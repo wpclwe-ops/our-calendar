@@ -50,6 +50,7 @@ jobs:
       - run: node tests/browser-event-touch-scroll.cjs
       - run: node tests/browser-event-datetime.cjs
       - run: node tests/browser-event-surface.cjs
+      - run: node tests/browser-event-category.cjs
 
 
       - run: node tests/browser-event-owners.cjs

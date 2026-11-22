@@ -402,7 +402,23 @@ class Service:
             validate_metadata(data['smart'])
         validate_timing(data)
 
-    def save_event(self,user_id,changes,event_id=None,revision=None):
+    def _apply_series_category(self,c,cal,event_id,category_id):
+        """Apply an explicitly confirmed category, retaining all other exception fields."""
+        from .smart_events import metadata
+        row=c.execute('SELECT data FROM events WHERE id=?',(event_id,)).fetchone()
+        data=load(row['data']);data['category_id']=category_id
+        data['smart']=metadata(data)
+        data['smart']['category']={'manual':True,'origin':'manual'}
+        self.validate_event(c,cal,data)
+        c.execute('UPDATE events SET data=? WHERE id=?',(dump(data),event_id))
+        for ov in c.execute('SELECT * FROM overrides WHERE event_id=?',(event_id,)).fetchall():
+            patch=load(ov['data'])
+            patch.pop('category_id',None)
+            if 'smart' in patch:
+                patch['smart']['category']={'manual':True,'origin':'manual'}
+            c.execute('UPDATE overrides SET data=? WHERE event_id=? AND occurrence=?',(dump(patch),event_id,ov['occurrence']))
+
+    def save_event(self,user_id,changes,event_id=None,revision=None,category_scope=None):
         with self.db.transaction() as c:
             cal=self.calendar(c,user_id)
             require(set(changes)<=(EVENT_FIELDS-{'smart','reminder_at_start'})|{'reminders_v2'},'invalid_event_fields')
@@ -425,6 +441,7 @@ class Service:
                         if pref.get('notifications_template_version')==2:
                             data['reminders'][person]=[v for v in pref['default_notifications'] if v>0]
                             data.setdefault('reminder_at_start',{})[person]=0 in pref['default_notifications']
+            require(category_scope is None or (category_scope=='all' and previous and previous.get('rrule') and 'category_id' in changes),'invalid_category_scope')
             changes=merge_translation_changes(data,dict(changes))
             if 'reminders' in changes:
                 require(isinstance(changes['reminders'],list),'own_reminders_only')
@@ -457,7 +474,10 @@ class Service:
                 event_id=uid()
                 c.execute('INSERT INTO events(id,calendar_id,data) VALUES(?,?,?)',(event_id,cal['id'],dump(data)))
                 self.notify(c,cal['id'],user_id,'created',data,event_id)
+            if category_scope=='all':
+                self._apply_series_category(c,cal,event_id,changes['category_id'])
             row=c.execute('SELECT * FROM events WHERE id=?',(event_id,)).fetchone()
+            data=load(row['data'])
             if not previous or any(data.get(k)!=previous.get(k) for k in ('title','description','owner','category_id')):
                 if previous:
                     changed={k for k in ('title','description') if data.get(k)!=previous.get(k)}
@@ -581,11 +601,15 @@ class Service:
                 return datetime.fromisoformat(it['start_utc']).astimezone(viewer).isoformat()[:19] if it.get('start_utc') else it['start']
             return sorted(result,key=order)
 
-    def occurrence_change(self,user_id,event_id,key,changes,revision,scope='one',delete=False):
+    def occurrence_change(self,user_id,event_id,key,changes,revision,scope='one',delete=False,category_scope=None):
         with self.db.transaction() as c:
             cal=self.calendar(c,user_id); row=self.event_row(c,user_id,event_id)
             require(row['revision']==revision,'revision_conflict',409)
             data=load(row['data']); require(bool(data['rrule']),'not_recurring')
+            require(category_scope is None or (category_scope=='all' and not delete and 'category_id' in changes),'invalid_category_scope')
+            category_id=changes.get('category_id')
+            if category_scope=='all' and scope!='all':
+                changes={k:v for k,v in changes.items() if k!='category_id'}
             require(scope in ('one','following','all'),'invalid_scope')
             if 'status' in changes: require(scope=='one','status_only_one_instance')
             try:
@@ -663,6 +687,9 @@ class Service:
                 for new_key,patch in mapped.items():
                     c.execute('INSERT INTO overrides VALUES(?,?,?)',(new_id,new_key,patch))
                 c.execute('DELETE FROM overrides WHERE event_id=? AND occurrence>=?',(event_id,key))
+            if category_scope=='all':
+                self._apply_series_category(c,cal,event_id,category_id)
+                if scope=='following':self._apply_series_category(c,cal,new_id,category_id)
             c.execute('UPDATE events SET revision=revision+1,schedule_version=schedule_version+1 WHERE id=?',(event_id,))
             c.execute("UPDATE outbox SET status='cancelled' WHERE event_id=? AND kind='reminder' AND status IN ('pending','sending')",(event_id,))
             if delete or any(k in changes and changes[k]!=prior.get(k,data.get(k)) for k in IMPORTANT):

@@ -305,7 +305,8 @@ def create_app(config=None,start_worker=True):
     @app.patch('/api/events/{eid}')
     async def edit_event(request:Request,eid:str):
         data=await body(request);revision=data.pop('revision',None)
-        return service.save_event(actor(request),data,eid,revision)
+        category_scope=data.pop('category_scope',None)
+        return service.save_event(actor(request),data,eid,revision,category_scope=category_scope)
     @app.post('/api/events/{eid}/translate')
     async def translate_event(request:Request,eid:str):
         data=await body(request)
@@ -317,7 +318,7 @@ def create_app(config=None,start_worker=True):
     @app.post('/api/events/{eid}/occurrence')
     async def occurrence(request:Request,eid:str):
         data=await body(request)
-        return service.occurrence_change(actor(request),eid,data['occurrence'],data.get('changes',{}),data['revision'],data.get('scope','one'),data.get('delete',False))
+        return service.occurrence_change(actor(request),eid,data['occurrence'],data.get('changes',{}),data['revision'],data.get('scope','one'),data.get('delete',False),category_scope=data.get('category_scope'))
     @app.delete('/api/events/{eid}')
     async def remove(request:Request,eid:str):
         data=await body(request);require(data.get('confirmed') is True,'confirmation_required')

@@ -517,26 +517,37 @@ function recurrenceLabel(e){
 function eventForm(){return EventSurface.form(formEvent)}
 function detail(){return EventSurface.detail(currentEvent,detailLanguage)}
 function eventReminderDialog(){return EventSurface.remindersDialog()}
+Object.assign(words.ru,{categorySeriesQuestion:'Изменить категорию всей серии?',invalid_category_scope:'Выберите область изменения категории.'});
+Object.assign(words.en,{categorySeriesQuestion:'Change the category for the entire series?',invalid_category_scope:'Choose which events should change category.'});
+function chooseCategoryScope(category_id,scopes=['all','one','following']){return new Promise(resolve=>{
+ const el=document.createElement('div'),previous=document.activeElement;el.className='modal-backdrop category-series-backdrop';
+ el.innerHTML=`<div class="modal" role="dialog" aria-modal="true" aria-labelledby="category-series-title"><h2 id="category-series-title">${esc(t('categorySeriesQuestion'))}</h2><p>${esc(t('category'))}: ${esc(catName(category_id))}</p>${scopes.map(scope=>`<button type="button" data-category-scope="${scope}">${esc(t({all:'series',one:'one',following:'following'}[scope]))}</button>`).join('')}<button type="button" data-category-scope="cancel">${esc(t('cancel'))}</button></div>`;
+ const finish=scope=>{el.remove();if(previous?.isConnected)previous.focus({preventScroll:true});resolve(scope==='cancel'?null:scope)};
+ el.addEventListener('click',e=>{e.stopPropagation();const choice=e.target.closest('[data-category-scope]');if(choice)finish(choice.dataset.categoryScope);else if(e.target===el)finish('cancel')});
+ el.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();finish('cancel')}if(e.key==='Tab'){const controls=$$('button',el),first=controls[0],last=controls.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}}});
+ document.body.append(el);$('[data-category-scope=cancel]',el).focus();
+})}
 function eventCategoryDialog(){
  const event=currentEvent;if(!event||$('.category-picker-backdrop'))return;
  const el=document.createElement('div');el.className='modal-backdrop category-picker-backdrop';
  const choices=[[null,t('noCategory')],...categories.map(c=>[c.id,catName(c.id)])];
- el.innerHTML=`<div class="modal event-category-picker" role="dialog" aria-modal="true" aria-labelledby="category-picker-title"><h2 id="category-picker-title">${t('category')}</h2>${event.rrule?`<label>${t('occurrenceScope')}${select('category-scope',[['one',t('one')],['following',t('following')],['all',t('series')]],'one')}</label>`:''}<div class="category-choices">${choices.map(([id,name])=>button('choose-event-category',`<span class="dot" data-bg="${esc(color(id))}"></span><span class="grow">${esc(name)}</span>${(event.category_id||null)===id?icon('check'):''}`,'category-choice',`data-category="${esc(id||'')}" aria-pressed="${(event.category_id||null)===id}"`)).join('')}</div><p class="error" role="alert"></p><button type="button" data-close>${t('cancel')}</button></div>`;
+ el.innerHTML=`<div class="modal event-category-picker" role="dialog" aria-modal="true" aria-labelledby="category-picker-title"><h2 id="category-picker-title">${t('category')}</h2><div class="category-choices">${choices.map(([id,name])=>button('choose-event-category',`<span class="dot" data-bg="${esc(color(id))}"></span><span class="grow">${esc(name)}</span>${(event.category_id||null)===id?icon('check'):''}`,'category-choice',`data-category="${esc(id||'')}" aria-pressed="${(event.category_id||null)===id}"`)).join('')}</div><p class="error" role="alert"></p><button type="button" data-close>${t('cancel')}</button></div>`;
  const close=()=>{el.remove();$('[data-action=category-options]')?.focus()};
  el.addEventListener('click',async e=>{
   if(busy)return;
   if(e.target===el||e.target.closest('[data-close]')){close();return}
   const choice=e.target.closest('[data-action=choose-event-category]');if(!choice)return;
-  const category_id=choice.dataset.category||null,scope=$('[name=category-scope]',el)?.value||'all';
+  const category_id=choice.dataset.category||null;
   try{
    busy=true;el.setAttribute('aria-busy','true');$$('button,select',el).forEach(x=>x.disabled=true);
+   const scope=event.rrule?await chooseCategoryScope(category_id):'all';if(!scope)return;
    const changes={category_id};
    const result=event.rrule&&scope!=='all'
     ?await api('events/'+event.id+'/occurrence','POST',{occurrence:event.occurrence,revision:event.revision,scope,changes})
-    :await api('events/'+event.id,'PATCH',{revision:event.revision,...changes});
+    :await api('events/'+event.id,'PATCH',{revision:event.revision,...changes,...(event.rrule?{category_scope:'all'}:{})});
    await openEvent(result.id||event.id,result.occurrence||event.occurrence);close();toast(t('saved'));
   }catch(error){$('.error',el).textContent=error.message}
-  finally{busy=false;el.removeAttribute('aria-busy');$$('button,select',el).forEach(x=>x.disabled=false)}
+  finally{busy=false;el.removeAttribute('aria-busy');$$('button,select',el).forEach(x=>x.disabled=false);if(el.isConnected)choice.focus({preventScroll:true})}
  });
  el.addEventListener('keydown',e=>{
   if(e.key==='Escape'&&!busy){e.preventDefault();close()}
@@ -747,10 +758,15 @@ async function saveForm(){
  }
  if(Object.hasOwn(payload,'reminders'))payload.reminders_v2=true;
  try{
+  let category_scope;
+  if(currentEvent?.rrule&&Object.hasOwn(payload,'category_id')){
+   const choice=await chooseCategoryScope(payload.category_id,formScope==='all'?['all']:['all',formScope]);if(!choice)return;
+   if(choice==='all')category_scope='all';
+  }
   let result;
-  if(currentEvent?.rrule&&formScope!=='all'){
-   result=await api('events/'+currentEvent.id+'/occurrence','POST',{occurrence:currentEvent.occurrence,revision:currentEvent.revision,scope:formScope,changes:payload});
-  }else result=await api(currentEvent?'events/'+currentEvent.id:'events',currentEvent?'PATCH':'POST',{...payload,...(currentEvent?{revision:currentEvent.revision}:{})});
+  if(currentEvent?.rrule&&formScope!=='all'&&!(category_scope==='all'&&Object.keys(payload).length===1)){
+   result=await api('events/'+currentEvent.id+'/occurrence','POST',{occurrence:currentEvent.occurrence,revision:currentEvent.revision,scope:formScope,changes:payload,...(category_scope?{category_scope}:{})});
+  }else result=await api(currentEvent?'events/'+currentEvent.id:'events',currentEvent?'PATCH':'POST',{...payload,...(currentEvent?{revision:currentEvent.revision}:{}),...(category_scope?{category_scope}:{})});
   const translation=EventSurface.consumeTranslation();let translationError='';
   if(translation)try{await api('events/'+(result.id||currentEvent.id)+'/translate','POST',translation)}catch(err){translationError=err.message}
   toast(translationError|| (result.overlap_warning?.length?t('overlap'):t('saved')));
